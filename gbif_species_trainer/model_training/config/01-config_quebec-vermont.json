@@ -1,0 +1,39 @@
+{
+	"note": "This config file is for training on the complete moth dataset for Quebec and Vermont",
+	
+	"model":{
+		"species_num_classes":3107,
+		"genus_num_classes": 960, 
+		"family_num_classes": 69,
+		"type": "resnet50",
+		"preprocess_mode": "torch"
+	},
+	
+	"dataset":{
+		"label_info": "/home/mila/a/aditya.jain/gbif_species_trainer/model_training/data/quebec-vermont_numeric_labels.json",
+		"taxon_hierarchy": "/home/mila/a/aditya.jain/gbif_species_trainer/model_training/data/quebec-vermont_taxon_hierarchy.json"
+	},
+	
+	"training":{
+		"batch_size": 128,
+		"image_resize": 300,
+		"epochs": 40,
+		"early_stopping": 5,
+		"start_val_loss": 100000000,
+		"loss":{
+				"name": "crossentropy"
+				},
+		"optimizer":{
+				"name": "sgd",
+				"learning_rate": 0.001,
+				"momentum": 0.9
+				},
+		"wandb":{
+				"entity": "moth-ai",
+				"project": "Quebec-Vermont-Moth-Classifier"
+				},
+		"model_save_path": "/home/mila/a/aditya.jain/logs/",
+		"model_name": "quebec-vermont-moth-model",
+		"version": "v07"
+	}
+}
