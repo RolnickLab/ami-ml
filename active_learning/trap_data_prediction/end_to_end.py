@@ -1,13 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[20]:
-
-
 """
-Author       : Aditya Jain
-Date Started : July 18, 2022
-About        : This file does everything end-to-end: localization, classification and tracking
+Author        : Aditya Jain
+Date modified : July 11, 2023
+About         : This file does everything end-to-end: localization, classification, and tracking
 """
 
 import torch
@@ -33,7 +30,6 @@ import argparse
 
 from localization_classification import localization_classification
 from tracks_w_classification_multiple import tracking
-from video import make_video
 
 # User-defined variables 
 parser = argparse.ArgumentParser()
@@ -54,12 +50,9 @@ parser.add_argument("--weight_cnn", help = "weight factor on the cnn features", 
 parser.add_argument("--weight_iou", help = "weight factor on intersection over union", default=1, type=int)
 parser.add_argument("--weight_box_ratio", help = "weight factor on ratio of the box areas", default=1, type=int)
 parser.add_argument("--weight_distance", help = "weight factor on the distance between boxes", default=1, type=int)
-parser.add_argument("--frame_rate", help = "frame rate of the resulting video", default=5, type=int)
-parser.add_argument("--scale_factor", help = "scale the raw image by this factor", default=0.5, type=float)
 parser.add_argument("--region", help = "name of the region", required=True)
 args   = parser.parse_args()
 
 if __name__ == '__main__':
 	localization_classification(args)
 	tracking(args)
-	make_video(args)
