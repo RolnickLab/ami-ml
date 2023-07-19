@@ -1,7 +1,0 @@
-taxon_key_gbif_id,order_name,family_name,genus_name,search_species_name,gbif_species_name,confidence,status,match_type
-5743122,Coleoptera,Lucanidae,Lucanus,Lucanus cervus,Lucanus cervus,99,ACCEPTED,EXACT
-8219144,Coleoptera,Lucanidae,Dorcus,Dorcus rectus,Dorcus rectus,99,ACCEPTED,EXACT
-7487564,Coleoptera,Lucanidae,Prosopocoilus,Prosopocoilus inclinatus,Prosopocoilus inclinatus,99,ACCEPTED,EXACT
-6957697,Coleoptera,Lucanidae,Allotopus,Allotopus rosenbergi,Allotopus rosenbergi,99,ACCEPTED,EXACT
-8350670,Coleoptera,Lucanidae,Hexarthrius,Hexarthrius mandibularis,Hexarthrius mandibularis,99,ACCEPTED,EXACT
-7453671,Coleoptera,Lucanidae,Prosopocoilus,Prosopocoilus giraffa,Prosopocoilus girafa,97,ACCEPTED,FUZZY
