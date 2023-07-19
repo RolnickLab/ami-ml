@@ -20,7 +20,7 @@ Options:
     --num_workers (int): by default, 1.
     --device (str): cuda or cpu. By default, cuda.
     --score_thr (float): by default, None (i.e. all boxes are kept).
-    --max_bboxes (int): by default, None (i.e. all boxes are kept). 
+    --max_bboxes (int): by default, None (i.e. all boxes are kept).
     --sampling_rate (int): by default, 1. Can set a higher value if you don't want to
     run inferences on every image, but just on one in {sampling_rate}
     --stats (bool): by default, True.
@@ -147,9 +147,7 @@ def inference(
 
     if stats:
         batch_size = data_loader.batch_size
-        print(
-            f"The image average inference time is: {np.mean(inference_times)/batch_size}"
-        )
+        print(f"Image average inference time: {np.mean(inference_times)/batch_size}")
 
     return preds
 

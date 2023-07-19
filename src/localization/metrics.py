@@ -227,4 +227,3 @@ def create_precision_recall_fig(
     ax.set_title("Precision - Recall curve")
 
     return fig, marked_pr_points
-

@@ -39,9 +39,9 @@ import typing as tp
 import click
 import numpy as np
 import torch
-from tqdm import tqdm
 from data.custom_datasets import DatasetAsNumpyArrays
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
+from tqdm import tqdm
 from utils import SAMtypes, compute_model_size
 
 
@@ -111,7 +111,7 @@ def main(
     output_mode: str,
     point_grids: tp.Optional[tp.List[np.ndarray]] = None,
 ):
-    if save_dir == None:
+    if save_dir is None:
         save_dir = data_dir
     if torch.cuda.is_available():
         device = torch.device("cuda:0")

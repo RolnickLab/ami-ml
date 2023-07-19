@@ -1,6 +1,6 @@
 from data.custom_datasets import (
-    TrainingDataset,
+    DatasetAsNumpyArrays,
     InferenceDataset,
     SplitDataset,
-    DatasetAsNumpyArrays,
+    TrainingDataset,
 )

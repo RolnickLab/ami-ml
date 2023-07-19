@@ -13,7 +13,7 @@ This script has several limitations:
     - Using a config file instead of command-line arguments would be preferable
     - Support for learning rate schedulers and optimizers limited to those used here:
     https://github.com/pytorch/vision/tree/e35793a1a4000db1f9f99673437c514e24e65451/references/detection
-    
+
 """
 
 import os
@@ -22,9 +22,6 @@ import typing as tp
 
 import click
 import torch
-import torchvision
-
-torchvision.disable_beta_transforms_warning()
 import torchvision.transforms.v2 as T
 import wandb
 from data.custom_datasets import SplitDataset, TrainingDataset
@@ -32,7 +29,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader, random_split
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from tqdm import tqdm
-from utils import SupportedModels, load_model, set_random_seed, bounding_box_to_tensor
+from utils import SupportedModels, bounding_box_to_tensor, load_model, set_random_seed
 
 SupportedLRSchedulers = tp.Literal["multisteplr", "cosineannealinglr"]
 
@@ -72,7 +69,7 @@ def train_model_one_epoch(
 
     train_loss = train_loss / num_batches
 
-    if warmup == False and lr_scheduler is not None:
+    if warmup is False and lr_scheduler is not None:
         lr_scheduler.step()
 
     return train_loss
