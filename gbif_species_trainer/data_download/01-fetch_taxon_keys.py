@@ -18,7 +18,7 @@ import time
 import argparse
 
 
-def get_gbif_key_backbone(name, place):
+def get_gbif_key_backbone(name: str, place: str):
     """given a species name, this function returns the unique gbif key and other
     attributes using backbone API
     """
