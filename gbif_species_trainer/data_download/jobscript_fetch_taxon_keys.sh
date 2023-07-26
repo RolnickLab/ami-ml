@@ -11,7 +11,7 @@ conda activate milamoth_ai
 
 # 3. Launch your script
 python 01-fetch_taxon_keys.py \
---species_filepath /home/mila/a/aditya.jain/mothAI/species_lists/Moths_of_Barro_Colorado_Island_1673275447.csv \
---column_name ScientificName \
---output_filepath /home/mila/a/aditya.jain/mothAI/species_lists/Barro-Colorado-Island_Moth-List_25Apr2023.csv \
---place panama_11Jan2023
+--species_filepath /home/mila/a/aditya.jain/mothAI/species_lists/Quebec-Vermont_Moth-List_22July2022.csv \
+--column_name search_species_name \
+--output_filepath /home/mila/a/aditya.jain/mothAI/species_lists/Quebec-Vermont_Moth-List_26July2023.csv \
+--place quebec_vermont

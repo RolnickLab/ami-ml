@@ -92,7 +92,7 @@ def get_gbif_key_backbone(name: str, place: str):
     return df
 
 
-def save_taxon_keys(args):
+def save_taxon_keys(args: argparse.Namespace):
     """main function for saving the taxon keys and related data for each species"""
 
     # fetch species names from the list
