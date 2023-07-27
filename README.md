@@ -17,3 +17,50 @@ Software, algorithms and research related to the Automated Monitoring of Insects
 </td>
 </tr>
 </table>
+
+
+## Setup
+
+Poetry is used to manage the dependencies common to all scripts and sub-projects. Some sub-projects may manage their own dependencies if necessary.
+
+1. Install [Poetry](https://python-poetry.org/docs/#installation)
+2. Clone this repository
+3. Run `poetry install` in the root of the repository
+4. Run `poetry shell` to activate the virtual environment
+5. OR run scripts using `poetry run python <script>`
+
+
+## Usage
+
+
+Activate the virtual environment
+
+```bash
+poetry shell
+```
+
+### Object Detection
+
+Run object detection using a pre-trained model on a directory of images
+
+```bash
+python src/localization/inference_localization.py \
+  --data_dir ~/TRAPIMAGES/Sample/
+```
+
+Review results in a GUI
+
+```bash
+python src/localization/annotations_explorer.py \
+  --img_dir ~/TRAPIMAGES/Sample/ \
+  --annotations_path ~/TRAPIMAGES/Sample/predictions_.json
+```
+
+Run detection using a custom trained model
+
+```bash
+python src/localization/inference_localization.py \
+  --data_dir ~/TRAPIMAGES/Sample/ \
+  --ckpt_path ~/Downloads/fasterrcnn_mobilenet_v3_large_fpn_uqfh7u9w.pt \
+  --model_type fasterrcnn_mobilenet_v3_large_fpn
+```
