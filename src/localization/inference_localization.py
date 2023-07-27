@@ -102,7 +102,10 @@ def main(
     preds = inference(
         model, data_loader, score_thr=score_thr, max_bboxes=max_bboxes, stats=stats
     )
-    model_name = os.path.splitext(os.path.basename(ckpt_path))[0]
+    if ckpt_path is None:
+        model_name = "default"
+    else:
+        model_name = os.path.splitext(os.path.basename(ckpt_path))[0]
     with open(os.path.join(data_dir, "predictions_" + model_name + ".json"), "w") as f:
         json.dump(preds, f)
 
