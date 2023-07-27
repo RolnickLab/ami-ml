@@ -10,7 +10,7 @@ authors = [
 ]
 license = "MIT"
 readme = "README.md"
-packages = [{ include = "ami_ml" }]
+packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -24,6 +24,7 @@ pillow = "^10.0.0"
 matplotlib = "^3.7.2"
 
 [tool.poetry.group.dev.dependencies]
+pre-commit = "^3.3.3"
 black = "^23.7.0"
 flake8 = "^6.0.0"
 Flake8-pyproject = "^1.2.3"

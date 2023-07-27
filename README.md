@@ -26,14 +26,15 @@ Poetry is used to manage the dependencies common to all scripts and sub-projects
 1. Install [Poetry](https://python-poetry.org/docs/#installation)
 2. Clone this repository
 3. Run `poetry install` in the root of the repository
-4. Run `poetry shell` to activate the virtual environment
-5. OR run scripts using `poetry run python <script>`
+4. Install pre-commit hooks `poetry run pre-commit install`
 
+To run scripts in the virtual environment, activate with `poetry shell` or run scripts with `poetry run <script>`.
 
 ## Usage
 
+### General
 
-Activate the virtual environment
+Activate the virtual environment before running scripts
 
 ```bash
 poetry shell
