@@ -6,7 +6,7 @@ authors = [
     "Aditya Jain <aditya.jain@mila.quebec>",
     "Michael Bunsen <michael.bunsen@mila.quebec>",
     "Fagner Cunha <fagner.cunha@icomp.ufam.edu.br>",
-    "Léonard Pasi <leonard.pasi@epfl.ch>",
+    "Léonard Pasi <leonardpasi@gmail.com>",
 ]
 license = "MIT"
 readme = "README.md"
@@ -20,8 +20,10 @@ torch = "^2.0.1"
 tqdm = "^4.65.0"
 segment-anything = "^1.0"
 torchvision = "^0.15.2"
+torchmetrics = "^0.11.4"
 pillow = "^10.0.0"
 matplotlib = "^3.7.2"
+wandb = "^0.14.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.3.3"
