@@ -1,4 +1,5 @@
 # ML for Automated Monitoring of Insects
+
 Software, algorithms and research related to the Automated Monitoring of Insects using deep learning and other machine learning methods.
 
 <table>
@@ -17,7 +18,6 @@ Software, algorithms and research related to the Automated Monitoring of Insects
 </td>
 </tr>
 </table>
-
 
 ## Setup
 
@@ -42,26 +42,28 @@ poetry shell
 
 ### Object Detection
 
-Run object detection using a pre-trained model on a directory of images
+The code in `src/localization` allows to:
 
-```bash
-python src/localization/inference_localization.py \
-  --data_dir ~/TRAPIMAGES/Sample/
-```
+- train a torchvision localization model, with `training.py`
+- run inferences on a set of images with a given localization model, with `inference_localization.py`
+- visualize annotations/predictions with the `annotation_explorer.py` app
+- run inferences on a set of images with Meta's Segment Anything Model (SAM), with `inference_sam.py`
+- visualize the crops produced by SAM with the `crop_explorer.py` app
+- visualize the Precision/Recall curve given the ground truths and the model predictions with the `threshold_explorer.py` app
+- convert model predictions (as a json file) to ground truths that can be used for training, with `preds_to_ground_truth.py`
 
-Review results in a GUI
-
-```bash
-python src/localization/annotations_explorer.py \
-  --img_dir ~/TRAPIMAGES/Sample/ \
-  --annotations_path ~/TRAPIMAGES/Sample/predictions_.json
-```
-
-Run detection using a custom trained model
+Example (in the poetry shell):
 
 ```bash
 python src/localization/inference_localization.py \
   --data_dir ~/TRAPIMAGES/Sample/ \
   --ckpt_path ~/Downloads/fasterrcnn_mobilenet_v3_large_fpn_uqfh7u9w.pt \
   --model_type fasterrcnn_mobilenet_v3_large_fpn
+```
+
+The functioning of each script is detailed in its docstring. Scripts' options can be listed
+directly in the CLI with the `--help` flag:
+
+```bash
+python src/localization/training.py --help
 ```
