@@ -28,11 +28,7 @@ Poetry is used to manage the dependencies common to all scripts and sub-projects
 3. Run `poetry install` in the root of the repository
 4. Install pre-commit hooks `poetry run pre-commit install`
 
-To run scripts in the virtual environment, activate with `poetry shell` or run scripts with `poetry run <script>`.
-
 ## Usage
-
-### General
 
 Activate the virtual environment before running scripts
 
@@ -40,19 +36,7 @@ Activate the virtual environment before running scripts
 poetry shell
 ```
 
-### Object Detection
-
-The code in `src/localization` allows to:
-
-- train a torchvision localization model, with `training.py`
-- run inferences on a set of images with a given localization model, with `inference_localization.py`
-- visualize annotations/predictions with the `annotation_explorer.py` app
-- run inferences on a set of images with Meta's Segment Anything Model (SAM), with `inference_sam.py`
-- visualize the crops produced by SAM with the `crop_explorer.py` app
-- visualize the Precision/Recall curve given the ground truths and the model predictions with the `threshold_explorer.py` app
-- convert model predictions (as a json file) to ground truths that can be used for training, with `preds_to_ground_truth.py`
-
-Example (in the poetry shell):
+Example for running a script (in the poetry shell):
 
 ```bash
 python src/localization/inference_localization.py \
@@ -61,9 +45,8 @@ python src/localization/inference_localization.py \
   --model_type fasterrcnn_mobilenet_v3_large_fpn
 ```
 
-The functioning of each script is detailed in its docstring. Scripts' options can be listed
-directly in the CLI with the `--help` flag:
+Alternatively, one can run the scripts without activating poetry's shell:
 
 ```bash
-python src/localization/training.py --help
+ poetry run <script>
 ```
