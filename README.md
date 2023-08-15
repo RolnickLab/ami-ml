@@ -48,5 +48,5 @@ python src/localization/inference_localization.py \
 Alternatively, one can run the scripts without activating poetry's shell:
 
 ```bash
- poetry run <script>
+ poetry run python <script>
 ```
