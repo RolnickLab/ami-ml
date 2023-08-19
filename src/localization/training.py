@@ -325,6 +325,12 @@ def prepare_dataloader(
 @click.option(
     "--wandb_entity", help="see wandb.init() documentation", default="moth-ai"
 )
+@click.option(
+    "--model_to_wandb",
+    help="whether to upload the model on wandb",
+    default=True,
+    type=bool,
+)
 def main(
     data_dir: str,
     dataset_name: tp.Optional[str],
@@ -332,6 +338,7 @@ def main(
     ckpt_path: tp.Optional[str],
     wandb_project: str,
     wandb_entity: str,
+    model_to_wandb: bool,
     model_type: SupportedModels,
     pretrained: bool,
     pretrained_backbone: bool,
@@ -435,11 +442,13 @@ def main(
         warmup_epochs=warmup_epochs,
     )
 
-    # Save checkpoint
-    torch.save(
-        checkpoint,
-        os.path.join(save_dir, model_type + "_" + checkpoint["wandb_run_id"] + ".pt"),
+    # Save checkpoint locally and on wandb
+    save_path = os.path.join(
+        save_dir, model_type + "_" + checkpoint["wandb_run_id"] + ".pt"
     )
+    torch.save(checkpoint, save_path)
+    if model_to_wandb:
+        wandb.log_artifact(save_path, name=model_type, type="model")
 
 
 if __name__ == "__main__":
