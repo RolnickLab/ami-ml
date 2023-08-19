@@ -4,6 +4,7 @@ max-line-length = 88
 docstring-convention = numpy
 per-file-ignores =
     __init__.py:F401
+    src/localization/training.py:E402
 
 exclude =
     # No need to traverse our git directory

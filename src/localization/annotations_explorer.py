@@ -48,7 +48,7 @@ class AnnotationsExplorer:
         mainframe = ttk.Frame(self.root, padding="3")
         mainframe.grid(column=0, row=0)
 
-        if self.is_ground_truth == False:
+        if self.is_ground_truth is False:
             self.score_thr = DoubleVar(value=0.5)
 
             # Label widget for score threshold

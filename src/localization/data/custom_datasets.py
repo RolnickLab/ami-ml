@@ -12,8 +12,8 @@ from PIL import Image
 from torch.utils.data import Dataset, Subset
 
 torchvision.disable_beta_transforms_warning()
-import torchvision.transforms.v2 as T
-from torchvision import datapoints
+import torchvision.transforms.v2 as T  # noqa: E402
+from torchvision import datapoints  # noqa: E402
 
 
 class TrainingDataset(Dataset):
@@ -41,7 +41,7 @@ class TrainingDataset(Dataset):
         json_files = glob.glob("*.json")
         if len(json_files) != 1:
             raise Exception(
-                f"root_dir must contain a single json file. It contains {len(json_files)}."
+                f"root_dir must contain a single json file. It has {len(json_files)}."
             )
         with open(os.path.join(root_dir, json_files[0])) as f:
             self.annot_data = json.load(f)
@@ -54,7 +54,7 @@ class TrainingDataset(Dataset):
         return len(self.imgs)
 
     def __getitem__(self, idx):
-        """Boxes which contains at least one side smaller than 10 px are filtered out."""
+        """Boxes which contain at least one side smaller than 10 px are filtered out."""
         image_name = self.imgs[idx]
         image_path = os.path.join(self.root_dir, image_name)
         image = Image.open(image_path)

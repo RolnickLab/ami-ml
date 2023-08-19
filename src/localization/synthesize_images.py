@@ -194,14 +194,9 @@ def paste_crop(image: np.ndarray, crop: np.ndarray, mask: np.ndarray, x: int, y:
     start_x1, end_x1, start_y1, end_y1 = indices1
     start_x2, end_x2, start_y2, end_y2 = indices2
 
-    try:
-        image[start_x1:end_x1, start_y1:end_y1][
-            mask[start_x2:end_x2, start_y2:end_y2]
-        ] = crop[start_x2:end_x2, start_y2:end_y2][
-            mask[start_x2:end_x2, start_y2:end_y2]
-        ]
-    except IndexError:
-        breakpoint()
+    image[start_x1:end_x1, start_y1:end_y1][
+        mask[start_x2:end_x2, start_y2:end_y2]
+    ] = crop[start_x2:end_x2, start_y2:end_y2][mask[start_x2:end_x2, start_y2:end_y2]]
     return
 
 
