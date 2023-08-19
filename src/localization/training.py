@@ -22,14 +22,18 @@ import typing as tp
 
 import click
 import torch
+from torchvision import disable_beta_transforms_warning
+
+disable_beta_transforms_warning()
 import torchvision.transforms.v2 as T
-import wandb
 from data.custom_datasets import SplitDataset, TrainingDataset
 from torch import nn, optim
 from torch.utils.data import DataLoader, random_split
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from tqdm import tqdm
 from utils import SupportedModels, bounding_box_to_tensor, load_model, set_random_seed
+
+import wandb
 
 SupportedLRSchedulers = tp.Literal["multisteplr", "cosineannealinglr"]
 
