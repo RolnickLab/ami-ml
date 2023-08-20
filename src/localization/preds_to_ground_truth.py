@@ -4,7 +4,7 @@ are considered positives and are kept).
 
 Usage:
     python3 preds_to_ground_truth.py [OPTIONS]
-    
+
 Options
     --preds_json_path : str
         Path to the json file containing the predictions.
@@ -36,7 +36,9 @@ from utils import preds_to_ground_truth
 
 
 @click.command(context_settings={"show_default": True})
-@click.option("--preds_json_path", type=click.Path(exists=True, dir_okay=False), required=True)
+@click.option(
+    "--preds_json_path", type=click.Path(exists=True, dir_okay=False), required=True
+)
 @click.option("--score_thr", type=float, required=True)
 @click.option("--ground_truth_filename", type=str, default=None)
 def main(
@@ -44,7 +46,6 @@ def main(
     score_thr: float,
     ground_truth_filename: tp.Optional[str],
 ):
-
     with open(preds_json_path) as f:
         preds = json.load(f)
 
@@ -53,8 +54,8 @@ def main(
     if ground_truth_filename is None:
         ground_truth_filename = os.path.splitext(os.path.basename(preds_json_path))[0]
         ground_truth_filename = ground_truth_filename + "_gt.json"
-    
-    if os.path.splitext(ground_truth_filename)[1] == '':
+
+    if os.path.splitext(ground_truth_filename)[1] == "":
         ground_truth_filename = ground_truth_filename + ".json"
 
     gt_json_path = os.path.join(os.path.dirname(preds_json_path), ground_truth_filename)
@@ -63,6 +64,7 @@ def main(
         json.dump(ground_thruths, f)
 
     return
+
 
 if __name__ == "__main__":
     main()

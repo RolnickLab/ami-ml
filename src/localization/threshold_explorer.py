@@ -18,7 +18,7 @@ class ThresholdExplorerApp(Tk):
     ):
         # Initialize main window
         super().__init__()
-        self.title(f"Threshold explorer")
+        self.title("Threshold explorer")
         self.geometry("700x500")
 
         # Data to plot
@@ -34,7 +34,7 @@ class ThresholdExplorerApp(Tk):
             orient="vertical",
             length=200,
             from_=0,
-            to=len(scores)-1,
+            to=len(scores) - 1,
             variable=self.idx,
             command=self._on_update_thr,
             resolution=1,

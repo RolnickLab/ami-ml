@@ -8,8 +8,6 @@ import PIL
 import torch
 import torchvision
 from torch import nn
-
-torchvision.disable_beta_transforms_warning()
 from torchvision.models.detection.anchor_utils import AnchorGenerator
 from torchvision.models.detection.backbone_utils import (
     _mobilenet_extractor,
