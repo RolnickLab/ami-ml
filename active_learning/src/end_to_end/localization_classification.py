@@ -84,7 +84,7 @@ def localization_classification(args: argparse.Namespace):
     SCORE_THR = args.localize_score_thresh / 100
     transform = transforms.Compose([transforms.ToTensor()])
     image_list = os.listdir(data_path)
-    assert len(image_list)>0, 'No image files read.'
+    assert len(image_list) > 0, "No image files read."
 
     for img in image_list:
         if not img.endswith(".jpg"):
