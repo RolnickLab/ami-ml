@@ -1,0 +1,95 @@
+"""
+Function definitions for the different acquisition/scoring functions in active learning
+"""
+import typing as tp
+
+import torch
+from torch import nn
+
+SupportedScoringFunc = tp.Literal["entropy", "mutual_info", "least_confidence", "margin_sampling"]
+
+@torch.no_grad()
+def score_batch(
+    preds: torch.Tensor, scoring_functions: tp.List[SupportedScoringFunc]
+) -> torch.Tensor:
+    """
+    Parameters
+    ----------
+    preds : torch.Tensor
+        Size is (nb_models, batch_size, nb_classes)
+    scoring_functions : tp.List[SupportedScoringFunc]
+        List of scoring functions to use on the batch
+
+    Returns
+    -------
+    torch.Tensor
+        Size is (batch_size, nb_scoring_functions). The order of the columns follows
+        the order of the given list of scoring functions.
+    """
+
+    scores_all = []
+    for scoring_func in scoring_functions:
+        if scoring_func == "entropy":
+            scores = entropy(preds)
+        elif scoring_func == "mutual_info":
+            scores = mutual_information(preds)
+        elif scoring_func == "mutual_info":
+            scores = mutual_information(preds)
+        elif scoring_func == "least_confidence":
+            scores = least_confidence(preds)
+        elif scoring_func == "margin_sampling":
+            scores = margin_sampling(preds)
+        else:
+            raise ValueError(f"{scoring_func} is not a supported scoring function")
+
+        scores_all.append(scores)
+
+    scores_all = torch.cat(scores_all, dim=1)
+
+    return scores_all
+
+
+@torch.no_grad()
+def entropy(preds: torch.Tensor)-> torch.Tensor:
+    """
+    Parameters
+    ----------
+    preds : torch.Tensor
+        Size is (nb_models, batch_size, nb_classes) or (batch_size, nb_classes)
+
+    Returns
+    -------
+    torch.Tensor
+        Size is (batch_size)
+    """
+
+    # 1: Average predicted probablities across models in the ensemble
+    if preds.dim() == 3:
+        preds_avg = preds.mean(dim=0)
+    elif preds.dim() == 2:
+        preds_avg = preds
+    else:
+        raise ValueError(f"Given prediction tensor has {preds.dim()} dimentions, but expects 2 or 3")
+    
+    # 2: Compute entropy. If a prediction is exactly zero, the log will give -inf and 
+    # the entropy of the corresponding vector of predictions is nan. We avoid that by
+    # replacing -inf with zero
+    neg_log_preds = -torch.log2(preds)
+    neg_log_preds[neg_log_preds.isinf()] = 0
+    entropies = torch.diag(torch.matmul(preds, neg_log_preds.transpose(0,1)))
+    
+    return entropies
+
+@torch.no_grad()
+def mutual_information(preds: torch.Tensor):
+    pass
+
+@torch.no_grad()
+def least_confidence(preds: torch.Tensor):
+    pass
+
+@torch.no_grad()
+def margin_sampling(preds: torch.Tensor):
+    pass
+
+

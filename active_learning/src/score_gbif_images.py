@@ -2,6 +2,7 @@
 
 
 """
+import os
 import typing as tp
 
 import click
@@ -10,8 +11,7 @@ from torch import nn
 from tqdm import tqdm
 from utils.datasets import InferenceDataset
 from utils.resnet50 import Resnet50
-
-SupportedAcquisitionFunc = tp.Literal["entropy", "mutual_info", "varion_ratios"]
+from utils.scoring_functions import SupportedScoringFunc, score_batch
 
 
 @click.command(context_settings={"show_default": True})
@@ -34,7 +34,7 @@ SupportedAcquisitionFunc = tp.Literal["entropy", "mutual_info", "varion_ratios"]
 @click.option(
     "--scoring_func",
     "scoring_functions",
-    type=click.Choice(tp.get_args(SupportedAcquisitionFunc)),
+    type=click.Choice(tp.get_args(SupportedScoringFunc)),
     required=True,
     multiple=True,
 )
@@ -47,7 +47,7 @@ def score_images(
     image_dir: str,
     ckpt_paths: tp.List[str],
     num_classes: int,
-    scoring_functions: SupportedAcquisitionFunc,
+    scoring_functions: SupportedScoringFunc,
     image_resize: int,
     batch_size: int,
     num_workers: int,
@@ -70,31 +70,41 @@ def score_images(
     scores = {}
 
     for image_batch, image_names in tqdm(data_loader):
-        batch_predictions = ensemble_inference(models, image_batch)
-        batch_scores = score_batch(batch_predictions, scoring_functions)
+        batch_preds = ensemble_inference(models, image_batch)
+        batch_scores = score_batch(batch_preds, scoring_functions)
         breakpoint()
         # add results to scores dict
     return
 
 
-def ensemble_inference(models: tp.List[nn.Module], image_batch: torch.Tensor):
-    """_summary_
-
+def ensemble_inference(
+    models: tp.List[nn.Module], image_batch: torch.Tensor
+) -> torch.Tensor:
+    """
     Parameters
     ----------
     models : tp.List[nn.Module]
         List of models in eval mode.
     image_batch : torch.Tensor
         Size is (batch_size, channels, width, height)
+
+    Returns
+    -------
+    torch.Tensor
+        Size is (nb_models, batch_size, nb_classes)
     """
+    ensemble_predictions = []
+
     for model in models:
         device = next(model.parameters()).device
-        batch_predictions = model(image_batch.to(device))
-    pass
+        model_predictions = model(image_batch.to(device))
+        # size: batch_size x nb_classes
+        model_predictions = nn.functional.softmax(model_predictions, dim=1).cpu()
+        ensemble_predictions.append(model_predictions)
 
+    ensemble_predictions = torch.cat(ensemble_predictions, dim=0)
 
-def score_batch(batch_predictions, scoring_functions):
-    pass
+    return ensemble_predictions
 
 
 def load_models(ckpt_paths: tp.List[str], num_classes: int) -> tp.List[nn.Module]:
@@ -106,7 +116,7 @@ def load_models(ckpt_paths: tp.List[str], num_classes: int) -> tp.List[nn.Module
     """
 
     # Device
-    if device == "cuda" and torch.cuda.is_available():
+    if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
@@ -128,5 +138,4 @@ def load_models(ckpt_paths: tp.List[str], num_classes: int) -> tp.List[nn.Module
 
 
 if __name__ == "__main__":
-    pass
-    #score_images()
+    score_images()
