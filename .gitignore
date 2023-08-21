@@ -161,3 +161,6 @@ cython_debug/
 
 # Wandb
 wandb/
+
+# Slurm job outputs
+*.out
