@@ -7,23 +7,23 @@ Date last modified: July 11, 2023
 About: Localization and classification on raw trap images, and saving the annotation information
 """
 
-import torch
-import torchvision.models as torchmodels
-import torchvision
-import os
-import numpy as np
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision import transforms
-from PIL import Image
-import matplotlib.pyplot as plt
-import cv2
-import json
-import timm
 import argparse
-from torchvision.utils import save_image
+import json
+import os
 
-from resnet50 import Resnet50
-from classification import ClassificationInference
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import timm
+import torch
+import torchvision
+import torchvision.models as torchmodels
+from PIL import Image
+from torchvision import transforms
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.utils import save_image
+from utils.classification import ClassificationInference
+from utils.resnet50 import Resnet50
 
 
 def padding(image: Image.Image):

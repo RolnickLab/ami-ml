@@ -7,31 +7,30 @@ Date modified : July 11, 2023
 About         : This file does everything end-to-end: localization, classification, and tracking
 """
 
-import torch
-import torchvision.models as torchmodels
-import torchvision
-import os
-import math
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision import transforms
-from PIL import Image
-from torch import nn
-from torchvision import transforms, utils
-from torchsummary import summary
-import cv2
+import argparse
 import json
+import math
+import os
+import time
+
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.optimize import linear_sum_assignment
-import time
 import timm
-import argparse
-
+import torch
+import torchvision
+import torchvision.models as torchmodels
 from localization_classification import localization_classification
+from PIL import Image
+from scipy.optimize import linear_sum_assignment
+from torch import nn
+from torchsummary import summary
+from torchvision import transforms, utils
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from tracks_w_classification_multiple import tracking
 
-# User-defined variables 
+# User-defined variables
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", help = "root directory containing the trap data", required=True)
 parser.add_argument("--image_folder", help = "date folder within root directory containing the images", required=True)

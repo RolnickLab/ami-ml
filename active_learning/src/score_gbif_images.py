@@ -1,21 +1,28 @@
 """
-    
+
 
 """
-import os
 import typing as tp
 
 import click
 import torch
 from torch import nn
 from tqdm import tqdm
-from utils import Resnet50, build_webdataset_pipeline
+from utils.datasets import InferenceDataset
+from utils.resnet50 import Resnet50
 
 SupportedAcquisitionFunc = tp.Literal["entropy", "mutual_info", "varion_ratios"]
 
 
 @click.command(context_settings={"show_default": True})
-@click.option("--web_dataset_path", type=click.Path(exists=True), required=True)
+@click.option(
+    "--image_list_csv", type=click.Path(exists=True, dir_okay=False), required=True
+)
+@click.option(
+    "--image_dir",
+    type=click.Path(exists=True, file_okay=False),
+    required=True,
+)
 @click.option(
     "--ckpt_path",
     "ckpt_paths",
@@ -26,7 +33,7 @@ SupportedAcquisitionFunc = tp.Literal["entropy", "mutual_info", "varion_ratios"]
 @click.option("--num_classes", type=int, required=True)
 @click.option(
     "--scoring_func",
-    "scoring_functions"
+    "scoring_functions",
     type=click.Choice(tp.get_args(SupportedAcquisitionFunc)),
     required=True,
     multiple=True,
@@ -36,7 +43,8 @@ SupportedAcquisitionFunc = tp.Literal["entropy", "mutual_info", "varion_ratios"]
 @click.option("--num_workers", type=int, default=1)
 @torch.no_grad()
 def score_images(
-    web_dataset_path: str,
+    image_list_csv: str,
+    image_dir: str,
     ckpt_paths: tp.List[str],
     num_classes: int,
     scoring_functions: SupportedAcquisitionFunc,
@@ -44,15 +52,16 @@ def score_images(
     batch_size: int,
     num_workers: int,
 ):
-    # Configure dataloader from webdataset
-    dataloader = build_webdataset_pipeline(
-        sharedurl=web_dataset_path,
-        input_size=image_resize,
-        batch_size=batch_size,
-        set_type="test",
-        num_workers=num_workers,
+    # Build data loader
+    dataset = InferenceDataset(
+        image_list_csv,
+        image_dir,
+        image_resize,
+        sampling_rate=1,
         preprocess_mode="torch",
-        test_set_num=4,
+    )
+    data_loader = torch.utils.data.DataLoader(
+        dataset, num_workers=num_workers, batch_size=batch_size
     )
 
     # Load models
@@ -60,18 +69,29 @@ def score_images(
 
     scores = {}
 
-    for image_batch, image_names in tqdm(dataloader):
+    for image_batch, image_names in tqdm(data_loader):
         batch_predictions = ensemble_inference(models, image_batch)
         batch_scores = score_batch(batch_predictions, scoring_functions)
+        breakpoint()
         # add results to scores dict
     return
 
 
-def ensemble_inference(models: tp.List[nn.Module], image_batch):
+def ensemble_inference(models: tp.List[nn.Module], image_batch: torch.Tensor):
+    """_summary_
+
+    Parameters
+    ----------
+    models : tp.List[nn.Module]
+        List of models in eval mode.
+    image_batch : torch.Tensor
+        Size is (batch_size, channels, width, height)
+    """
     for model in models:
         device = next(model.parameters()).device
         batch_predictions = model(image_batch.to(device))
     pass
+
 
 def score_batch(batch_predictions, scoring_functions):
     pass
@@ -108,4 +128,5 @@ def load_models(ckpt_paths: tp.List[str], num_classes: int) -> tp.List[nn.Module
 
 
 if __name__ == "__main__":
-    score_images()
+    pass
+    #score_images()

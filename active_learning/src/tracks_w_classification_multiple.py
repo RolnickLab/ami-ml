@@ -7,25 +7,24 @@ Date started  : July 18, 2022
 About         : Given image sequences localization and classification info, builds the tracks using CNN features, IoU, distance and box ratio
 """
 
-import cv2
-import os
-import math
+import argparse
 import json
+import math
+import os
+
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.optimize import linear_sum_assignment
 import torch
-from torchsummary import summary
-from torch import nn
 import torchvision.models as models
 from PIL import Image
-import matplotlib.pyplot as plt
+from scipy.optimize import linear_sum_assignment
+from torch import nn
+from torchsummary import summary
 from torchvision import transforms, utils
-import argparse
-
-from cost_method.cnn_iou_dist_boxratio import TrackingCost
-from resnet50 import Resnet50
+from utils.cost_method.cnn_iou_dist_boxratio import TrackingCost
+from utils.resnet50 import Resnet50
 
 
 def find_track_id(image_name, annot):
