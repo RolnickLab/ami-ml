@@ -102,7 +102,7 @@ def ensemble_inference(
         model_predictions = nn.functional.softmax(model_predictions, dim=1).cpu()
         ensemble_predictions.append(model_predictions)
 
-    ensemble_predictions = torch.cat(ensemble_predictions, dim=0)
+    ensemble_predictions = torch.stack(ensemble_predictions, dim=0)
 
     return ensemble_predictions
 

@@ -47,9 +47,9 @@ def score_batch(
         else:
             raise ValueError(f"{scoring_func} is not a supported scoring function")
 
-        scores_all.append(scores.unsqueeze(1))
+        scores_all.append(scores)
 
-    scores_all = torch.cat(scores_all, dim=1)
+    scores_all = torch.stack(scores_all, dim=1)
 
     return scores_all
 
