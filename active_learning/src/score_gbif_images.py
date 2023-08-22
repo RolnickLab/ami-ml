@@ -6,6 +6,7 @@ import os
 import typing as tp
 
 import click
+import pandas as pd
 import torch
 from torch import nn
 from tqdm import tqdm
@@ -30,6 +31,18 @@ from utils.scoring_functions import SupportedScoringFunc, score_batch
     required=True,
     multiple=True,
 )
+@click.option(
+    "--save_path",
+    type=click.Path(exists=True, file_okay=False),
+    help="directory where the computed scores will be save",
+    required=True,
+)
+@click.option(
+    "--save_name",
+    type=str,
+    help="filename for csv file",
+    required=True,
+)
 @click.option("--num_classes", type=int, required=True)
 @click.option(
     "--scoring_func",
@@ -46,6 +59,8 @@ def score_images(
     image_list_csv: str,
     image_dir: str,
     ckpt_paths: tp.List[str],
+    save_path: str,
+    save_name: str,
     num_classes: int,
     scoring_functions: tp.List[SupportedScoringFunc],
     image_resize: int,
@@ -69,11 +84,20 @@ def score_images(
 
     scores = {}
 
+    # Run inferences and score images
     for image_batch, image_names in tqdm(data_loader):
         batch_preds = ensemble_inference(models, image_batch)
         batch_scores = score_batch(batch_preds, scoring_functions)
-        breakpoint()
-        # add results to scores dict
+        scores.update(scores_to_dict(image_names, scoring_functions, batch_scores))
+
+    # Save results
+    scores = pd.DataFrame(scores).T
+    images_info = pd.read_csv(image_list_csv).drop_duplicates()
+    merged = images_info.merge(
+        scores, left_on="filename", right_index=True, how="inner"
+    )
+    merged.to_csv(os.path.join(save_path, save_name), index=False)
+
     return
 
 
@@ -105,6 +129,21 @@ def ensemble_inference(
     ensemble_predictions = torch.stack(ensemble_predictions, dim=0)
 
     return ensemble_predictions
+
+
+def scores_to_dict(
+    image_keys: tp.List[str],
+    scoring_functions: SupportedScoringFunc,
+    batch_scores: torch.Tensor,
+):
+    scores_dict = {}
+    for i, image_key in enumerate(image_keys):
+        image_scores = {}
+        for j, scoring_func in enumerate(scoring_functions):
+            image_scores[scoring_func] = batch_scores[i, j].item()
+        scores_dict[image_key] = image_scores
+
+    return scores_dict
 
 
 def load_models(ckpt_paths: tp.List[str], num_classes: int) -> tp.List[nn.Module]:
