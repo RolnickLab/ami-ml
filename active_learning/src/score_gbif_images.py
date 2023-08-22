@@ -47,7 +47,7 @@ def score_images(
     image_dir: str,
     ckpt_paths: tp.List[str],
     num_classes: int,
-    scoring_functions: SupportedScoringFunc,
+    scoring_functions: tp.List[SupportedScoringFunc],
     image_resize: int,
     batch_size: int,
     num_workers: int,
