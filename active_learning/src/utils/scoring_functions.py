@@ -6,7 +6,10 @@ import typing as tp
 import torch
 from torch import nn
 
-SupportedScoringFunc = tp.Literal["entropy", "mutual_info", "least_confidence", "margin_sampling"]
+SupportedScoringFunc = tp.Literal[
+    "entropy", "mutual_info", "least_confidence", "margin_sampling", "variation_ratios"
+]
+
 
 @torch.no_grad()
 def score_batch(
@@ -39,10 +42,12 @@ def score_batch(
             scores = least_confidence(preds)
         elif scoring_func == "margin_sampling":
             scores = margin_sampling(preds)
+        elif scoring_func == "variation_ratios":
+            scores = variation_ratios(preds)
         else:
             raise ValueError(f"{scoring_func} is not a supported scoring function")
 
-        scores_all.append(scores)
+        scores_all.append(scores.unsqueeze(1))
 
     scores_all = torch.cat(scores_all, dim=1)
 
@@ -50,7 +55,7 @@ def score_batch(
 
 
 @torch.no_grad()
-def entropy(preds: torch.Tensor)-> torch.Tensor:
+def entropy(preds: torch.Tensor) -> torch.Tensor:
     """
     Parameters
     ----------
@@ -69,19 +74,22 @@ def entropy(preds: torch.Tensor)-> torch.Tensor:
     elif preds.dim() == 2:
         preds_avg = preds
     else:
-        raise ValueError(f"Given prediction tensor has {preds.dim()} dimentions, but expects 2 or 3")
+        raise ValueError(
+            f"Given prediction tensor has {preds.dim()} dimentions, but expects 2 or 3"
+        )
 
     # 2: Compute entropy. If a prediction is exactly zero, the log will give -inf and
     # the entropy of the corresponding vector of predictions is nan. We avoid that by
     # replacing -inf with zero
-    neg_log_preds = -torch.log2(preds)
+    neg_log_preds = -torch.log2(preds_avg)
     neg_log_preds[neg_log_preds.isinf()] = 0
-    entropies = torch.diag(torch.matmul(preds, neg_log_preds.transpose(0,1)))
+    entropies = torch.diag(torch.matmul(preds_avg, neg_log_preds.transpose(0, 1)))
 
     return entropies
 
+
 @torch.no_grad()
-def mutual_information(preds: torch.Tensor)->torch.Tensor:
+def mutual_information(preds: torch.Tensor) -> torch.Tensor:
     """
     Parameters
     ----------
@@ -93,7 +101,7 @@ def mutual_information(preds: torch.Tensor)->torch.Tensor:
     torch.Tensor
         Size is (batch_size)
     """
-    if preds.dim() != 3 and not preds.shape[0]>1:
+    if preds.dim() != 3 and not preds.shape[0] > 1:
         raise ValueError(f"Mutual information can only be computed with an ensemble")
 
     nb_models = preds.shape[0]
@@ -109,7 +117,7 @@ def mutual_information(preds: torch.Tensor)->torch.Tensor:
 
 
 @torch.no_grad()
-def least_confidence(preds: torch.Tensor)->torch.Tensor:
+def least_confidence(preds: torch.Tensor) -> torch.Tensor:
     """
     Parameters
     ----------
@@ -128,7 +136,9 @@ def least_confidence(preds: torch.Tensor)->torch.Tensor:
     elif preds.dim() == 2:
         preds_avg = preds
     else:
-        raise ValueError(f"Given prediction tensor has {preds.dim()} dimentions, but expects 2 or 3")
+        raise ValueError(
+            f"Given prediction tensor has {preds.dim()} dimentions, but expects 2 or 3"
+        )
 
     # 2: Compute scores
     scores = 1 - torch.max(preds_avg, dim=1)[0]
@@ -137,7 +147,7 @@ def least_confidence(preds: torch.Tensor)->torch.Tensor:
 
 
 @torch.no_grad()
-def margin_sampling(preds: torch.Tensor)->torch.Tensor:
+def margin_sampling(preds: torch.Tensor) -> torch.Tensor:
     """
     Parameters
     ----------
@@ -156,12 +166,45 @@ def margin_sampling(preds: torch.Tensor)->torch.Tensor:
     elif preds.dim() == 2:
         preds_avg = preds
     else:
-        raise ValueError(f"Given prediction tensor has {preds.dim()} dimentions, but expects 2 or 3")
+        raise ValueError(
+            f"Given prediction tensor has {preds.dim()} dimentions, but expects 2 or 3"
+        )
 
     # 2: Compute scores
     top2 = torch.topk(preds_avg, k=2, dim=1)[0]
-    scores = top2[:,0]-top2[:,1]
+    scores = 1 - (top2[:, 0] - top2[:, 1])
 
     return scores
 
 
+@torch.no_grad()
+def variation_ratios(preds: torch.Tensor):
+    """Compute the fraction of models that do not agree with the majority vote. This
+    score can only take a finite number of values, that depends on the number of models
+    in the ensemble. Thus it is not expected to be a good scoring functions with small
+    ensembles.
+
+    Parameters
+    ----------
+    preds : torch.Tensor
+        Size is (nb_models, batch_size, nb_classes), with nb_models > 1
+
+    Returns
+    -------
+    torch.Tensor
+        Size is (batch_size)
+    """
+
+    if preds.dim() != 3 and not preds.shape[0] > 1:
+        raise ValueError(f"Variation ratios can only be computed with an ensemble")
+
+    nb_models = preds.shape[0]
+
+    votes = preds.argmax(dim=2)
+    majority_vote = torch.mode(votes, dim=0)[0]
+    nb_in_agreement = torch.stack(
+        [votes[e] == majority_vote for e in range(nb_models)]
+    ).sum(dim=0)
+    var_ratios = 1 - nb_in_agreement / nb_models
+
+    return var_ratios
