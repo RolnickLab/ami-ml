@@ -1,5 +1,4 @@
 """
-Note: the random_resize and identity functions were copy pasted from Aditya's repo
 """
 import os
 import typing as tp
@@ -9,27 +8,6 @@ import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
-
-
-def random_resize(image):
-    """randomly resize image given a probability distribution"""
-
-    random_num = np.random.uniform()
-    if random_num <= 0.25:
-        transform = transforms.Resize((150, 150))
-        new_image = transform(image)
-    elif random_num > 0.25 and random_num <= 0.5:
-        transform = transforms.Resize((75, 75))
-        new_image = transform(image)
-    else:
-        new_image = image
-
-    return new_image
-
-
-def identity(x):
-    return x
-
 
 class InferenceDataset(Dataset):
     def __init__(
@@ -74,12 +52,13 @@ class InferenceDataset(Dataset):
 
         self.transforms = transforms.Compose(
             [
-                transforms.Lambda(random_resize),
                 transforms.Resize((input_size, input_size)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean, std),
             ]
         )
+        self.rng = np.random.default_rng(12345)
+
 
     def __len__(self):
         # return size of dataset
@@ -88,6 +67,27 @@ class InferenceDataset(Dataset):
     def __getitem__(self, idx):
         image_name = os.path.basename(self.imgs[idx])
         image = Image.open(self.imgs[idx])
+
+        if image.mode != "RGB":
+            image = image.convert("RGB") # Grey scale images can be present
+
+        
+        image = self._random_resize(image)
         image = self.transforms(image)
 
         return image, image_name
+    
+    def _random_resize(self, image):
+        
+        random_num = self.rgn.uniform()
+        if random_num <= 0.25:
+            transform = transforms.Resize((150, 150))
+            new_image = transform(image)
+        elif random_num > 0.25 and random_num <= 0.5:
+            transform = transforms.Resize((75, 75))
+            new_image = transform(image)
+        else:
+            new_image = image
+
+        return new_image
+
