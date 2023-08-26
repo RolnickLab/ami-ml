@@ -4,6 +4,8 @@
 """
 import os
 import typing as tp
+import numpy
+import random
 
 import click
 import pandas as pd
@@ -75,8 +77,14 @@ def score_images(
         sampling_rate=1,
         preprocess_mode="torch",
     )
+
+    g = torch.Generator().manual_seed(0)
     data_loader = torch.utils.data.DataLoader(
-        dataset, num_workers=num_workers, batch_size=batch_size
+        dataset,
+        num_workers=num_workers,
+        batch_size=batch_size,
+        worker_init_fn=seed_worker,
+        generator=g,
     )
 
     # Load models
@@ -174,6 +182,12 @@ def load_models(ckpt_paths: tp.List[str], num_classes: int) -> tp.List[nn.Module
         print(f"Loaded model {name} to {device}")
 
     return models
+
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    numpy.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 if __name__ == "__main__":
