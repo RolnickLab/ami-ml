@@ -24,6 +24,8 @@ torchmetrics = "^0.11.4"
 pillow = "^10.0.0"
 matplotlib = "^3.7.2"
 wandb = "^0.14.0"
+python-dwca-reader = "^0.15.1"
+pandas = "^2.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.3.3"
