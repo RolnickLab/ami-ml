@@ -5,6 +5,7 @@
 """
 
 import os
+import shutil
 import urllib.request
 from functools import partial
 from multiprocessing import Pool
@@ -30,11 +31,24 @@ def get_and_verify_image_path(image_data, dataset_path: str):
     return image_path + ".jpg"
 
 
-def fetch_image(image_data, dataset_path: str):
+def try_copy_from_cache(image_path: str, dataset_path: str, cache_path: str):
+    if cache_path is not None:
+        image_cache = os.path.relpath(image_path, dataset_path)
+        image_cache = os.path.join(cache_path, image_cache)
+
+        if os.path.isfile(image_cache) and not os.path.isfile(image_path):
+            shutil.copyfile(image_cache, image_path)
+            return True
+
+    return False
+
+
+def fetch_image(image_data, dataset_path: str, cache_path: str):
     url = image_data["identifier"]
     image_path = get_and_verify_image_path(image_data, dataset_path)
+    cached = try_copy_from_cache(image_path, dataset_path, cache_path)
 
-    if not os.path.isfile(image_path):
+    if not cached and not os.path.isfile(image_path):
         try:
             urllib.request.urlretrieve(url, image_path)
             print(f"Image fetched from {url}")
@@ -62,6 +76,14 @@ def load_dwca_data(dwca_file: str):
     "--dataset_path", type=str, required=True, help="Folder to save images to"
 )
 @click.option(
+    "--cache_path",
+    type=str,
+    help=(
+        "Folder containing cached images. If provied, the script will try copy"
+        " images from cache before trying fetch them."
+    ),
+)
+@click.option(
     "--num_workers",
     type=int,
     default=8,
@@ -73,12 +95,14 @@ def load_dwca_data(dwca_file: str):
     required=True,
     help="Darwin Core Archive file",
 )
-def main(dwca_file: str, num_workers: int, dataset_path: str):
+def main(dwca_file: str, num_workers: int, dataset_path: str, cache_path: str):
     gbif_metadata = load_dwca_data(dwca_file)
 
     _, list_images = zip(*gbif_metadata.iterrows())
 
-    fetch_image_f = partial(fetch_image, dataset_path=dataset_path)
+    fetch_image_f = partial(
+        fetch_image, dataset_path=dataset_path, cache_path=cache_path
+    )
     with Pool(processes=num_workers) as pool:
         pool.map(fetch_image_f, list_images)
 
