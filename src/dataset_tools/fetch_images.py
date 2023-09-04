@@ -14,22 +14,21 @@ from multiprocessing import Pool
 import click
 import pandas as pd
 from dwca.read import DwCAReader
+from utils import get_image_path
 
 
 def get_and_verify_image_path(image_data, dataset_path: str):
-    write_loc = os.path.join(dataset_path, image_data["datasetKey"])
-    if not os.path.isdir(write_loc):
+    image_path = os.path.join(dataset_path, get_image_path(image_data))
+
+    dirs = os.path.dirname(image_path)
+    if not os.path.isdir(dirs):
         try:
-            os.makedirs(write_loc)
+            os.makedirs(dirs)
         except OSError:
-            print(f"Directory {write_loc} can not be created")
+            print(f"Directory {dirs} can not be created")
             return None
 
-    image_path = write_loc + os.sep + str(image_data["coreid"])
-    if image_data["count"] > 0:
-        image_path = image_path + "_" + str(image_data["count"])
-
-    return image_path + ".jpg"
+    return image_path
 
 
 def try_copy_from_cache(image_path: str, dataset_path: str, cache_path: str):
