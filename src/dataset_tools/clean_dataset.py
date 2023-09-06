@@ -124,7 +124,10 @@ def main(
             f"(No lifeStage info: {nan_lifestage})",
         )
 
-    verified_metadata = verified_metadata.copy()
+    verified_metadata_clean = verified_metadata.copy()
+    metadata_clean_filename = verified_data_csv[:-4] + "_clean.csv"
+    verified_metadata_clean.to_csv(metadata_clean_filename, index=False)
+    print(f"Clean dataset saved to {metadata_clean_filename}")
 
 
 if __name__ == "__main__":

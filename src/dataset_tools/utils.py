@@ -21,7 +21,17 @@ def load_dwca_data(dwca_file: str):
         occ_df = dwca.pd_read("occurrence.txt", parse_dates=True, on_bad_lines="skip")
 
     media_df = media_df[["coreid", "identifier"]].copy()
-    occ_df = occ_df[["id", "datasetKey", "speciesKey", "lifeStage"]].copy()
+    occ_df = occ_df[
+        [
+            "id",
+            "datasetKey",
+            "speciesKey",
+            "lifeStage",
+            "decimalLatitude",
+            "decimalLongitude",
+            "eventDate",
+        ]
+    ].copy()
 
     images = pd.merge(media_df, occ_df, how="inner", left_on="coreid", right_on="id")
     images["count"] = images.groupby("coreid").cumcount()
