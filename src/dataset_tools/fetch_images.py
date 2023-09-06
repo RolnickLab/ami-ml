@@ -12,9 +12,7 @@ from functools import partial
 from multiprocessing import Pool
 
 import click
-import pandas as pd
-from dwca.read import DwCAReader
-from utils import get_image_path
+from utils import get_image_path, load_dwca_data
 
 
 def get_and_verify_image_path(image_data, dataset_path: str):
@@ -57,20 +55,6 @@ def fetch_image(image_data, dataset_path: str, cache_path: str):
             except Exception as e:
                 print(f"Error fetching {url}")
                 print(e)
-
-
-def load_dwca_data(dwca_file: str):
-    with DwCAReader(dwca_file) as dwca:
-        media_df = dwca.pd_read("multimedia.txt", parse_dates=True, on_bad_lines="skip")
-        occ_df = dwca.pd_read("occurrence.txt", parse_dates=True, on_bad_lines="skip")
-
-    media_df = media_df[["coreid", "identifier"]].copy()
-    occ_df = occ_df[["id", "datasetKey", "speciesKey"]].copy()
-
-    images = pd.merge(media_df, occ_df, how="inner", left_on="coreid", right_on="id")
-    images["count"] = images.groupby("coreid").cumcount()
-
-    return images
 
 
 @click.command(context_settings={"show_default": True})
