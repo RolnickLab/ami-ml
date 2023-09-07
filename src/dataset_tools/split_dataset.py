@@ -11,6 +11,20 @@ from sklearn.model_selection import train_test_split
 from utils import set_random_seeds
 
 
+def subsample_instances(dataset, max_instances: int, category_key: str):
+    counts = dataset[category_key].value_counts()
+    many_categs = list(counts[counts > max_instances].keys())
+
+    subsampling_metadata = dataset[~dataset[category_key].isin(many_categs)].copy()
+    for categ in many_categs:
+        categ_df = dataset[dataset[category_key] == categ].sample(max_instances).copy()
+        subsampling_metadata = pd.concat(
+            [subsampling_metadata, categ_df], ignore_index=True
+        )
+
+    return subsampling_metadata
+
+
 @click.command(context_settings={"show_default": True})
 @click.option(
     "--dataset_csv",
@@ -46,6 +60,12 @@ from utils import set_random_seeds
     ),
 )
 @click.option(
+    "--max_instances",
+    type=int,
+    default=1000,
+    help="Maximun number of instances on training set (and on val/test proportionally)",
+)
+@click.option(
     "--category_key",
     type=str,
     default="speciesKey",
@@ -64,6 +84,7 @@ def main(
     val_frac: float,
     split_by_occurrence: bool,
     category_key: str,
+    max_instances: int,
     random_seed: int,
 ):
     set_random_seeds(random_seed)
@@ -113,6 +134,15 @@ def main(
         (~metadata.image_path.isin(test_set.image_path.unique()))
         & (~metadata.image_path.isin(val_set.image_path.unique()))
     ]
+
+    if max_instances > 0:
+        train_set = subsample_instances(train_set, max_instances, category_key)
+        val_set = subsample_instances(
+            val_set, int(max_instances * val_frac), category_key
+        )
+        test_set = subsample_instances(
+            test_set, int(max_instances * test_frac), category_key
+        )
 
     data = {"train": train_set, "val": val_set, "test": test_set}
     for set_name in data:
