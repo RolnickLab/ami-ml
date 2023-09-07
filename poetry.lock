@@ -97,6 +97,17 @@ jupyter = ["ipython (>=7.8.0)", "tokenize-rt (>=3.2.0)"]
 uvloop = ["uvloop (>=0.15.2)"]
 
 [[package]]
+name = "braceexpand"
+version = "0.1.7"
+description = "Bash-style brace expansion for Python"
+optional = false
+python-versions = "*"
+files = [
+    {file = "braceexpand-0.1.7-py2.py3-none-any.whl", hash = "sha256:91332d53de7828103dcae5773fb43bc34950b0c8160e35e0f44c4427a3b85014"},
+    {file = "braceexpand-0.1.7.tar.gz", hash = "sha256:e6e539bd20eaea53547472ff94f4fb5c3d3bf9d0a89388c4b56663aba765f705"},
+]
+
+[[package]]
 name = "certifi"
 version = "2023.7.22"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -2060,6 +2071,22 @@ files = [
 ]
 
 [[package]]
+name = "webdataset"
+version = "0.2.48"
+description = "Record sequential storage for deep learning."
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "webdataset-0.2.48-py3-none-any.whl", hash = "sha256:e6d06895720afdef5cbf03cbb316434d67d9fb578e1bd9815fbd47ced4bcc731"},
+    {file = "webdataset-0.2.48.tar.gz", hash = "sha256:c1c3914881e89f594cbf5cc048f405e760ec764575c80f0ce97521ebc91c44e2"},
+]
+
+[package.dependencies]
+braceexpand = "*"
+numpy = "*"
+pyyaml = "*"
+
+[[package]]
 name = "zipp"
 version = "3.16.2"
 description = "Backport of pathlib-compatible object wrapper for zip files"
@@ -2077,4 +2104,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "010079a1d323877aa221dbc93a642bd81654cd1c48ca1ac064418591aededd34"
+content-hash = "bad3043df58e747a895db344ecb656a12ca651fe261afecabb4bfa6ce2d79008"

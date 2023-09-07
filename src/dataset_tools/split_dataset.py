@@ -29,13 +29,13 @@ def subsample_instances(dataset, max_instances: int, category_key: str):
 @click.option(
     "--dataset_csv",
     type=str,
-    default=True,
+    required=True,
     help="CSV file with dataset metadata",
 )
 @click.option(
     "--split_prefix",
     type=str,
-    default=True,
+    required=True,
     help="Prefix used for saving splits.",
 )
 @click.option(
