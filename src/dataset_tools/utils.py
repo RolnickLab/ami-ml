@@ -2,7 +2,9 @@
 # coding: utf-8
 
 import os
+import random
 
+import numpy as np
 import pandas as pd
 from dwca.read import DwCAReader
 
@@ -37,3 +39,8 @@ def load_dwca_data(dwca_file: str):
     images["count"] = images.groupby("coreid").cumcount()
 
     return images
+
+
+def set_random_seeds(random_seed):
+    random.seed(random_seed)
+    np.random.seed(random_seed)
