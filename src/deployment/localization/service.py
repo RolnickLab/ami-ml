@@ -253,6 +253,8 @@ output_spec = bentoml.io.JSON()
 )
 async def predict(input_data):
     tasks = input_data.tasks
+    if len(tasks) > 1:
+        raise Exception("Only one task per request is supported")
     image_paths = [task.data["image"] for task in tasks]
     task_predictions = await moth_detection_runner.inference.async_run(image_paths)
     resp = {
