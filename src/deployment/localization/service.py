@@ -36,11 +36,10 @@ class LabelStudioTask(BaseModel):
 # Label studio task result
 example_result = (
     {
-        "from_name": "label",
+        "from_name": "detected_object",
         "to_name": "image",
-        "type": "rectanglelabels",
+        "type": "rectangle",
         "value": {
-            "rectanglelabels": ["Object"],
             "x": 66.12516045570374,
             "y": 74.68075222439236,
             "width": 1.3237595558166504,
@@ -144,7 +143,7 @@ def post_process_single(output: dict) -> tuple[list, list, list]:
         f"Keeping {len(bboxes)} out of {len(output['boxes'])} objects found (threshold: {SCORE_THRESHOLD})"
     )
 
-    bboxes = bboxes.cpu().detach().numpy().astype(int).tolist()
+    bboxes = bboxes.cpu().detach().numpy().tolist()
     return bboxes, labels, scores
 
 
@@ -154,17 +153,19 @@ def format_predictions_single(
     width, height = image.spatial_size
     return [
         {
-            "from_name": "label",
+            "from_name": "detected_object",
             "to_name": "image",
-            "type": "rectanglelabels",
+            "type": "rectangle",
             "value": {
-                "rectanglelabels": ["Object"],
                 "x": bbox[0] / width * 100,
                 "y": bbox[1] / height * 100,
                 "width": (bbox[2] - bbox[0]) / width * 100,
                 "height": (bbox[3] - bbox[1]) / height * 100,
             },
             "score": score,
+            "original_width": width,
+            "original_height": height,
+            "image_rotation": 0,
         }
         for bbox, score in zip(bboxes, scores)
     ]
@@ -186,7 +187,6 @@ class Yolov5Runnable(bentoml.Runnable):
     @bentoml.Runnable.method(batchable=True, batch_dim=0)
     @torch.no_grad()
     def inference(self, input_img_paths):
-        # Return predictions only
         input_imgs = [
             get_or_download_file(path) for path in input_img_paths if path is not None
         ]
@@ -203,7 +203,23 @@ class Yolov5Runnable(bentoml.Runnable):
     @bentoml.Runnable.method(batchable=True, batch_dim=0)
     def render(self, input_imgs):
         # Return images with boxes and labels
-        return self.model(input_imgs).render()
+        # convert image fom JpegImageFile to uint8  tensor to avoid error in draw_bounding_boxes
+        to_tensor = T.Compose([T.ToImageTensor(), T.ToDtype(torch.uint8)])
+        input_imgs_t = self.transform()(input_imgs)
+        results = self.model(input_imgs_t)
+        draw = torchvision.utils.draw_bounding_boxes
+        to_image = torchvision.transforms.ToPILImage()
+        out_imgs = [
+            draw(to_tensor(image), output["boxes"])
+            for image, output in zip(input_imgs, results)
+        ]
+        # overlay bounding boxes on original image
+        out_imgs = [
+            to_image(img * 0.5 + image * 0.5)
+            for img, image in zip(out_imgs, input_imgs_t)
+        ]
+
+        return out_imgs
 
 
 yolo_v5_runner = bentoml.Runner(Yolov5Runnable, max_batch_size=30)
