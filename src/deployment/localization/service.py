@@ -18,11 +18,11 @@ import torchvision.transforms.v2 as T
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-tempdir = tempfile.TemporaryDirectory()
-os.environ["LOCAL_WEIGHTS_PATH"] = "./tmp/images"
+tempdir = tempfile.TemporaryDirectory(prefix="mothml")
+os.environ["LOCAL_WEIGHTS_PATH"] = tempdir.name
 
 CHECKPOINT = "https://object-arbutus.cloud.computecanada.ca/ami-models/moths/localization/fasterrcnn_mobilenet_v3_large_fpn_uqfh7u9w.pt"
-SCORE_THRESHOLD = 0.5
+SCORE_THRESHOLD = 0.0
 
 logger = logging.getLogger(__name__)
 BaseModel.model_config["protected_namespaces"] = ()
@@ -52,14 +52,14 @@ example_result = (
 
 def get_or_download_file(path, destination_dir=None, prefix=None) -> pathlib.Path:
     """
-    >>> filename, headers = get_weights("https://drive.google.com/file/d/1KdQc56WtnMWX9PUapy6cS0CdjC8VSdVe/view?usp=sharing")
+    >>> filename, headers = get_weights("https://drive.google.com/file/d/1KdQc56WtnMWX9PUapy6cS0CdjC8VSdVe/view?usp=sharing") # noqa: E501
 
     Taken from https://github.com/RolnickLab/ami-data-companion/blob/main/trapdata/ml/utils.py
     """
     if not path:
         raise Exception("Specify a URL or path to fetch file from.")
 
-    # If path is a local path instead of a URL then urlretrieve will just return that path
+    # If path is a local path instead of a URL, urlretrieve will just return the path
     destination_dir = destination_dir or os.environ.get("LOCAL_WEIGHTS_PATH")
     fname = path.rsplit("/", 1)[-1]
     if destination_dir:
@@ -140,7 +140,8 @@ def post_process_single(output: dict) -> tuple[list, list, list]:
     bboxes = output["boxes"][output["scores"] > SCORE_THRESHOLD]
 
     print(
-        f"Keeping {len(bboxes)} out of {len(output['boxes'])} objects found (threshold: {SCORE_THRESHOLD})"
+        f"Keeping {len(bboxes)} out of {len(output['boxes'])} objects found "
+        f"(threshold: {SCORE_THRESHOLD})"
     )
 
     bboxes = bboxes.cpu().detach().numpy().tolist()
@@ -170,7 +171,7 @@ def format_predictions_single(image: PIL.Image.Image, bboxes, scores) -> list[di
     ]
 
 
-class Yolov5Runnable(bentoml.Runnable):
+class MothDetectionRunner(bentoml.Runnable):
     SUPPORTED_RESOURCES = ("nvidia.com/gpu", "cpu")
     SUPPORTS_CPU_MULTI_THREADING = True
 
@@ -202,7 +203,6 @@ class Yolov5Runnable(bentoml.Runnable):
     @bentoml.Runnable.method(batchable=True, batch_dim=0)
     def render(self, input_imgs):
         # Return images with boxes and labels
-        # convert image fom JpegImageFile to uint8  tensor to avoid error in draw_bounding_boxes
         to_tensor = T.Compose([T.ToImageTensor(), T.ToDtype(torch.uint8)])
         input_imgs_t = self.transform()(input_imgs)
         results = self.model(input_imgs_t)
@@ -221,9 +221,9 @@ class Yolov5Runnable(bentoml.Runnable):
         return out_imgs
 
 
-yolo_v5_runner = bentoml.Runner(Yolov5Runnable, max_batch_size=30)
+moth_detection_runner = bentoml.Runner(MothDetectionRunner, max_batch_size=30)
 
-svc = bentoml.Service("yolo_v5_demo", runners=[yolo_v5_runner])
+svc = bentoml.Service("moth_detector", runners=[moth_detection_runner])
 
 
 @svc.on_startup
@@ -233,13 +233,13 @@ def download(_: bentoml.Context):
 
 @svc.api(input=bentoml.io.Image(), output=bentoml.io.JSON())
 async def invocation(input_img):
-    batch_ret = await yolo_v5_runner.inference.async_run([input_img])
+    batch_ret = await moth_detection_runner.inference.async_run([input_img])
     return batch_ret[0]
 
 
 @svc.api(input=bentoml.io.Image(), output=bentoml.io.Image())
 async def render(input_img):
-    batch_ret = await yolo_v5_runner.render.async_run([input_img])
+    batch_ret = await moth_detection_runner.render.async_run([input_img])
     return batch_ret[0]
 
 
@@ -254,7 +254,7 @@ output_spec = bentoml.io.JSON()
 async def predict(input_data):
     tasks = input_data.tasks
     image_paths = [task.data["image"] for task in tasks]
-    task_predictions = await yolo_v5_runner.inference.async_run(image_paths)
+    task_predictions = await moth_detection_runner.inference.async_run(image_paths)
     resp = {
         "results": [{"result": task_prediction} for task_prediction in task_predictions]
     }
@@ -271,7 +271,7 @@ svc.mount_asgi_app(fastapi_app)
 def health():
     return {
         "status": "UP",
-        "model_class": "HighwayMoths",
+        "model_class": "FasterRCNN_MobileNetV3_Large_FPN",
     }
 
 
@@ -280,5 +280,5 @@ def health():
 @fastapi_app.post("/setup")
 def setup():
     return {
-        "model_version": "2.0",
+        "model_version": "uqfh7u9w",
     }
