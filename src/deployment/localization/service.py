@@ -147,10 +147,8 @@ def post_process_single(output: dict) -> tuple[list, list, list]:
     return bboxes, labels, scores
 
 
-def format_predictions_single(
-    image: torchvision.datapoints.Image, bboxes, scores
-) -> list[dict]:
-    width, height = image.spatial_size
+def format_predictions_single(image: PIL.Image.Image, bboxes, scores) -> list[dict]:
+    width, height = image.size
     return [
         {
             "from_name": "detected_object",
@@ -161,6 +159,7 @@ def format_predictions_single(
                 "y": bbox[1] / height * 100,
                 "width": (bbox[2] - bbox[0]) / width * 100,
                 "height": (bbox[3] - bbox[1]) / height * 100,
+                "rotation": 0,
             },
             "score": score,
             "original_width": width,
@@ -191,8 +190,8 @@ class Yolov5Runnable(bentoml.Runnable):
             get_or_download_file(path) for path in input_img_paths if path is not None
         ]
         input_imgs = [PIL.Image.open(path) for path in input_imgs]
-        input_imgs = self.transform()(input_imgs)
-        results = self.model(input_imgs)
+        input_imgs_t = self.transform()(input_imgs)
+        results = self.model(input_imgs_t)
         results = [post_process_single(result) for result in results]
         predictions = [
             format_predictions_single(image, bboxes, scores)
