@@ -15,8 +15,22 @@ Options:
 
 import os
 import re
-from tkinter import *
-from tkinter import filedialog, messagebox
+from tkinter import (
+    ACTIVE,
+    DISABLED,
+    BooleanVar,
+    Button,
+    DoubleVar,
+    E,
+    Label,
+    N,
+    S,
+    Scale,
+    Tk,
+    W,
+    filedialog,
+    messagebox,
+)
 
 import click
 import cv2
