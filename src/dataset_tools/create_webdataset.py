@@ -180,43 +180,43 @@ def dataset_samples(
 
 @click.command(context_settings={"show_default": True})
 @click.option(
-    "--annotations_csv",
+    "--annotations-csv",
     type=str,
     required=True,
     help="Path to csv file containing the annotations",
 )
 @click.option(
-    "--dataset_dir",
+    "--dataset-dir",
     type=str,
     required=True,
     help="Path to directory containing dataset images",
 )
 @click.option(
-    "--webdataset_patern",
+    "--webdataset-patern",
     type=str,
     required=True,
     help="Webdataset output file pattern",
 )
 @click.option(
-    "--image_path_column",
+    "--image-path-column",
     type=str,
     required=True,
     help="CSV column containing image file path",
 )
 @click.option(
-    "--label_column",
+    "--label-column",
     type=str,
     required=True,
     help="CSV column containing image label",
 )
 @click.option(
-    "--max_shard_size",
+    "--max-shard-size",
     type=int,
     default=100 * 1024 * 1024,
     help="Maximun size of each shard",
 )
 @click.option(
-    "--resize_min_size",
+    "--resize-min-size",
     type=int,
     help=(
         "Size which the shortest image side will be resized to. If it is not"
@@ -224,13 +224,13 @@ def dataset_samples(
     ),
 )
 @click.option(
-    "--shuffle_images",
+    "--shuffle-images",
     type=bool,
     default=True,
     help="Shufle images before to write to tar files",
 )
 @click.option(
-    "--category_map_json",
+    "--category-map-json",
     type=str,
     help=(
         "JSON containing the categories id map. If not provided, the"
@@ -238,7 +238,7 @@ def dataset_samples(
     ),
 )
 @click.option(
-    "--save_category_map_json",
+    "--save-category-map-json",
     type=str,
     help=(
         "JSON containing the categories id map. If not provided, the"
@@ -246,12 +246,12 @@ def dataset_samples(
     ),
 )
 @click.option(
-    "--columns_to_json",
+    "--columns-to-json",
     type=str,
     help="List of columns from CSV file to save as metadata in a json file.",
 )
 @click.option(
-    "--megadetector_results_json",
+    "--megadetector-results-json",
     type=str,
     help=(
         "Path to json file containing megadetector results. If provided, the"
@@ -260,7 +260,7 @@ def dataset_samples(
     ),
 )
 @click.option(
-    "--random_seed",
+    "--random-seed",
     type=int,
     default=42,
     help="Random seed for reproductible experiments",

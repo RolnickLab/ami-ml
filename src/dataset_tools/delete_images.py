@@ -12,13 +12,13 @@ import pandas as pd
 
 @click.command(context_settings={"show_default": True})
 @click.option(
-    "--error_images_csv",
+    "--error-images-csv",
     type=str,
     required=True,
     help="File to save image verification info",
 )
 @click.option(
-    "--base_path",
+    "--base-path",
     type=str,
     help="Root path for the image list",
 )

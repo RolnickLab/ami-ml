@@ -27,31 +27,31 @@ def subsample_instances(dataset, max_instances: int, category_key: str):
 
 @click.command(context_settings={"show_default": True})
 @click.option(
-    "--dataset_csv",
+    "--dataset-csv",
     type=str,
     required=True,
     help="CSV file with dataset metadata",
 )
 @click.option(
-    "--split_prefix",
+    "--split-prefix",
     type=str,
     required=True,
     help="Prefix used for saving splits.",
 )
 @click.option(
-    "--test_frac",
+    "--test-frac",
     type=float,
     default=0.2,
     help="Fraction of data used for the test set",
 )
 @click.option(
-    "--val_frac",
+    "--val-frac",
     type=float,
     default=0.1,
     help="Fraction of data used for the validation set",
 )
 @click.option(
-    "--split_by_occurrence",
+    "--split-by-occurrence",
     type=bool,
     default=True,
     help=(
@@ -60,19 +60,19 @@ def subsample_instances(dataset, max_instances: int, category_key: str):
     ),
 )
 @click.option(
-    "--max_instances",
+    "--max-instances",
     type=int,
     default=1000,
     help="Maximun number of instances on training set (and on val/test proportionally)",
 )
 @click.option(
-    "--category_key",
+    "--category-key",
     type=str,
     default="speciesKey",
     help="Key used as category id for strified spliting",
 )
 @click.option(
-    "--random_seed",
+    "--random-seed",
     type=int,
     default=42,
     help="Random seed for reproductible experiments",

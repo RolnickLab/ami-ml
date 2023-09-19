@@ -59,10 +59,10 @@ def fetch_image(image_data, dataset_path: str, cache_path: str):
 
 @click.command(context_settings={"show_default": True})
 @click.option(
-    "--dataset_path", type=str, required=True, help="Folder to save images to"
+    "--dataset-path", type=str, required=True, help="Folder to save images to"
 )
 @click.option(
-    "--cache_path",
+    "--cache-path",
     type=str,
     help=(
         "Folder containing cached images. If provided, the script will try copy"
@@ -70,19 +70,19 @@ def fetch_image(image_data, dataset_path: str, cache_path: str):
     ),
 )
 @click.option(
-    "--num_workers",
+    "--num-workers",
     type=int,
     default=8,
     help="Number of processes to download in images in parallel",
 )
 @click.option(
-    "--dwca_file",
+    "--dwca-file",
     type=str,
     required=True,
     help="Darwin Core Archive file",
 )
 @click.option(
-    "--subset_list",
+    "--subset-list",
     type=str,
     help=(
         "JSON file with the list of keys to be fetched."
@@ -91,7 +91,7 @@ def fetch_image(image_data, dataset_path: str, cache_path: str):
     ),
 )
 @click.option(
-    "--subset_key",
+    "--subset-key",
     type=str,
     default="speciesKey",
     help=(

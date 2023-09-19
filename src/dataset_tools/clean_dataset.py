@@ -24,25 +24,25 @@ def load_data(dwca_file: str, verified_data_csv: str):
 
 @click.command(context_settings={"show_default": True})
 @click.option(
-    "--dwca_file",
+    "--dwca-file",
     type=str,
     required=True,
     help="Darwin Core Archive file",
 )
 @click.option(
-    "--verified_data_csv",
+    "--verified-data-csv",
     type=str,
     required=True,
     help="CSV file containing verified image info",
 )
 @click.option(
-    "--remove_duplicate_url",
+    "--remove-duplicate-url",
     type=bool,
     default=True,
     help="Whether occurrences with duplicate URLs should be removed.",
 )
 @click.option(
-    "--remove_tumbnails",
+    "--remove-tumbnails",
     type=bool,
     default=True,
     help=(
@@ -51,13 +51,13 @@ def load_data(dwca_file: str, verified_data_csv: str):
     ),
 )
 @click.option(
-    "--thumb_size",
+    "--thumb-size",
     type=int,
     default=64,
     help="Minimum side size to an image not be considered as thumbnail",
 )
 @click.option(
-    "--ignore_dataset_by_key",
+    "--ignore-dataset-by-key",
     type=str,
     default=(
         "f3130a8a-4508-42b4-9737-fbda77748438,"
@@ -70,7 +70,7 @@ def load_data(dwca_file: str, verified_data_csv: str):
     ),
 )
 @click.option(
-    "--remove_non_adults",
+    "--remove-non-adults",
     type=bool,
     default=True,
     help="Whether keeping only occurrences with lifeStage identified as Adult or Imago",

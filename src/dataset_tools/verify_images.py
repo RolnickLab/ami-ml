@@ -63,13 +63,13 @@ def verify_image(image_data, dataset_path: str):
 
 @click.command(context_settings={"show_default": True})
 @click.option(
-    "--dwca_file",
+    "--dwca-file",
     type=str,
     required=True,
     help="Darwin Core Archive file",
 )
 @click.option(
-    "--resume_from_ckpt",
+    "--resume-from-ckpt",
     type=str,
     help=(
         "Checkpoint with partial verification results. If provided, the verification "
@@ -77,25 +77,25 @@ def verify_image(image_data, dataset_path: str):
     ),
 )
 @click.option(
-    "--save_freq",
+    "--save-freq",
     type=int,
     default=10000,
     help="Save partial verification data every n images",
 )
 @click.option(
-    "--num_workers",
+    "--num-workers",
     type=int,
     default=8,
     help="Number of processes to verify in images in parallel",
 )
 @click.option(
-    "--dataset_path",
+    "--dataset-path",
     type=str,
     required=True,
     help="Path to directory containing dataset images.",
 )
 @click.option(
-    "--results_csv",
+    "--results-csv",
     type=str,
     required=True,
     help="File to save image verification info",
