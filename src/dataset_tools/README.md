@@ -27,3 +27,9 @@ directly in the CLI with the `--help` flag:
 ```bash
 python src/dataset_tools/fetch_images.py --help
 ```
+
+## Pipeline description
+
+The figure below shows a diagram demonstrating the webdataset creation pipeline given a Darwin Core Archive file as the source, including intermediate files produced by each process. Dashed lines indicate optional processes.
+
+<img src='../../assets/webdataset_preparation_pipeline.jpg'>
