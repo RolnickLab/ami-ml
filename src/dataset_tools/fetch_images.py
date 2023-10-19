@@ -12,6 +12,7 @@ from functools import partial
 from multiprocessing import Pool
 
 import click
+import pandas as pd
 from utils import get_image_path, load_dwca_data
 
 
@@ -93,10 +94,19 @@ def fetch_image(image_data, dataset_path: str, cache_path: str):
 @click.option(
     "--subset-key",
     type=str,
-    default="speciesKey",
+    default="acceptedTaxonKey",
     help=(
         "DwC-A field to use for filtering occurrences to be fetched. "
         "See --subset_list"
+    ),
+)
+@click.option(
+    "--num-images-per-category",
+    type=int,
+    default=0,
+    help=(
+        "Number of images to be downloaded for each category. If not provided, all "
+        "images will be fetched."
     ),
 )
 def main(
@@ -106,6 +116,7 @@ def main(
     cache_path: str,
     subset_list: str,
     subset_key: str,
+    num_images_per_category: int,
 ):
     gbif_metadata = load_dwca_data(dwca_file)
     if subset_list is not None:
@@ -113,6 +124,21 @@ def main(
             keys_list = json.load(f)
             keys_list = [int(x) for x in keys_list]
         gbif_metadata = gbif_metadata[gbif_metadata[subset_key].isin(keys_list)].copy()
+
+    if num_images_per_category > 0:
+        all_occ = (
+            gbif_metadata.groupby(subset_key)
+            .filter(lambda x: len(x) < num_images_per_category)
+            .copy()
+        )
+        subsampling_occ = (
+            gbif_metadata.groupby(subset_key)
+            .filter(lambda x: len(x) >= num_images_per_category)
+            .groupby(subset_key)
+            .sample(num_images_per_category)
+            .copy()
+        )
+        gbif_metadata = pd.concat([all_occ, subsampling_occ])
 
     _, list_images = zip(*gbif_metadata.iterrows())
 

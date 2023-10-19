@@ -28,6 +28,7 @@ def load_dwca_data(dwca_file: str):
             "id",
             "datasetKey",
             "speciesKey",
+            "acceptedTaxonKey",
             "lifeStage",
             "decimalLatitude",
             "decimalLongitude",

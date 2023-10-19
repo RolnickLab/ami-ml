@@ -68,7 +68,7 @@ def subsample_instances(dataset, max_instances: int, category_key: str):
 @click.option(
     "--category-key",
     type=str,
-    default="speciesKey",
+    default="acceptedTaxonKey",
     help="Key used as category id for strified spliting",
 )
 @click.option(
