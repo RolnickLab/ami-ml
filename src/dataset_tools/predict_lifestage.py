@@ -8,9 +8,28 @@ import os
 
 import click
 import pandas as pd
+import timm
+import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+
+
+def build_model(model_name, num_classes, model_path, device):
+    if model_name == "efficientnetv2-b3":
+        model = timm.create_model(
+            "tf_efficientnetv2_b3", pretrained=True, num_classes=num_classes
+        )
+    else:
+        raise RuntimeError(f"Model {model_name} not implemented")
+
+    model.load_state_dict(torch.load(model_path, map_location=torch.device(device)))
+
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model)
+    model = model.to(device)
+
+    return model
 
 
 def get_image_transforms(input_size=224, preprocess_mode="torch"):
@@ -62,6 +81,16 @@ class CSVDataset(Dataset):
         return image
 
 
+def predict_life_stage(model, dataset, device):
+    for i, data in enumerate(dataset):
+        preds = model(data)
+        preds = torch.nn.functional.softmax(preds, dim=1)
+        print(preds)
+
+        if i > 0:
+            break
+
+
 @click.command(context_settings={"show_default": True})
 @click.option(
     "--verified-data-csv",
@@ -98,6 +127,14 @@ class CSVDataset(Dataset):
 @click.option(
     "--batch-size", type=int, default=32, help="Batch size used during training."
 )
+@click.option(
+    "--model-name",
+    type=click.Choice(["efficientnetv2-b3"]),
+    default="efficientnetv2-b3",
+    help="Name of the model",
+)
+@click.option("--num-classes", type=int, required=True, help="Number of categories")
+@click.option("--model-path", type=str, required=True, help="Path to model checkpoint")
 def main(
     verified_data_csv: str,
     dataset_path: str,
@@ -105,7 +142,13 @@ def main(
     preprocessing_mode: str,
     predict_nan_life_stage: bool,
     batch_size: int,
+    model_name: str,
+    num_classes: int,
+    model_path: str,
 ):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(device)
+
     test_data = CSVDataset(
         verified_data_csv,
         dataset_path,
@@ -114,12 +157,8 @@ def main(
         predict_nan_life_stage,
     )
     test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
-
-    for i, data in enumerate(test_dataloader):
-        print(data)
-        print(data.shape)
-        if i > 0:
-            break
+    model = build_model(model_name, num_classes, model_path, device)
+    predict_life_stage(model, test_dataloader, device)
 
 
 if __name__ == "__main__":
