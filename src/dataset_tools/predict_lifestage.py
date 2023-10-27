@@ -71,24 +71,47 @@ class CSVDataset(Dataset):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
-        image_path = os.path.join(
-            self.dataset_dir, self.img_labels["image_path"].iloc[idx]
-        )
+        image_id = self.img_labels["image_path"].iloc[idx]
+        image_path = os.path.join(self.dataset_dir, image_id)
         image = Image.open(image_path)
         image = image.convert("RGB")
         image = self.transform(image)
 
-        return image
+        return image, image_id
 
 
-def predict_life_stage(model, dataset, device):
-    for i, data in enumerate(dataset):
-        preds = model(data)
-        preds = torch.nn.functional.softmax(preds, dim=1)
-        print(preds)
+def get_predictions(model, dataset, device, log_frequence):
+    with torch.no_grad():
+        y_pred = torch.tensor([], dtype=torch.float32, device=device)
+        y_pred_cpu = torch.tensor([], dtype=torch.float32, device="cpu")
+        ids_cpu = []
 
-        if i > 0:
-            break
+        model.eval()
+        for i, data in enumerate(dataset):
+            images, ids = data
+            images = images.to(device, non_blocking=True)
+
+            outputs = model(images)
+            outputs = torch.nn.functional.softmax(outputs, dim=1)
+            y_pred = torch.cat((y_pred, outputs), 0)
+            ids_cpu += list(ids)
+
+            if i % log_frequence == 0:
+                print(f"Finished eval step {i}", flush=True)
+                y_pred_cpu = torch.cat((y_pred_cpu, y_pred.cpu()), 0)
+                y_pred = torch.tensor([], dtype=torch.float32, device=device)
+
+        y_pred_cpu = torch.cat((y_pred_cpu, y_pred.cpu()), 0)
+        y_pred = y_pred_cpu.numpy()
+
+        return y_pred, ids_cpu
+
+
+def predict_life_stage(model, dataset, device, log_frequence):
+    y_pred, ids_cpu = get_predictions(model, dataset, device, log_frequence)
+
+    print(y_pred)
+    print(ids_cpu)
 
 
 @click.command(context_settings={"show_default": True})
@@ -135,6 +158,9 @@ def predict_life_stage(model, dataset, device):
 )
 @click.option("--num-classes", type=int, required=True, help="Number of categories")
 @click.option("--model-path", type=str, required=True, help="Path to model checkpoint")
+@click.option(
+    "--log-frequence", type=int, default=50, help="Log inferecen every n steps"
+)
 def main(
     verified_data_csv: str,
     dataset_path: str,
@@ -145,6 +171,7 @@ def main(
     model_name: str,
     num_classes: int,
     model_path: str,
+    log_frequence: int,
 ):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(device)
@@ -158,7 +185,7 @@ def main(
     )
     test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
     model = build_model(model_name, num_classes, model_path, device)
-    predict_life_stage(model, test_dataloader, device)
+    predict_life_stage(model, test_dataloader, device, log_frequence)
 
 
 if __name__ == "__main__":
