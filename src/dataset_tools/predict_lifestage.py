@@ -4,6 +4,7 @@
 """ Predict life stage for moths
 """
 
+import json
 import os
 
 import click
@@ -107,13 +108,6 @@ def get_predictions(model, dataset, device, log_frequence):
         return y_pred, ids_cpu
 
 
-def predict_life_stage(model, dataset, device, log_frequence):
-    y_pred, ids_cpu = get_predictions(model, dataset, device, log_frequence)
-
-    print(y_pred)
-    print(ids_cpu)
-
-
 @click.command(context_settings={"show_default": True})
 @click.option(
     "--verified-data-csv",
@@ -161,6 +155,15 @@ def predict_life_stage(model, dataset, device, log_frequence):
 @click.option(
     "--log-frequence", type=int, default=50, help="Log inferecen every n steps"
 )
+@click.option(
+    "--category-map-json",
+    type=str,
+    required=True,
+    help="JSON containing the categories id map.",
+)
+@click.option(
+    "--results-csv", type=str, required=True, help="CSV file to save results to"
+)
 def main(
     verified_data_csv: str,
     dataset_path: str,
@@ -172,6 +175,8 @@ def main(
     num_classes: int,
     model_path: str,
     log_frequence: int,
+    category_map_json: str,
+    results_csv: str,
 ):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(device)
@@ -185,7 +190,19 @@ def main(
     )
     test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
     model = build_model(model_name, num_classes, model_path, device)
-    predict_life_stage(model, test_dataloader, device, log_frequence)
+    with open(category_map_json, "r") as f:
+        category_map = json.load(f)
+    category_map = {v: k for k, v in category_map.items()}
+
+    y_pred, image_path = get_predictions(model, test_dataloader, device, log_frequence)
+    y_pred = y_pred.argmax(axis=1)
+
+    df = pd.DataFrame({"image_path": image_path, "life_stage_prediction": y_pred})
+    df["life_stage_prediction"] = df["life_stage_prediction"].astype(int)
+    df["life_stage_prediction"] = df["life_stage_prediction"].map(category_map)
+    df.to_csv(results_csv, index=False)
+
+    print("Finished prediction", flush=True)
 
 
 if __name__ == "__main__":
