@@ -8,7 +8,7 @@ import pandas as pd
 from utils import get_image_path, load_dwca_data
 
 
-def load_data(dwca_file: str, verified_data_csv: str):
+def load_data(dwca_file: str, verified_data_csv: str, life_stage_predictions: str):
     metadata = load_dwca_data(dwca_file)
     metadata["image_path"] = metadata.apply(get_image_path, axis=1)
     verified_data = pd.read_csv(verified_data_csv)
@@ -18,6 +18,13 @@ def load_data(dwca_file: str, verified_data_csv: str):
         how="inner",
         on="image_path",
     )
+    if life_stage_predictions is not None:
+        life_stage_preds = pd.read_csv(life_stage_predictions)
+        verified_metadata = pd.merge(
+            verified_metadata, life_stage_preds, on="image_path", how="left"
+        )
+    else:
+        verified_metadata["life_stage_prediction"] = None
 
     return verified_metadata
 
@@ -75,6 +82,14 @@ def load_data(dwca_file: str, verified_data_csv: str):
     default=True,
     help="Whether keeping only occurrences with lifeStage identified as Adult or Imago",
 )
+@click.option(
+    "--life-stage-predictions",
+    type=str,
+    help=(
+        "CSV containing life-stage predictions for images. If provided images without"
+        " the GBIF life stage will be filtered based on life stage prediction"
+    ),
+)
 def main(
     dwca_file: str,
     verified_data_csv: str,
@@ -83,8 +98,9 @@ def main(
     remove_tumbnails: bool,
     thumb_size: int,
     remove_non_adults: bool,
+    life_stage_predictions: str,
 ):
-    verified_metadata = load_data(dwca_file, verified_data_csv)
+    verified_metadata = load_data(dwca_file, verified_data_csv, life_stage_predictions)
     current_filtered = len(verified_metadata)
     print("Verified images: ", current_filtered)
 
@@ -115,7 +131,8 @@ def main(
     if remove_non_adults:
         nan_lifestage = len(verified_metadata[verified_metadata.lifeStage.isna()])
         verified_metadata = verified_metadata[
-            verified_metadata.lifeStage.isin(["Adult", "Imago"])
+            (verified_metadata.lifeStage.isin(["Adult", "Imago"]))
+            | (verified_metadata.life_stage_prediction.isin(["Adult"]))
         ]
         previous = current_filtered
         current_filtered = len(verified_metadata)
