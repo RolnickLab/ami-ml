@@ -4,6 +4,7 @@
 """ Image verification script using Darwin Core Archive files
 """
 
+import json
 import os
 from datetime import datetime
 from functools import partial
@@ -100,6 +101,24 @@ def verify_image(image_data, dataset_path: str):
     required=True,
     help="File to save image verification info",
 )
+@click.option(
+    "--subset-list",
+    type=str,
+    help=(
+        "JSON file with the list of keys to be fetched."
+        "If provided, only occorrences with these keys will be fetched. Use the option"
+        " --subset_key to define the field to be used for filtering."
+    ),
+)
+@click.option(
+    "--subset-key",
+    type=str,
+    default="acceptedTaxonKey",
+    help=(
+        "DwC-A field to use for filtering occurrences to be fetched. "
+        "See --subset_list"
+    ),
+)
 def main(
     dwca_file: str,
     resume_from_ckpt: str,
@@ -107,8 +126,16 @@ def main(
     num_workers: int,
     dataset_path: str,
     results_csv: str,
+    subset_list: str,
+    subset_key: str,
 ):
     gbif_metadata = load_dwca_data(dwca_file)
+    if subset_list is not None:
+        with open(subset_list) as f:
+            keys_list = json.load(f)
+            keys_list = [int(x) for x in keys_list]
+        gbif_metadata = gbif_metadata[gbif_metadata[subset_key].isin(keys_list)].copy()
+
     gbif_metadata = gbif_metadata[~gbif_metadata.datasetKey.isna()]
     gbif_metadata["image_path"] = gbif_metadata.apply(get_image_path, axis=1)
 
