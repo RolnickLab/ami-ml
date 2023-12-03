@@ -158,6 +158,8 @@ def dataset_samples(
                     image = crop_to_bbox(image, md_preds)
                 except KeyError:
                     print("Skipping crop for the image: ", row[image_path_column])
+                except TypeError:
+                    print("Skipping crop for the image: ", row[image_path_column])
 
             if resize_min_size is not None:
                 image = resize_transform(image)
