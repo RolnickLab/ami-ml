@@ -67,13 +67,17 @@ def square_crop(image, x, y, width, height):
 
 
 def crop_to_bbox(image, md_preds):
-    if md_preds["max_detection_conf"] > 0.0:
+    if len(md_preds["detections"]) > 0:
+        max_detection_conf = 0.0
+        (x, y, width, height) = 0, 0, 0, 0
         for det in md_preds["detections"]:
-            if det["conf"] == md_preds["max_detection_conf"]:
+            if det["conf"] > max_detection_conf:
+                max_detection_conf = det["conf"]
                 (x, y, width, height) = det["bbox"]
-                image = square_crop(image, x, y, width, height)
+        if max_detection_conf > 0.0:
+            image = square_crop(image, x, y, width, height)
 
-                return image
+            return image
 
     return image
 
@@ -152,8 +156,10 @@ def dataset_samples(
                 try:
                     md_preds = md_results.loc[row[image_path_column]]
                     image = crop_to_bbox(image, md_preds)
-                except KeyError as err:
-                    print("Skipping crop for the image: ", err)
+                except KeyError:
+                    print("Skipping crop for the image: ", row[image_path_column])
+                except TypeError:
+                    print("Skipping crop for the image: ", row[image_path_column])
 
             if resize_min_size is not None:
                 image = resize_transform(image)
