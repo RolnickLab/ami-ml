@@ -7,13 +7,13 @@
 import json
 import os
 import shutil
-import urllib.request
 from functools import partial
 from multiprocessing import Pool
 
 import click
 import pandas as pd
-from utils import get_image_path, load_dwca_data
+import requests
+from utils import get_image_path, load_dwca_data, set_random_seeds
 
 
 def get_and_verify_image_path(image_data, dataset_path: str):
@@ -42,7 +42,19 @@ def try_copy_from_cache(image_path: str, dataset_path: str, cache_path: str):
     return False
 
 
-def fetch_image(image_data, dataset_path: str, cache_path: str):
+def url_retrieve(url, file_path, timeout):
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:124.0) "
+            "Gecko/20100101 Firefox/124.0"
+        )
+    }
+
+    r = requests.get(url, timeout=(timeout, None), headers=headers)
+    open(file_path, "wb").write(r.content)
+
+
+def fetch_image(image_data, dataset_path: str, cache_path: str, timeout: int):
     url = image_data["identifier"]
     image_path = get_and_verify_image_path(image_data, dataset_path)
 
@@ -51,7 +63,7 @@ def fetch_image(image_data, dataset_path: str, cache_path: str):
 
         if not cached and not os.path.isfile(image_path):
             try:
-                urllib.request.urlretrieve(url, image_path)
+                url_retrieve(url, image_path, timeout)
                 print(f"Image fetched from {url}")
             except Exception as e:
                 print(f"Error fetching {url}")
@@ -109,6 +121,18 @@ def fetch_image(image_data, dataset_path: str, cache_path: str):
         "images will be fetched."
     ),
 )
+@click.option(
+    "--request-timeout",
+    type=int,
+    default=30,
+    help=("Timout for closing urresponsive connections."),
+)
+@click.option(
+    "--random-seed",
+    type=int,
+    default=42,
+    help="Random seed for reproductible experiments",
+)
 def main(
     dwca_file: str,
     num_workers: int,
@@ -117,7 +141,10 @@ def main(
     subset_list: str,
     subset_key: str,
     num_images_per_category: int,
+    request_timeout: int,
+    random_seed: int,
 ):
+    set_random_seeds(random_seed)
     gbif_metadata = load_dwca_data(dwca_file)
     if subset_list is not None:
         with open(subset_list) as f:
@@ -143,7 +170,10 @@ def main(
     _, list_images = zip(*gbif_metadata.iterrows())
 
     fetch_image_f = partial(
-        fetch_image, dataset_path=dataset_path, cache_path=cache_path
+        fetch_image,
+        dataset_path=dataset_path,
+        cache_path=cache_path,
+        timeout=request_timeout,
     )
     with Pool(processes=num_workers) as pool:
         pool.map(fetch_image_f, list_images)
