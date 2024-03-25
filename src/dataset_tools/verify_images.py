@@ -74,7 +74,7 @@ def verify_image(image_data, dataset_path: str):
     type=str,
     help=(
         "Checkpoint with partial verification results. If provided, the verification "
-        "continues from a previous execition skipping the already verfied images."
+        "continues from a previous execution, skipping the already verfied images."
     ),
 )
 @click.option(
@@ -193,6 +193,7 @@ def main(
     verif_df = pd.merge(gbif_metadata, verif_df, how="inner", on="image_path")
     verif_df.to_csv(results_csv, index=False)
     errors_df.to_csv(results_csv + ".error.csv", index=False)
+    print(f"Final verification results saved to {results_csv}")
 
 
 if __name__ == "__main__":
