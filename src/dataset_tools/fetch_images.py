@@ -50,7 +50,7 @@ def url_retrieve(url, file_path, timeout):
         )
     }
 
-    r = requests.get(url, timeout=(timeout, None), headers=headers)
+    r = requests.get(url, timeout=(timeout, timeout * 10), headers=headers)
     open(file_path, "wb").write(r.content)
 
 
