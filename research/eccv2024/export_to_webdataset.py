@@ -11,9 +11,15 @@ import os
 import json
 from PIL import Image
 import webdataset as wds
+import pandas as pd
+
+def get_synonym(sp_checklist: pd.DataFrame, species: str):
+    """Return synonym name of a species, if it exists on GBIF"""
+    
+    species_list.loc[species_list["gbif_species"] == species]["search_species"].values[0]
 
 
-def export_to_webdataset(data_dir: str, export_dir: str):
+def export_to_webdataset(data_dir: str, export_dir: str, sp_checklist: pd.DataFrame):
     """Main function for exporting AMI-Traps to webdataset"""
 
     # Get the list of raw camera trap images and other metadata
@@ -99,6 +105,10 @@ def export_to_webdataset(data_dir: str, export_dir: str):
 
                 # Export to webdataset for finegrained classification, if moth crop
                 if label_rank != "NA":
+
+                    # If exists, get the synonym name
+                    synonym = get_synonym(sp_checklist, label_name)
+
                     sample_fgrained_annotation = {
                         "label": label_name, 
                         "synonym": ...,
@@ -121,4 +131,7 @@ def export_to_webdataset(data_dir: str, export_dir: str):
 if __name__ == "__main__":
     data_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/ami_traps_dataset"
     export_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/webdataset"
-    export_to_webdataset(data_dir, export_dir)
+    species_checklist = "/home/mila/a/aditya.jain/mothAI/species_lists/quebec-vermont-uk-denmark-panama_checklist_20231124.csv"
+    species_list = pd.read_csv(species_checklist)
+
+    export_to_webdataset(data_dir, export_dir, species_list)
