@@ -23,14 +23,16 @@ def export_to_webdataset(data_dir: str, export_dir: str):
     image_list = os.listdir(image_dir)
 
     # Get ground truth class names
-    gt_class_list = json.load(open(os.path.join(data_dir, "notes.json")))[
-        "categories"
-    ]
+    gt_class_list = json.load(open(os.path.join(data_dir, "notes.json")))["categories"]
 
     # WebDataset specific variables
     max_shard_size = 50 * 1024 * 1024
-    wbd_pattern_binary = os.path.join(export_dir, "binary_classification", "binary-%06d.tar") 
-    wbd_pattern_fgrained = os.path.join(export_dir, "finegrained_classification", "fgrained-%06d.tar")
+    wbd_pattern_binary = os.path.join(
+        export_dir, "binary_classification", "binary-%06d.tar"
+    )
+    wbd_pattern_fgrained = os.path.join(
+        export_dir, "finegrained_classification", "fgrained-%06d.tar"
+    )
     sink_binary = wds.ShardWriter(wbd_pattern_binary, maxsize=max_shard_size)
     sink_fgrained = wds.ShardWriter(wbd_pattern_fgrained, maxsize=max_shard_size)
 
@@ -49,12 +51,13 @@ def export_to_webdataset(data_dir: str, export_dir: str):
             img_width, img_height = raw_image.size
         except:
             raise Exception(f"Issue with image {image}")
-        
+
         # Get the ground truth bounding box and label
         labels = open(os.path.join(labels_dir, img_basename + ".txt"), "r")
 
         # Iterate over each annotation/crop separately
         binary_crop_count = 1
+        fgrained_crop_count = 1
         for line in labels:
             label_id, x, y, w, h = (
                 int(line.split()[0]),
@@ -70,32 +73,50 @@ def export_to_webdataset(data_dir: str, export_dir: str):
                     label_name = class_entry["name"]
                     label_rank = class_entry["rank"]
                     break
-       
-            # Ignore unlabeled crops        
-            if label_name!="Unidentifiable" and label_name!="Unclassified":
+
+            # Ignore unlabeled crops
+            if label_name != "Unidentifiable" and label_name != "Unclassified":
                 # Get the insect crop
                 x_start = int((x - w / 2) * img_width)
                 y_start = int((y - h / 2) * img_height)
                 w_px, h_px = int(w * img_width), int(h * img_height)
-                insect_crop = raw_image.crop((x_start, y_start, x_start+w_px, y_start+h_px))
-
-                # Test image save
-                # insect_crop.save(export_dir+str(count)+".jpg") 
+                insect_crop = raw_image.crop(
+                    (x_start, y_start, x_start + w_px, y_start + h_px)
+                )
 
                 # Export to webdataset for binary classification
-                ## TO DO:
-                sample_annotation = {"label": label_name, "region": region}
-                sample_binary = {"__key__": img_basename+"_"+str(binary_crop_count), "jpg": insect_crop, "json": sample_annotation}
+                sample_binary_annotation = {
+                    "label": label_name, 
+                    "region": region
+                }
+                sample_binary = {
+                    "__key__": img_basename + "_" + str(binary_crop_count),
+                    "jpg": insect_crop,
+                    "json": sample_binary_annotation,
+                }
                 binary_crop_count += 1
                 sink_binary.write(sample_binary)
 
-                # # Export to webdataset for finegrained classification, if moth crop
-                # if label_rank != "NA":            
-                #     ## TO DO:
-                #     pass
-            
+                # Export to webdataset for finegrained classification, if moth crop
+                if label_rank != "NA":
+                    sample_fgrained_annotation = {
+                        "label": label_name, 
+                        "synonym": ...,
+                        "gbif_id": ...,
+                        "region": region
+                    }
+                    sample_fgrained = {
+                        "__key__": img_basename + "_" + str(fgrained_crop_count),
+                        "jpg": insect_crop,
+                        "json": sample_fgrained_annotation,
+                    }
+                    fgrained_crop_count += 1
+                    sink_fgrained.write(sample_fgrained)
+
     sink_binary.close()
-    print(f"The export of AMI-Traps dataset to webdataset is complete.", flush=True)
+    sink_fgrained.close()
+    print(f"The export of the AMI-Traps dataset to webdataset is complete!", flush=True)
+
 
 if __name__ == "__main__":
     data_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/ami_traps_dataset"
