@@ -40,6 +40,13 @@ mypy = "^1.4.1"
 ipdb = "^0.13.13"
 python-devtools = "^2"
 
+#
+# Scripts
+#
+[tool.poetry.scripts]
+ami-dataset = "src.dataset_tools.cli:cli"
+
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
