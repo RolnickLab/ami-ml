@@ -16,6 +16,8 @@ from PIL import Image
 
 from src.dataset_tools.utils import get_image_path, load_dwca_data
 
+ERROR_CSV = ".error.csv"
+
 
 def _get_image_info(image_path):
     file_size = -1
@@ -120,18 +122,18 @@ def verify_images(
             if not errors_partial.empty:
                 errors_partial = errors_partial["image_path"]
                 errors_df = pd.concat([errors_df, errors_partial], ignore_index=True)
-                errors_df.to_csv(results_csv + ".error.csv", index=False)
+                errors_df.to_csv(results_csv + ERROR_CSV, index=False)
 
     verif_df = pd.merge(gbif_metadata, verif_df, how="inner", on="image_path")
     verif_df.to_csv(results_csv, index=False)
-    errors_df.to_csv(results_csv + ".error.csv", index=False)
+    errors_df.to_csv(results_csv + ERROR_CSV, index=False)
     print(f"Final verification results saved to {results_csv}")
 
 
 def _resume_from_ckpt(gbif_metadata, resume_from_ckpt):
     verif_df = pd.read_csv(resume_from_ckpt)
-    if os.path.isfile(resume_from_ckpt + ".error.csv"):
-        errors_df = pd.read_csv(resume_from_ckpt + ".error.csv")
+    if os.path.isfile(resume_from_ckpt + ERROR_CSV):
+        errors_df = pd.read_csv(resume_from_ckpt + ERROR_CSV)
     else:
         errors_df = pd.DataFrame()
     if not verif_df.empty:
