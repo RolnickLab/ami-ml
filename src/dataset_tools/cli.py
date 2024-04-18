@@ -4,9 +4,11 @@ import click
 
 from src.dataset_tools.clean_dataset import clean_dataset
 from src.dataset_tools.fetch_images import fetch_images
+from src.dataset_tools.verify_images import verify_images
 
 CLEAN_DATASET = "clean-dataset"
 FETCH_IMAGES = "fetch-images"
+VERIFY_IMAGES = "verify-images"
 
 
 def with_dwca_file(func):
@@ -16,6 +18,20 @@ def with_dwca_file(func):
         type=str,
         required=True,
         help="Darwin Core Archive file",
+    )
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def with_num_workers(func):
+    @functools.wraps(func)
+    @click.option(
+        "--num-workers",
+        type=int,
+        default=8,
+        help="Number of processes to download in images in parallel",
     )
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -109,6 +125,7 @@ def clean_dataset_command(
 #
 @click.command(name=FETCH_IMAGES, context_settings={"show_default": True})
 @with_dwca_file
+@with_num_workers
 @click.option(
     "--dataset-path", type=str, required=True, help="Folder to save images to"
 )
@@ -119,12 +136,6 @@ def clean_dataset_command(
         "Folder containing cached images. If provided, the script will try copy"
         " images from cache before trying fetch them."
     ),
-)
-@click.option(
-    "--num-workers",
-    type=int,
-    default=8,
-    help="Number of processes to download in images in parallel",
 )
 @click.option(
     "--dwca-file",
@@ -196,6 +207,80 @@ def fetch_images_command(
 
 
 #
+# Verify Images Command
+#
+
+
+@click.command(name=VERIFY_IMAGES, context_settings={"show_default": True})
+@with_dwca_file
+@with_num_workers
+@click.option(
+    "--resume-from-ckpt",
+    type=str,
+    help=(
+        "Checkpoint with partial verification results. If provided, the verification "
+        "continues from a previous execution, skipping the already verfied images."
+    ),
+)
+@click.option(
+    "--save-freq",
+    type=int,
+    default=10000,
+    help="Save partial verification data every n images",
+)
+@click.option(
+    "--dataset-path",
+    type=str,
+    required=True,
+    help="Path to directory containing dataset images.",
+)
+@click.option(
+    "--results-csv",
+    type=str,
+    required=True,
+    help="File to save image verification info",
+)
+@click.option(
+    "--subset-list",
+    type=str,
+    help=(
+        "JSON file with the list of keys to be fetched."
+        "If provided, only occorrences with these keys will be fetched. Use the option"
+        " --subset_key to define the field to be used for filtering."
+    ),
+)
+@click.option(
+    "--subset-key",
+    type=str,
+    default="acceptedTaxonKey",
+    help=(
+        "DwC-A field to use for filtering occurrences to be fetched. "
+        "See --subset_list"
+    ),
+)
+def verify_images_command(
+    dwca_file: str,
+    resume_from_ckpt: str,
+    save_freq: int,
+    num_workers: int,
+    dataset_path: str,
+    results_csv: str,
+    subset_list: str,
+    subset_key: str,
+):
+    verify_images(
+        dwca_file=dwca_file,
+        resume_from_ckpt=resume_from_ckpt,
+        save_freq=save_freq,
+        num_workers=num_workers,
+        dataset_path=dataset_path,
+        results_csv=results_csv,
+        subset_list=subset_list,
+        subset_key=subset_key,
+    )
+
+
+#
 # Main CLI configuration
 #
 @click.group()
@@ -206,6 +291,7 @@ def cli():
 
 cli.add_command(clean_dataset_command)
 cli.add_command(fetch_images_command)
+cli.add_command(verify_images_command)
 
 if __name__ == "__main__":
     cli()
