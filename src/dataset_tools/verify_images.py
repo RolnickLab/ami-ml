@@ -64,6 +64,63 @@ def _verify_image(image_data, dataset_path: str):
     return verification_metadata
 
 
+def _resume_from_ckpt(gbif_metadata, resume_from_ckpt):
+    verif_df = pd.read_csv(resume_from_ckpt)
+    if os.path.isfile(resume_from_ckpt + ERROR_CSV):
+        errors_df = pd.read_csv(resume_from_ckpt + ERROR_CSV)
+    else:
+        errors_df = pd.DataFrame()
+    if not verif_df.empty:
+        verif_df = verif_df[["image_path", "width", "height", "fetch_date"]].copy()
+        gbif_metadata_unverified = gbif_metadata[
+            ~gbif_metadata.image_path.isin(verif_df.image_path)
+        ]
+    else:
+        gbif_metadata_unverified = gbif_metadata
+    return errors_df, gbif_metadata_unverified, verif_df
+
+
+def _subset_list(gbif_metadata, subset_key, subset_list):
+    with open(subset_list) as f:
+        keys_list = json.load(f)
+        keys_list = [int(x) for x in keys_list]
+    gbif_metadata = gbif_metadata[gbif_metadata[subset_key].isin(keys_list)].copy()
+    return gbif_metadata
+
+
+def _execute_verification_process(
+    errors_df,
+    gbif_metadata,
+    images_list,
+    num_workers,
+    results_csv,
+    verif_df,
+    verify_image_f,
+):
+    for images_list_partial in images_list:
+        with Pool(processes=num_workers) as pool:
+            results = pool.map(verify_image_f, images_list_partial)
+            errors = [x for x in results if x["corrupted"]]
+            results = [x for x in results if x["file_size"] > 0]
+
+            verif_df_partial = pd.DataFrame(results)
+            errors_partial = pd.DataFrame(errors)
+
+            if not verif_df_partial.empty:
+                verif_df = pd.concat([verif_df, verif_df_partial], ignore_index=True)
+                temp_df = pd.merge(
+                    gbif_metadata, verif_df, how="inner", on="image_path"
+                )
+                temp_df.to_csv(results_csv, index=False)
+                print(f"Partial verification saved to {results_csv}")
+
+            if not errors_partial.empty:
+                errors_partial = errors_partial["image_path"]
+                errors_df = pd.concat([errors_df, errors_partial], ignore_index=True)
+                errors_df.to_csv(results_csv + ERROR_CSV, index=False)
+    return errors_df, verif_df
+
+
 def verify_images(
     dwca_file: str,
     resume_from_ckpt: str,
@@ -76,10 +133,7 @@ def verify_images(
 ):
     gbif_metadata = load_dwca_data(dwca_file)
     if subset_list is not None:
-        with open(subset_list) as f:
-            keys_list = json.load(f)
-            keys_list = [int(x) for x in keys_list]
-        gbif_metadata = gbif_metadata[gbif_metadata[subset_key].isin(keys_list)].copy()
+        gbif_metadata = _subset_list(gbif_metadata, subset_key, subset_list)
 
     gbif_metadata = gbif_metadata[~gbif_metadata.datasetKey.isna()]
     gbif_metadata["image_path"] = gbif_metadata.apply(get_image_path, axis=1)
@@ -102,45 +156,17 @@ def verify_images(
 
     verify_image_f = partial(_verify_image, dataset_path=dataset_path)
 
-    for images_list_partial in images_list:
-        with Pool(processes=num_workers) as pool:
-            results = pool.map(verify_image_f, images_list_partial)
-            errors = [x for x in results if x["corrupted"]]
-            results = [x for x in results if x["file_size"] > 0]
-
-            verif_df_partial = pd.DataFrame(results)
-            errors_partial = pd.DataFrame(errors)
-
-            if not verif_df_partial.empty:
-                verif_df = pd.concat([verif_df, verif_df_partial], ignore_index=True)
-                temp_df = pd.merge(
-                    gbif_metadata, verif_df, how="inner", on="image_path"
-                )
-                temp_df.to_csv(results_csv, index=False)
-                print(f"Partial verification saved to {results_csv}")
-
-            if not errors_partial.empty:
-                errors_partial = errors_partial["image_path"]
-                errors_df = pd.concat([errors_df, errors_partial], ignore_index=True)
-                errors_df.to_csv(results_csv + ERROR_CSV, index=False)
+    errors_df, verif_df = _execute_verification_process(
+        errors_df,
+        gbif_metadata,
+        images_list,
+        num_workers,
+        results_csv,
+        verif_df,
+        verify_image_f,
+    )
 
     verif_df = pd.merge(gbif_metadata, verif_df, how="inner", on="image_path")
     verif_df.to_csv(results_csv, index=False)
     errors_df.to_csv(results_csv + ERROR_CSV, index=False)
     print(f"Final verification results saved to {results_csv}")
-
-
-def _resume_from_ckpt(gbif_metadata, resume_from_ckpt):
-    verif_df = pd.read_csv(resume_from_ckpt)
-    if os.path.isfile(resume_from_ckpt + ERROR_CSV):
-        errors_df = pd.read_csv(resume_from_ckpt + ERROR_CSV)
-    else:
-        errors_df = pd.DataFrame()
-    if not verif_df.empty:
-        verif_df = verif_df[["image_path", "width", "height", "fetch_date"]].copy()
-        gbif_metadata_unverified = gbif_metadata[
-            ~gbif_metadata.image_path.isin(verif_df.image_path)
-        ]
-    else:
-        gbif_metadata_unverified = gbif_metadata
-    return errors_df, gbif_metadata_unverified, verif_df
