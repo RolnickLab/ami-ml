@@ -6,9 +6,24 @@ from src.dataset_tools.clean_dataset import clean_dataset
 from src.dataset_tools.fetch_images import fetch_images
 from src.dataset_tools.verify_images import verify_images
 
-CLEAN_DATASET = "clean-dataset"
-FETCH_IMAGES = "fetch-images"
-VERIFY_IMAGES = "verify-images"
+CLEAN_CMD = "clean_cmd"
+FETCH_CMD = "fetch_cmd"
+VERIFY_CMD = "verify_cmd"
+
+# This is most useful to automatically test the CLI
+COMMAND_KEYS = frozenset([CLEAN_CMD, FETCH_CMD, VERIFY_CMD])
+
+COMMANDS = {
+    CLEAN_CMD: "clean-dataset",
+    FETCH_CMD: "fetch-images",
+    VERIFY_CMD: "verify-images",
+}
+
+COMMANDS_HELP = {
+    CLEAN_CMD: "This command cleans the dataset",
+    FETCH_CMD: "This command fetches the images",
+    VERIFY_CMD: "This command verifies the images",
+}
 
 
 def with_dwca_file(func):
@@ -42,7 +57,11 @@ def with_num_workers(func):
 #
 # Clean Dataset
 #
-@click.command(name=CLEAN_DATASET, context_settings={"show_default": True})
+@click.command(
+    name=COMMANDS[CLEAN_CMD],
+    help=COMMANDS_HELP[CLEAN_CMD],
+    context_settings={"show_default": True},
+)
 @with_dwca_file
 @click.option(
     "--verified-data-csv",
@@ -123,7 +142,11 @@ def clean_dataset_command(
 #
 # Fetch Images Command
 #
-@click.command(name=FETCH_IMAGES, context_settings={"show_default": True})
+@click.command(
+    name=COMMANDS[FETCH_CMD],
+    help=COMMANDS_HELP[FETCH_CMD],
+    context_settings={"show_default": True},
+)
 @with_dwca_file
 @with_num_workers
 @click.option(
@@ -211,7 +234,11 @@ def fetch_images_command(
 #
 
 
-@click.command(name=VERIFY_IMAGES, context_settings={"show_default": True})
+@click.command(
+    name=COMMANDS[VERIFY_CMD],
+    help=COMMANDS_HELP[VERIFY_CMD],
+    context_settings={"show_default": True},
+)
 @with_dwca_file
 @with_num_workers
 @click.option(
