@@ -117,10 +117,11 @@ class ModelInference:
             predictions = self.model(image)
             predictions = torch.nn.functional.softmax(predictions, dim=1)
             predictions = predictions.cpu()
-            if self.topk > len(predictions[0]):
-                predictions = torch.topk(predictions, len(predictions[0]))
-            else:
-                predictions = torch.topk(predictions, self.topk)
+            predictions = torch.topk(predictions, len(predictions[0])) # Get all predictions
+            # if self.topk > len(predictions[0]):
+            #     predictions = torch.topk(predictions, len(predictions[0]))
+            # else:
+            #     predictions = torch.topk(predictions, self.topk)
 
             # Process the results
             values, indices = predictions.values.numpy()[0], predictions.indices.numpy()[0]
