@@ -27,7 +27,7 @@ def binary_model_evaluation(
     min_crop_dim: int = 0,
 ):
     """Main function for binary model evaluation"""
-    
+
     # Get the environment variables
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device {device} is available.")
@@ -63,7 +63,7 @@ def binary_model_evaluation(
         image = Image.open(image_path)
 
         # If skipping small crops, check size
-        if skip_small_crops:
+        if skip_small_crops == "True":
             width, height = image.width, image.height
             if width < min_crop_dim and height < min_crop_dim:
                 continue
@@ -79,12 +79,16 @@ def binary_model_evaluation(
 
         # Fill up evluation metrics
         if gt_label == "Moth":
-            if pred == "moth": tp += 1
-            else: fn += 1
+            if pred == "moth":
+                tp += 1
+            else:
+                fn += 1
             gt_moths += 1
         elif gt_label == "Non-Moth":
-            if pred == "nonmoth": tn += 1
-            else: fp += 1
+            if pred == "nonmoth":
+                tn += 1
+            else:
+                fp += 1
             gt_nonmoths += 1
         else:
             raise Exception("Unknown binary label for an insect crop!")
@@ -163,6 +167,6 @@ if __name__ == "__main__":
         args.model_dir,
         args.category_map,
         args.insect_crops_dir,
-        bool(args.skip_small_crops),
+        args.skip_small_crops,
         args.min_crop_dim,
     )
