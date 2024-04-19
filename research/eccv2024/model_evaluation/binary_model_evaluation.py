@@ -24,10 +24,10 @@ def binary_model_evaluation(
     category_map: str,
     insect_crops_dir: str,
     skip_small_crops: bool,
-    min_crop_dim: int = 0
+    min_crop_dim: int = 0,
 ):
     """Main function for binary model evaluation"""
-
+    
     # Get the environment variables
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device {device} is available.")
@@ -49,15 +49,16 @@ def binary_model_evaluation(
 
     # Get all insect crops and label information
     insect_crops = glob.glob(os.path.join(insect_crops_dir, "*.jpg"))
-    insect_labels = json.load(open(os.path.join(insect_crops_dir, "binary_labels.json")))
+    insect_labels = json.load(
+        open(os.path.join(insect_crops_dir, "binary_labels.json"))
+    )
 
     # Evaluation metrics variables
     tp, tn, fp, fn = 0, 0, 0, 0
     gt_moths, gt_nonmoths = 0, 0
 
     # Iterate over the files in webdataset
-    for image_path in insect_crops: 
-
+    for image_path in insect_crops:
         # Read the image
         image = Image.open(image_path)
 
@@ -68,7 +69,7 @@ def binary_model_evaluation(
                 continue
 
         # Get ground truth label
-        img_name = os.path.split(image_path)[1] 
+        img_name = os.path.split(image_path)[1]
         gt_label = insect_labels[img_name]["label"]
 
         # Binary model prediction
@@ -76,7 +77,7 @@ def binary_model_evaluation(
         image = transform_to_tensor(image)
         pred = binary_classifier.predict(image)[0][0]
 
-        # Fill up evluation metrics 
+        # Fill up evluation metrics
         if gt_label == "Moth":
             if pred == "moth": tp += 1
             else: fn += 1
@@ -87,7 +88,7 @@ def binary_model_evaluation(
             gt_nonmoths += 1
         else:
             raise Exception("Unknown binary label for an insect crop!")
-        
+
     # Aggregated metrics
     total_crops = gt_moths + gt_nonmoths
     accuracy = round((tp + tn) / (tp + tn + fp + fn) * 100, 2)
@@ -105,20 +106,63 @@ def binary_model_evaluation(
         \nPrecision - {precision}%\
         \nRecall - {recall}%\
         \nF1 score - {fscore}%\
-        \n", 
-        flush=True
+        \n",
+        flush=True,
     )
 
-if __name__ == "__main__":
-    run_name = "binary_resnet50_baseline_run1"
-    wandb_model_artifact = "moth-ai/ami-gbif-binary/model:v0"
-    model_type = "resnet50"
-    model_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/models/binary"
-    category_map = "05-moth-nonmoth_category_map.json"
-    insect_crops_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/insect_crops"
-    skip_small_crops = True
-    min_crop_dim = 200
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--run_name",
+        help="Run name of the model on Weights and Biases.",
+        required=True,
+    )
+    parser.add_argument(
+        "--wandb_model_artifact",
+        help="Model artifact on Weights and Biases.",
+        required=True,
+    )
+    parser.add_argument(
+        "--model_type",
+        help="Model type of the binary classifier.",
+        required=True,
+    )
+    parser.add_argument(
+        "--model_dir",
+        help="Model directory where the binary models are downloaded.",
+        required=True,
+    )
+    parser.add_argument(
+        "--category_map",
+        help="Category map for the binary classifier.",
+        required=True,
+    )
+    parser.add_argument(
+        "--insect_crops_dir",
+        help="Directory containing the insect crops.",
+        required=True,
+    )
+    parser.add_argument(
+        "--skip_small_crops",
+        help="Whether to skip crops below a certain size.",
+        required=True,
+    )
+    parser.add_argument(
+        "--min_crop_dim",
+        help="Minimum crop length in pixels to consider for prediction.",
+        type=int,
+    )
+
+    args = parser.parse_args()
     binary_model_evaluation(
-        run_name, wandb_model_artifact, model_type, model_dir, category_map, insect_crops_dir, skip_small_crops, min_crop_dim
+        args.run_name,
+        args.wandb_model_artifact,
+        args.model_type,
+        args.model_dir,
+        args.category_map,
+        args.insect_crops_dir,
+        bool(args.skip_small_crops),
+        args.min_crop_dim,
     )
