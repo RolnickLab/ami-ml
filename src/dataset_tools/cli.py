@@ -26,6 +26,7 @@ from src.dataset_tools.clean_dataset import clean_dataset
 from src.dataset_tools.delete_images import delete_images
 from src.dataset_tools.fetch_images import fetch_images
 from src.dataset_tools.predict_lifestage import predict_lifestage
+from src.dataset_tools.split_dataset import split_dataset
 from src.dataset_tools.verify_images import verify_images
 
 # Command key constants
@@ -34,6 +35,7 @@ FETCH_CMD = "fetch_cmd"
 VERIFY_CMD = "verify_cmd"
 DELETE_CMD = "delete_cmd"
 PREDICT_CMD = "predict_cmd"
+SPLIT_CMD = "split_cmd"
 
 # This is most useful to automatically test the CLI
 COMMAND_KEYS = frozenset([CLEAN_CMD, FETCH_CMD, VERIFY_CMD, DELETE_CMD, PREDICT_CMD])
@@ -45,6 +47,7 @@ COMMANDS = {
     VERIFY_CMD: "verify-images",
     DELETE_CMD: "delete-images",
     PREDICT_CMD: "predict-lifestage",
+    SPLIT_CMD: "split-dataset",
 }
 
 # Command help text dictionary
@@ -57,6 +60,7 @@ COMMANDS_HELP = {
         "This command launches a model to predict the lifestage for "
         "the provided images"
     ),
+    SPLIT_CMD: "This command splits the provided dataset into train and test sets",
 }
 
 
@@ -125,6 +129,20 @@ def with_results_csv(func):
         type=str,
         required=True,
         help="File to save image verification info",
+    )
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def with_random_seed(func):
+    @click.option(
+        "--random-seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducible experiments",
     )
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -248,12 +266,7 @@ def clean_dataset_command(
     ),
 )
 @with_num_workers
-@click.option(
-    "--random-seed",
-    type=int,
-    default=42,
-    help="Random seed for reproducible experiments",
-)
+@with_random_seed
 @click.option(
     "--request-timeout",
     type=int,
@@ -469,6 +482,84 @@ def predict_lifestage_command(
         log_frequence=log_frequence,
         category_map_json=category_map_json,
         results_csv=results_csv,
+    )
+
+
+#
+# Split Dataset Command
+#
+
+
+@click.command(
+    name=COMMANDS[SPLIT_CMD],
+    help=COMMANDS_HELP[SPLIT_CMD],
+    context_settings={"show_default": True},
+)
+@click.option(
+    "--dataset-csv",
+    type=str,
+    required=True,
+    help="CSV file with dataset metadata",
+)
+@click.option(
+    "--split-prefix",
+    type=str,
+    required=True,
+    help="Prefix used for saving splits.",
+)
+@click.option(
+    "--category-key",
+    type=str,
+    default="acceptedTaxonKey",
+    help="Key used as category id for strified spliting",
+)
+@click.option(
+    "--max-instances",
+    type=int,
+    default=1000,
+    help="Maximun number of instances on training set (and on val/test proportionally)",
+)
+@with_random_seed
+@click.option(
+    "--split-by-occurrence",
+    type=bool,
+    default=True,
+    help=(
+        "Whether images belonging to the same occurrence should be kept in the same "
+        "partition"
+    ),
+)
+@click.option(
+    "--test-frac",
+    type=float,
+    default=0.2,
+    help="Fraction of data used for the test set",
+)
+@click.option(
+    "--val-frac",
+    type=float,
+    default=0.1,
+    help="Fraction of data used for the validation set",
+)
+def split_dataset_command(
+    dataset_csv: str,
+    split_prefix: str,
+    test_frac: float,
+    val_frac: float,
+    split_by_occurrence: bool,
+    category_key: str,
+    max_instances: int,
+    random_seed: int,
+):
+    split_dataset(
+        dataset_csv=dataset_csv,
+        split_prefix=split_prefix,
+        test_frac=test_frac,
+        val_frac=val_frac,
+        split_by_occurrence=split_by_occurrence,
+        category_key=category_key,
+        max_instances=max_instances,
+        random_seed=random_seed,
     )
 
 

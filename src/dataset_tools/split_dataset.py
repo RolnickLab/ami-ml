@@ -5,10 +5,10 @@
 """
 import math
 
-import click
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from utils import set_random_seeds
+
+from src.dataset_tools.utils import set_random_seeds
 
 
 def subsample_instances(dataset, max_instances: int, category_key: str):
@@ -25,59 +25,7 @@ def subsample_instances(dataset, max_instances: int, category_key: str):
     return subsampling_metadata
 
 
-@click.command(context_settings={"show_default": True})
-@click.option(
-    "--dataset-csv",
-    type=str,
-    required=True,
-    help="CSV file with dataset metadata",
-)
-@click.option(
-    "--split-prefix",
-    type=str,
-    required=True,
-    help="Prefix used for saving splits.",
-)
-@click.option(
-    "--test-frac",
-    type=float,
-    default=0.2,
-    help="Fraction of data used for the test set",
-)
-@click.option(
-    "--val-frac",
-    type=float,
-    default=0.1,
-    help="Fraction of data used for the validation set",
-)
-@click.option(
-    "--split-by-occurrence",
-    type=bool,
-    default=True,
-    help=(
-        "Whether images belonging to the same occurrence should be kept in the same "
-        "partition"
-    ),
-)
-@click.option(
-    "--max-instances",
-    type=int,
-    default=1000,
-    help="Maximun number of instances on training set (and on val/test proportionally)",
-)
-@click.option(
-    "--category-key",
-    type=str,
-    default="acceptedTaxonKey",
-    help="Key used as category id for strified spliting",
-)
-@click.option(
-    "--random-seed",
-    type=int,
-    default=42,
-    help="Random seed for reproductible experiments",
-)
-def main(
+def split_dataset(
     dataset_csv: str,
     split_prefix: str,
     test_frac: float,
@@ -147,7 +95,3 @@ def main(
     data = {"train": train_set, "val": val_set, "test": test_set}
     for set_name in data:
         data[set_name].to_csv(split_prefix + set_name + ".csv", index=False)
-
-
-if __name__ == "__main__":
-    main()
