@@ -23,6 +23,7 @@ import functools
 import click
 
 from src.dataset_tools.clean_dataset import clean_dataset
+from src.dataset_tools.create_webdataset import create_webdataset
 from src.dataset_tools.delete_images import delete_images
 from src.dataset_tools.fetch_images import fetch_images
 from src.dataset_tools.predict_lifestage import predict_lifestage
@@ -36,9 +37,20 @@ VERIFY_CMD = "verify_cmd"
 DELETE_CMD = "delete_cmd"
 PREDICT_CMD = "predict_cmd"
 SPLIT_CMD = "split_cmd"
+WEBDATASET_CMD = "webdataset_cmd"
 
 # This is most useful to automatically test the CLI
-COMMAND_KEYS = frozenset([CLEAN_CMD, FETCH_CMD, VERIFY_CMD, DELETE_CMD, PREDICT_CMD])
+COMMAND_KEYS = frozenset(
+    [
+        CLEAN_CMD,
+        FETCH_CMD,
+        VERIFY_CMD,
+        DELETE_CMD,
+        PREDICT_CMD,
+        SPLIT_CMD,
+        WEBDATASET_CMD,
+    ]
+)
 
 # Command dictionary
 COMMANDS = {
@@ -48,6 +60,7 @@ COMMANDS = {
     DELETE_CMD: "delete-images",
     PREDICT_CMD: "predict-lifestage",
     SPLIT_CMD: "split-dataset",
+    WEBDATASET_CMD: "create-webdataset",
 }
 
 # Command help text dictionary
@@ -61,6 +74,7 @@ COMMANDS_HELP = {
         "the provided images"
     ),
     SPLIT_CMD: "This command splits the provided dataset into train and test sets",
+    WEBDATASET_CMD: "This command creates a webdataset",
 }
 
 
@@ -559,6 +573,124 @@ def split_dataset_command(
         split_by_occurrence=split_by_occurrence,
         category_key=category_key,
         max_instances=max_instances,
+        random_seed=random_seed,
+    )
+
+
+#
+# Create Webdataset Command
+#
+
+
+@click.command(
+    name=COMMANDS[WEBDATASET_CMD],
+    help=COMMANDS_HELP[WEBDATASET_CMD],
+    context_settings={"show_default": True},
+)
+@click.option(
+    "--annotations-csv",
+    type=str,
+    required=True,
+    help="Path to csv file containing the annotations",
+)
+@with_dataset_path
+@click.option(
+    "--image-path-column",
+    type=str,
+    required=True,
+    help="CSV column containing image file path",
+)
+@click.option(
+    "--label-column",
+    type=str,
+    required=True,
+    help="CSV column containing image label",
+)
+@click.option(
+    "--shuffle-images",
+    type=bool,
+    default=True,
+    help="Shufle images before to write to tar files",
+)
+@click.option(
+    "--webdataset-patern",
+    type=str,
+    required=True,
+    help="Webdataset output file pattern",
+)
+@click.option(
+    "--category-map-json",
+    type=str,
+    help=(
+        "JSON containing the categories id map. If not provided, the"
+        " category map will be infered from annotations csv."
+    ),
+)
+@click.option(
+    "--columns-to-json",
+    type=str,
+    help="List of columns from CSV file to save as metadata in a json file.",
+)
+@click.option(
+    "--max-shard-size",
+    type=int,
+    default=100 * 1024 * 1024,
+    help="Maximun size of each shard",
+)
+@click.option(
+    "--megadetector-results-json",
+    type=str,
+    help=(
+        "Path to json file containing megadetector results. If provided, the"
+        " images will be cropped to a squared region around the bbox with"
+        " the highest confidence."
+    ),
+)
+@click.option(
+    "--resize-min-size",
+    type=int,
+    help=(
+        "Size which the shortest image side will be resized to. If it is not"
+        " given, the original image is used withou resizing."
+    ),
+)
+@click.option(
+    "--save-category-map-json",
+    type=str,
+    help=(
+        "JSON containing the categories id map. If not provided, the"
+        " category map will be infered from annotations csv."
+    ),
+)
+@with_random_seed
+def create_webdataset_command(
+    annotations_csv: str,
+    dataset_dir: str,
+    webdataset_patern: str,
+    image_path_column: str,
+    label_column: str,
+    max_shard_size: int,
+    shuffle_images: bool,
+    resize_min_size: int,
+    category_map_json: str,
+    save_category_map_json: str,
+    columns_to_json: str,
+    megadetector_results_json: str,
+    random_seed: int,
+):
+    create_webdataset(
+        annotations_csv=annotations_csv,
+        dataset_dir=dataset_dir,
+        webdataset_patern=webdataset_patern,
+        image_path_column=image_path_column,
+        label_column=label_column,
+        max_shard_size=max_shard_size,
+        shuffle_images=shuffle_images,
+        resize_min_size=resize_min_size,
+        category_map_json=category_map_json,
+        save_category_map_json=save_category_map_json,
+        columns_to_json=columns_to_json,
+        megadetector_results_json=megadetector_results_json,
         random_seed=random_seed,
     )
 

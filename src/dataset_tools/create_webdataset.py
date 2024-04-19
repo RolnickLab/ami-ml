@@ -1,20 +1,21 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-""" Create webdataset
+"""
+Create webdataset
 """
 
 import json
 import os
 
-import click
 import pandas as pd
 import PIL
 import torch
 import webdataset as wds
 from PIL import Image
 from torchvision import transforms
-from utils import set_random_seeds
+
+from src.dataset_tools.utils import set_random_seeds
 
 
 def prepare_json_data(sample_metadata, columns_to_json):
@@ -184,94 +185,7 @@ def dataset_samples(
         yield sample
 
 
-@click.command(context_settings={"show_default": True})
-@click.option(
-    "--annotations-csv",
-    type=str,
-    required=True,
-    help="Path to csv file containing the annotations",
-)
-@click.option(
-    "--dataset-dir",
-    type=str,
-    required=True,
-    help="Path to directory containing dataset images",
-)
-@click.option(
-    "--webdataset-patern",
-    type=str,
-    required=True,
-    help="Webdataset output file pattern",
-)
-@click.option(
-    "--image-path-column",
-    type=str,
-    required=True,
-    help="CSV column containing image file path",
-)
-@click.option(
-    "--label-column",
-    type=str,
-    required=True,
-    help="CSV column containing image label",
-)
-@click.option(
-    "--max-shard-size",
-    type=int,
-    default=100 * 1024 * 1024,
-    help="Maximun size of each shard",
-)
-@click.option(
-    "--resize-min-size",
-    type=int,
-    help=(
-        "Size which the shortest image side will be resized to. If it is not"
-        " given, the original image is used withou resizing."
-    ),
-)
-@click.option(
-    "--shuffle-images",
-    type=bool,
-    default=True,
-    help="Shufle images before to write to tar files",
-)
-@click.option(
-    "--category-map-json",
-    type=str,
-    help=(
-        "JSON containing the categories id map. If not provided, the"
-        " category map will be infered from annotations csv."
-    ),
-)
-@click.option(
-    "--save-category-map-json",
-    type=str,
-    help=(
-        "JSON containing the categories id map. If not provided, the"
-        " category map will be infered from annotations csv."
-    ),
-)
-@click.option(
-    "--columns-to-json",
-    type=str,
-    help="List of columns from CSV file to save as metadata in a json file.",
-)
-@click.option(
-    "--megadetector-results-json",
-    type=str,
-    help=(
-        "Path to json file containing megadetector results. If provided, the"
-        " images will be cropped to a squared region around the bbox with"
-        " the highest confidence."
-    ),
-)
-@click.option(
-    "--random-seed",
-    type=int,
-    default=42,
-    help="Random seed for reproductible experiments",
-)
-def main(
+def create_webdataset(
     annotations_csv: str,
     dataset_dir: str,
     webdataset_patern: str,
@@ -302,7 +216,3 @@ def main(
         )
         for sample in dataset:
             sink.write(sample)
-
-
-if __name__ == "__main__":
-    main()
