@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=northamerica_resnet50_baseline_run1
+#SBATCH --job-name=northamerica_resnet50_baseline_run
 #SBATCH --partition=long                      # Ask for long job
 #SBATCH --cpus-per-task=2                     # Ask for 2 CPUs
 #SBATCH --gres=gpu:rtx8000:1                  # Ask for 1 GPU
@@ -12,7 +12,7 @@ module load anaconda/3
 # 2. Load your environment
 conda activate milamoth_ai
 
-# 4. Launch your script
+# 3. Launch your script
 python model_prediction_on_trap_data.py \
 --data_dir /home/mila/a/aditya.jain/scratch/cvpr2024_data \
 --binary_model moth-nonmoth_resnet50_20230604_065440_30.pth \
