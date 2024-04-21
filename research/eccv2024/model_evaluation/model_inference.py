@@ -13,7 +13,7 @@ class ModelInference:
         self,
         model_path: str,   
         model_type: str,     
-        category_map_json: dict,
+        category_map_json: str,
         device: str,        
         input_size: int = 128,
         topk: int = 10
@@ -27,7 +27,7 @@ class ModelInference:
         self.model = self._load_model(model_path, num_classes=len(self.id2categ))
         self.model.eval()
 
-    def _load_category_map(self, category_map_json: dict):
+    def _load_category_map(self, category_map_json: str):
         with open(category_map_json, "r") as f:
             categories_map = json.load(f)
 
@@ -117,8 +117,7 @@ class ModelInference:
             predictions = self.model(image)
             predictions = torch.nn.functional.softmax(predictions, dim=1)
             predictions = predictions.cpu()
-            # predictions = torch.topk(predictions, len(predictions[0])) # Get all predictions
-            if self.topk > len(predictions[0]):
+            if self.topk == 0 or self.topk > len(predictions[0]): # topk=0 means get all predictions
                 predictions = torch.topk(predictions, len(predictions[0]))
             else:
                 predictions = torch.topk(predictions, self.topk)
@@ -130,6 +129,6 @@ class ModelInference:
             for i in range(len(indices)):
                 idx, value = indices[i], values[i]
                 categ = self.id2categ[idx]
-                pred_results.append([categ, str(value)])
+                pred_results.append([categ, value])
 
             return pred_results

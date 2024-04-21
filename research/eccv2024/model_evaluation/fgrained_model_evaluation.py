@@ -9,6 +9,7 @@ import glob
 import json
 import argparse
 import pandas as pd
+import numpy as np
 import pickle
 from PIL import Image
 import torch
@@ -27,9 +28,32 @@ def check_prediction(gt_label, pred_label):
     pass
 
 
-def get_higher_taxon_pred():
-    """Rollup species prediction at genus and family level"""
-    pass
+def get_higher_taxon_pred(sp_pred: list[list[str, float]], taxonomy_map: pd.DataFrame):
+    """Rollup model species prediction at genus and family level"""
+    
+    # Variables definitions
+    genus_pred, family_pred = {}, {}
+
+    for prediction in sp_pred:
+        # Get family and genus name for every species prediction
+        sp_key, conf = int(prediction[0]), round(float(prediction[1]), 3)
+        genus = taxonomy_map.loc[taxonomy_map["speciesKey"] == sp_key]["genus"].values[0]
+        family = taxonomy_map.loc[taxonomy_map["speciesKey"] == sp_key]["family"].values[0]
+
+        # Genus accuracy calculation
+        if genus not in genus_pred.keys(): genus_pred[genus] = conf
+        else: genus_pred[genus] += conf
+
+        # Family accuracy calculation
+        if family not in family_pred.keys(): family_pred[family] = conf
+        else: family_pred[family] += conf
+
+    # Sort the prediction in decreasing order of confidence
+    genus_pred_sorted = [[taxa, round(conf, 3)] for taxa, conf in sorted(list(genus_pred.items()), key=lambda item: item[1], reverse=True)]
+    family_pred_sorted = [[taxa, round(conf, 3)] for taxa, conf in sorted(list(family_pred.items()), key=lambda item: item[1], reverse=True)]
+
+    return genus_pred_sorted, family_pred_sorted
+
 
 
 def get_higher_taxon_gt(label: str, rank: str, taxonomy_map: pd.DataFrame):
@@ -50,6 +74,7 @@ def get_higher_taxon_gt(label: str, rank: str, taxonomy_map: pd.DataFrame):
             print(f"{label} of rank {rank} not found in the taxonomy database.")
 
 
+
 def fgrained_model_evaluation(
     run_name: str,
     artifact: str,
@@ -59,7 +84,8 @@ def fgrained_model_evaluation(
     category_map: str,
     insect_crops_dir: str,
     sp_exclusion_list: list[int],
-    ami_traps_taxonomy_map: pd.DataFrame
+    ami_traps_taxonomy_map: pd.DataFrame,
+    ami_gbif_taxonomy_map: pd.DataFrame
 ):
     """Main function for fine-grained model evaluation"""
 
@@ -80,7 +106,7 @@ def fgrained_model_evaluation(
 
     # Build the fine-grained classification model
     categ_map_path = os.path.join(model_dir, category_map)
-    fgrained_classifier = ModelInference(new_model, model_type, categ_map_path, device, topk=5)
+    fgrained_classifier = ModelInference(new_model, model_type, categ_map_path, device, topk=0)
 
     # Get all moth insect crops label information
     insect_labels = json.load(
@@ -110,14 +136,16 @@ def fgrained_model_evaluation(
             transform_to_tensor = transforms.Compose([transforms.ToTensor()])
             image = transform_to_tensor(image)
             sp_pred = fgrained_classifier.predict(image)
-            # gs_pred, fm_pred = get_higher_taxon_pred(sp_pred)
+
+            # Get rolled up predictions to genus and family level
+            gs_pred, fm_pred = get_higher_taxon_pred(sp_pred, ami_gbif_taxonomy_map)
 
             # Calculate species accuracy
             if gt_rank == "SPECIES":
                 # Get ground truth at the labeled rank and above
                 gt_label_sp = gt_label
                 gt_label_gs, gt_label_fm = get_higher_taxon_gt(gt_label_sp, gt_rank, ami_traps_taxonomy_map)
-                
+
                 # # Species accuracy calculation
                 # top1, top5 = check_prediction(gt_acceptedTaxonKey, sp_pred)
                 # sp_top1 += top1; sp_top5 += top5; sp_count += 1
@@ -174,12 +202,10 @@ if __name__ == "__main__":
     insect_crops_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/insect_crops"
     sp_exclusion_list_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle"
     sp_exclusion_list = exclusion_sp = pickle.load(open(sp_exclusion_list_file, "rb"))
-    ami_traps_taxonomy_map = pd.read_csv("/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-taxonomy-joined-20240119.csv")
-    # ami_gbif_taxonomy_map = pd.read_csv(...)
+    ami_traps_taxonomy_map = pd.read_csv("/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv")
+    ami_gbif_taxonomy_map = pd.read_csv("/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-gbif_taxonomy_map.csv")
 
-    fgrained_model_evaluation(run_name, artifact, region, model_type, model_dir, category_map, insect_crops_dir, sp_exclusion_list, ami_traps_taxonomy_map)
-
-
+    fgrained_model_evaluation(run_name, artifact, region, model_type, model_dir, category_map, insect_crops_dir, sp_exclusion_list, ami_traps_taxonomy_map, ami_gbif_taxonomy_map)
 
     # parser = argparse.ArgumentParser()
 
