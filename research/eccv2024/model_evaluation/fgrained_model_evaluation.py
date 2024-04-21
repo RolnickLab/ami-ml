@@ -17,7 +17,7 @@ from torchvision import transforms
 import wandb
 
 from model_inference import ModelInference
-# from taxon_grouping import TaxonGrouping
+
 
 def check_prediction(gt_label, pred_label):
     """
@@ -25,10 +25,20 @@ def check_prediction(gt_label, pred_label):
     
     Returns 0, 1 for incorrect and correct respectively
     """
-    pass
+    
+    # Variable definitions
+    top1, top5 = 0, 0
+
+    # Accuracy calculation
+    top5_pred = pred_label[:5]
+    top5_labels = [item[0] for item in top5_pred]
+    if gt_label in top5_labels[:1]: top1 = 1
+    if gt_label in top5_labels[:5]: top5 = 1
+
+    return top1, top5
 
 
-def get_higher_taxon_pred(sp_pred: list[list[str, float]], taxonomy_map: pd.DataFrame):
+def get_higher_taxon_pred(sp_pred: list[list[str, float]], taxonomy_map: pd.DataFrame, gbif_taxonomy_hierarchy: dict):
     """Rollup model species prediction at genus and family level"""
     
     # Variables definitions
@@ -36,9 +46,9 @@ def get_higher_taxon_pred(sp_pred: list[list[str, float]], taxonomy_map: pd.Data
 
     for prediction in sp_pred:
         # Get family and genus name for every species prediction
-        sp_key, conf = int(prediction[0]), round(float(prediction[1]), 3)
-        genus = taxonomy_map.loc[taxonomy_map["speciesKey"] == sp_key]["genus"].values[0]
-        family = taxonomy_map.loc[taxonomy_map["speciesKey"] == sp_key]["family"].values[0]
+        sp_key, conf = prediction[0], round(float(prediction[1]), 3)
+        genus = gbif_taxonomy_hierarchy[sp_key][0]
+        family = gbif_taxonomy_hierarchy[sp_key][1]
 
         # Genus accuracy calculation
         if genus not in genus_pred.keys(): genus_pred[genus] = conf
@@ -83,15 +93,20 @@ def fgrained_model_evaluation(
     model_dir: str,
     category_map: str,
     insect_crops_dir: str,
-    sp_exclusion_list: list[int],
-    ami_traps_taxonomy_map: pd.DataFrame,
-    ami_gbif_taxonomy_map: pd.DataFrame
+    sp_exclusion_list_file: str,
+    ami_traps_taxonomy_map_file: str,
+    ami_gbif_taxonomy_map_file: str,
+    gbif_taxonomy_hierarchy_file: str
 ):
     """Main function for fine-grained model evaluation"""
 
-    # Get the environment variables
+    # Get the environment variable and other files
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device {device} is available.")
+    sp_exclusion_list = pickle.load(open(sp_exclusion_list_file, "rb"))
+    ami_traps_taxonomy_map = pd.read_csv(ami_traps_taxonomy_map_file)
+    ami_gbif_taxonomy_map = pd.read_csv(ami_gbif_taxonomy_map_file)
+    gbif_taxonomy_hierarchy = json.load(open(gbif_taxonomy_hierarchy_file))
 
     # Download the model
     api = wandb.Api()
@@ -127,7 +142,6 @@ def fgrained_model_evaluation(
         # Get ground truth label information
         gt_label = insect_labels[img_name]["label"]
         gt_rank = insect_labels[img_name]["taxon_rank"]
-        gt_speciesKey = insect_labels[img_name]["speciesKey"]
         gt_acceptedTaxonKey = insect_labels[img_name]["acceptedTaxonKey"]
         gt_region = insect_labels[img_name]["region"]
 
@@ -138,7 +152,7 @@ def fgrained_model_evaluation(
             sp_pred = fgrained_classifier.predict(image)
 
             # Get rolled up predictions to genus and family level
-            gs_pred, fm_pred = get_higher_taxon_pred(sp_pred, ami_gbif_taxonomy_map)
+            gs_pred, fm_pred = get_higher_taxon_pred(sp_pred, ami_gbif_taxonomy_map, gbif_taxonomy_hierarchy)
 
             # Calculate species accuracy
             if gt_rank == "SPECIES":
@@ -146,17 +160,17 @@ def fgrained_model_evaluation(
                 gt_label_sp = gt_label
                 gt_label_gs, gt_label_fm = get_higher_taxon_gt(gt_label_sp, gt_rank, ami_traps_taxonomy_map)
 
-                # # Species accuracy calculation
-                # top1, top5 = check_prediction(gt_acceptedTaxonKey, sp_pred)
-                # sp_top1 += top1; sp_top5 += top5; sp_count += 1
+                # Species accuracy calculation
+                top1, top5 = check_prediction(str(gt_acceptedTaxonKey), sp_pred)
+                sp_top1 += top1; sp_top5 += top5; sp_count += 1
 
-                # # Genus accuracy calculation
-                # top1, top5 = check_prediction(gt_label_gs, gs_pred)
-                # gs_top1 += top1; gs_top5 += top5; gs_count += 1 
+                # Genus accuracy calculation
+                top1, top5 = check_prediction(gt_label_gs, gs_pred)
+                gs_top1 += top1; gs_top5 += top5; gs_count += 1 
 
-                # # Family accuracy calculation
-                # top1, top5 = check_prediction(gt_label_fm, fm_pred)
-                # fm_top1 += top1; fm_top5 += top5; fm_count += 1 
+                # Family accuracy calculation
+                top1, top5 = check_prediction(gt_label_fm, fm_pred)
+                fm_top1 += top1; fm_top5 += top5; fm_count += 1 
 
             # Calculate genus accuracy
             elif gt_rank == "GENUS":
@@ -164,23 +178,25 @@ def fgrained_model_evaluation(
                 gt_label_gs = gt_label
                 gt_label_fm = get_higher_taxon_gt(gt_label_gs, gt_rank, ami_traps_taxonomy_map)
         
-                # # Genus accuracy calculation
-                # top1, top5 = check_prediction(gt_label_gs.split(" ")[0], gs_pred)
-                # gs_top1 += top1; gs_top5 += top5; gs_count += 1
+                # Genus accuracy calculation
+                top1, top5 = check_prediction(gt_label_gs.split(" ")[0], gs_pred)
+                gs_top1 += top1; gs_top5 += top5; gs_count += 1
 
-                # # Family accuracy calculation
-                # top1, top5 = check_prediction(gt_label_fm, fm_pred)
-                # fm_top1 += top1; fm_top5 += top5; fm_count += 1   
+                # Family accuracy calculation
+                top1, top5 = check_prediction(gt_label_fm, fm_pred)
+                fm_top1 += top1; fm_top5 += top5; fm_count += 1   
 
             # Calculate sub-tribe, tribe and family accuracy
             else:
                 # Rollup sub-tribe and tribe to family level
                 if gt_rank != "FAMILY":
                     gt_label_fm = get_higher_taxon_gt(gt_label, gt_rank, ami_traps_taxonomy_map)
+                else:
+                    gt_label_fm = gt_label
 
-                # # Family accuracy calculation
-                # top1, top5 = check_prediction(gt_label_fm, fm_pred)
-                # fm_top1 += top1; fm_top5 += top5; fm_count += 1 
+                # Family accuracy calculation
+                top1, top5 = check_prediction(gt_label_fm, fm_pred)
+                fm_top1 += top1; fm_top5 += top5; fm_count += 1 
 
     print(
         f"\nFine-grained classification evaluation for {run_name}:\
@@ -200,64 +216,9 @@ if __name__ == "__main__":
     model_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/models/fine_grained"
     category_map = "01_ami-gbif_fine-grained_ne-america_category_map.json"
     insect_crops_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/insect_crops"
-    sp_exclusion_list_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle"
-    sp_exclusion_list = exclusion_sp = pickle.load(open(sp_exclusion_list_file, "rb"))
-    ami_traps_taxonomy_map = pd.read_csv("/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv")
-    ami_gbif_taxonomy_map = pd.read_csv("/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-gbif_taxonomy_map.csv")
+    sp_exclusion_list_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle"    
+    ami_traps_taxonomy_map_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv"
+    ami_gbif_taxonomy_map_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-gbif_taxonomy_map.csv"    
+    gbif_taxonomy_hierarchy_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/gbif_taxonomy_hierarchy.json"
 
-    fgrained_model_evaluation(run_name, artifact, region, model_type, model_dir, category_map, insect_crops_dir, sp_exclusion_list, ami_traps_taxonomy_map, ami_gbif_taxonomy_map)
-
-    # parser = argparse.ArgumentParser()
-
-    # parser.add_argument(
-    #     "--run_name",
-    #     help="Run name of the model on Weights and Biases.",
-    #     required=True,
-    # )
-    # parser.add_argument(
-    #     "--wandb_model_artifact",
-    #     help="Model artifact on Weights and Biases.",
-    #     required=True,
-    # )
-    # parser.add_argument(
-    #     "--model_type",
-    #     help="Model type of the binary classifier.",
-    #     required=True,
-    # )
-    # parser.add_argument(
-    #     "--model_dir",
-    #     help="Model directory where the binary models are downloaded.",
-    #     required=True,
-    # )
-    # parser.add_argument(
-    #     "--category_map",
-    #     help="Category map for the binary classifier.",
-    #     required=True,
-    # )
-    # parser.add_argument(
-    #     "--insect_crops_dir",
-    #     help="Directory containing the insect crops.",
-    #     required=True,
-    # )
-    # parser.add_argument(
-    #     "--skip_small_crops",
-    #     help="Whether to skip crops below a certain size.",
-    #     required=True,
-    # )
-    # parser.add_argument(
-    #     "--min_crop_dim",
-    #     help="Minimum crop length in pixels to consider for prediction.",
-    #     type=int,
-    # )
-
-    # args = parser.parse_args()
-    # binary_model_evaluation(
-    #     args.run_name,
-    #     args.wandb_model_artifact,
-    #     args.model_type,
-    #     args.model_dir,
-    #     args.category_map,
-    #     args.insect_crops_dir,
-    #     args.skip_small_crops,
-    #     args.min_crop_dim,
-    # )
+    fgrained_model_evaluation(run_name, artifact, region, model_type, model_dir, category_map, insect_crops_dir, sp_exclusion_list_file, ami_traps_taxonomy_map_file, ami_gbif_taxonomy_map_file, gbif_taxonomy_hierarchy_file)
