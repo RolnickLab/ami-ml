@@ -7,14 +7,13 @@ About: Evaluation of AMI-GBIF trained moth fine-grained classifier on AMI-Traps 
 import os
 import glob
 import json
-import argparse
 import pandas as pd
-import numpy as np
 import pickle
 from PIL import Image
 import torch
 from torchvision import transforms
 import wandb
+import typer
 
 from model_inference import ModelInference
 
@@ -209,16 +208,4 @@ def fgrained_model_evaluation(
 
 
 if __name__ == "__main__":
-    run_name = "ne-america_resnet50_baseline_run1"
-    artifact =  "moth-ai/ami-gbif-fine-grained/model:v13" 
-    region = "NorthEasternAmerica"
-    model_type = "resnet50"
-    model_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/models/fine_grained"
-    category_map = "01_ami-gbif_fine-grained_ne-america_category_map.json"
-    insect_crops_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/insect_crops"
-    sp_exclusion_list_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle"    
-    ami_traps_taxonomy_map_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv"
-    ami_gbif_taxonomy_map_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-gbif_taxonomy_map.csv"    
-    gbif_taxonomy_hierarchy_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/gbif_taxonomy_hierarchy.json"
-
-    fgrained_model_evaluation(run_name, artifact, region, model_type, model_dir, category_map, insect_crops_dir, sp_exclusion_list_file, ami_traps_taxonomy_map_file, ami_gbif_taxonomy_map_file, gbif_taxonomy_hierarchy_file)
+    typer.run(fgrained_model_evaluation)
