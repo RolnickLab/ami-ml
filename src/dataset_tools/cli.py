@@ -31,6 +31,7 @@ from src.dataset_tools.split_dataset import split_dataset
 from src.dataset_tools.verify_images import verify_images
 
 # Command key constants
+# Make sure to add them to COMMAND_KEYS frozenset
 CLEAN_CMD = "clean_cmd"
 FETCH_CMD = "fetch_cmd"
 VERIFY_CMD = "verify_cmd"
@@ -681,7 +682,7 @@ def create_webdataset_command(
     create_webdataset(
         annotations_csv=annotations_csv,
         dataset_dir=dataset_dir,
-        webdataset_patern=webdataset_patern,
+        webdataset_pattern=webdataset_patern,
         image_path_column=image_path_column,
         label_column=label_column,
         max_shard_size=max_shard_size,
