@@ -32,3 +32,13 @@ def test_command_help(command, command_help):
     assert result.exit_code == 0
     assert command in result.output
     assert command_help in result.output
+
+
+def test_number_of_command_constants():
+    num_of_keys = len(COMMAND_KEYS)
+    num_of_commands = len(COMMANDS)
+    num_of_help = len(COMMANDS_HELP)
+    assert num_of_commands == num_of_help, "Each command should have its own help text"
+    assert (
+        num_of_keys == num_of_commands
+    ), "The COMMAND_KEYS frozenset should be the same length as the number of COMMANDS"
