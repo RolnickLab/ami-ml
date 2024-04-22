@@ -43,11 +43,11 @@ WEBDATASET_CMD = "webdataset_cmd"
 # This is most useful to automatically test the CLI
 COMMAND_KEYS = frozenset(
     [
-        CLEAN_CMD,
         FETCH_CMD,
         VERIFY_CMD,
         DELETE_CMD,
         PREDICT_CMD,
+        CLEAN_CMD,
         SPLIT_CMD,
         WEBDATASET_CMD,
     ]
@@ -55,27 +55,24 @@ COMMAND_KEYS = frozenset(
 
 # Command dictionary
 COMMANDS = {
-    CLEAN_CMD: "clean-dataset",
     FETCH_CMD: "fetch-images",
     VERIFY_CMD: "verify-images",
     DELETE_CMD: "delete-images",
     PREDICT_CMD: "predict-lifestage",
+    CLEAN_CMD: "clean-dataset",
     SPLIT_CMD: "split-dataset",
     WEBDATASET_CMD: "create-webdataset",
 }
 
 # Command help text dictionary
 COMMANDS_HELP = {
-    CLEAN_CMD: "This command cleans the dataset",
-    FETCH_CMD: "This command fetches the images",
-    VERIFY_CMD: "This command verifies the images",
-    DELETE_CMD: "This command deletes the provided images",
-    PREDICT_CMD: (
-        "This command launches a model to predict the lifestage for "
-        "the provided images"
-    ),
-    SPLIT_CMD: "This command splits the provided dataset into train and test sets",
-    WEBDATASET_CMD: "This command creates a webdataset",
+    FETCH_CMD: "Download images from urls found in input DwC-A file",
+    VERIFY_CMD: "Check if there are errors in the images",
+    DELETE_CMD: "Delete images based on input list",
+    PREDICT_CMD: "Predict lifestage for moths",
+    CLEAN_CMD: "Filter out images to ensure quality of training data",
+    SPLIT_CMD: "Split the provided dataset into train, validate and test sets",
+    WEBDATASET_CMD: "Assemble final training set in webdataset format",
 }
 
 
@@ -166,91 +163,17 @@ def with_random_seed(func):
     return wrapper
 
 
-#
-# Clean Dataset Command
-#
-@click.command(
-    name=COMMANDS[CLEAN_CMD],
-    help=COMMANDS_HELP[CLEAN_CMD],
-    context_settings={"show_default": True},
-)
-@with_dwca_file
-@with_verified_data_csv
-@click.option(
-    "--ignore-dataset-by-key",
-    type=str,
-    default=(
-        "f3130a8a-4508-42b4-9737-fbda77748438,"
-        "4bfac3ea-8763-4f4b-a71a-76a6f5f243d3,"
-        "7e380070-f762-11e1-a439-00145eb45e9a"
-    ),
-    help=(
-        "DatasetKeys separeted by comma. Some datasets might be ignored due to the "
-        "poor quality of their images."
-    ),
-)
-@click.option(
-    "--life-stage-predictions",
-    type=str,
-    help=(
-        "CSV containing life-stage predictions for images. If provided images without"
-        " the GBIF life stage will be filtered based on life stage prediction"
-    ),
-)
-@click.option(
-    "--thumb-size",
-    type=int,
-    default=64,
-    help="Minimum side size to an image not be considered as thumbnail",
-)
-@click.option(
-    "--remove-duplicate-url",
-    type=bool,
-    default=True,
-    help="Whether occurrences with duplicate URLs should be removed.",
-)
-@click.option(
-    "--remove-non-adults",
-    type=bool,
-    default=True,
-    help="Whether keeping only occurrences with lifeStage identified as Adult or Imago",
-)
-@click.option(
-    "--remove-tumbnails",
-    type=bool,
-    default=True,
-    help=(
-        "Whether small images should be removed. Use the option --thumb_size to "
-        "determine the minimum side size."
-    ),
-)
-def clean_dataset_command(
-    dwca_file: str,
-    verified_data_csv: str,
-    remove_duplicate_url: bool,
-    ignore_dataset_by_key: str,
-    remove_tumbnails: bool,
-    thumb_size: int,
-    remove_non_adults: bool,
-    life_stage_predictions: str,
-):
-    clean_dataset(
-        dwca_file=dwca_file,
-        verified_data_csv=verified_data_csv,
-        remove_duplicate_url=remove_duplicate_url,
-        ignore_dataset_by_key=ignore_dataset_by_key,
-        remove_tumbnails=remove_tumbnails,
-        thumb_size=thumb_size,
-        remove_non_adults=remove_non_adults,
-        life_stage_predictions=life_stage_predictions,
-    )
+# # # # # # #
+# Commands  #
+# # # # # # #
+
+# The order of declaration of the commands affect the order
+# in which they appear in the CLI
 
 
 #
 # Fetch Images Command
 #
-
-
 @click.command(
     name=COMMANDS[FETCH_CMD],
     help=COMMANDS_HELP[FETCH_CMD],
@@ -501,10 +424,88 @@ def predict_lifestage_command(
 
 
 #
+# Clean Dataset Command
+#
+@click.command(
+    name=COMMANDS[CLEAN_CMD],
+    help=COMMANDS_HELP[CLEAN_CMD],
+    context_settings={"show_default": True},
+)
+@with_dwca_file
+@with_verified_data_csv
+@click.option(
+    "--ignore-dataset-by-key",
+    type=str,
+    default=(
+        "f3130a8a-4508-42b4-9737-fbda77748438,"
+        "4bfac3ea-8763-4f4b-a71a-76a6f5f243d3,"
+        "7e380070-f762-11e1-a439-00145eb45e9a"
+    ),
+    help=(
+        "DatasetKeys separeted by comma. Some datasets might be ignored due to the "
+        "poor quality of their images."
+    ),
+)
+@click.option(
+    "--life-stage-predictions",
+    type=str,
+    help=(
+        "CSV containing life-stage predictions for images. If provided images without"
+        " the GBIF life stage will be filtered based on life stage prediction"
+    ),
+)
+@click.option(
+    "--thumb-size",
+    type=int,
+    default=64,
+    help="Minimum side size to an image not be considered as thumbnail",
+)
+@click.option(
+    "--remove-duplicate-url",
+    type=bool,
+    default=True,
+    help="Whether occurrences with duplicate URLs should be removed.",
+)
+@click.option(
+    "--remove-non-adults",
+    type=bool,
+    default=True,
+    help="Whether keeping only occurrences with lifeStage identified as Adult or Imago",
+)
+@click.option(
+    "--remove-tumbnails",
+    type=bool,
+    default=True,
+    help=(
+        "Whether small images should be removed. Use the option --thumb_size to "
+        "determine the minimum side size."
+    ),
+)
+def clean_dataset_command(
+    dwca_file: str,
+    verified_data_csv: str,
+    remove_duplicate_url: bool,
+    ignore_dataset_by_key: str,
+    remove_tumbnails: bool,
+    thumb_size: int,
+    remove_non_adults: bool,
+    life_stage_predictions: str,
+):
+    clean_dataset(
+        dwca_file=dwca_file,
+        verified_data_csv=verified_data_csv,
+        remove_duplicate_url=remove_duplicate_url,
+        ignore_dataset_by_key=ignore_dataset_by_key,
+        remove_tumbnails=remove_tumbnails,
+        thumb_size=thumb_size,
+        remove_non_adults=remove_non_adults,
+        life_stage_predictions=life_stage_predictions,
+    )
+
+
+#
 # Split Dataset Command
 #
-
-
 @click.command(
     name=COMMANDS[SPLIT_CMD],
     help=COMMANDS_HELP[SPLIT_CMD],
@@ -581,8 +582,6 @@ def split_dataset_command(
 #
 # Create Webdataset Command
 #
-
-
 @click.command(
     name=COMMANDS[WEBDATASET_CMD],
     help=COMMANDS_HELP[WEBDATASET_CMD],
@@ -696,10 +695,17 @@ def create_webdataset_command(
     )
 
 
-#
-# Main CLI configuration
-#
-@click.group()
+# # # # # # # # # # # # # #
+# Main CLI configuration  #
+# # # # # # # # # # # # # #
+class OrderCommands(click.Group):
+    """This class is necessary to order the commands the way we want to."""
+
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        return list(self.commands)
+
+
+@click.group(cls=OrderCommands)
 def cli():
     """This is the main command line interface for dataset tools."""
     pass
