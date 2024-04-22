@@ -45,9 +45,11 @@ def _crop_to_bbox(image, md_preds):
 
 
 def _get_resize_transform(resize_min_size):
-    return transforms.Compose(
-        [transforms.Resize(resize_min_size), transforms.ToTensor()]
-    )
+    if resize_min_size:
+        return transforms.Compose(
+            [transforms.Resize(resize_min_size), transforms.ToTensor()]
+        )
+    return None
 
 
 def _get_category_map(
@@ -67,36 +69,48 @@ def _get_category_map(
     return categories_map
 
 
-# TODO : Refactor _dataset_sample
-def _dataset_samples(
+def _dataset_preprocessing(
     annotations_csv: str,
-    dataset_dir: str,
-    shuffle_images: bool,
-    label_column: str,
-    image_path_column: str,
     category_map_json: str,
-    save_category_map_json: str,
+    label_column: str,
     megadetector_results_json: str,
-    columns_to_json: str,
-    resize_min_size: int,
-):
+    save_category_map_json: str,
+    shuffle_images: bool,
+) -> (dict, pd.DataFrame, dict):
+    md_results = None
+
     if megadetector_results_json is not None:
         with open(megadetector_results_json, "r") as f:
             md_results = json.load(f)
         md_results = pd.DataFrame(md_results["images"])
         md_results = md_results.set_index("file")
-    else:
-        md_results = None
 
     dataset_df = pd.read_csv(annotations_csv)
+
     if shuffle_images:
         dataset_df = dataset_df.sample(frac=1)
+
     categories_map = _get_category_map(
         dataset_df, label_column, category_map_json, save_category_map_json
     )
 
-    if resize_min_size is not None:
-        resize_transform = _get_resize_transform(resize_min_size)
+    return categories_map, dataset_df, md_results
+
+
+# TODO : Refactor _create_samples
+# Pretty sure there's a way to refactor for less complexity
+# Instead of checking `resize_min_size` and `md_results` each loop,
+def _create_samples(
+    dataset_dir: str,
+    categories_map: dict,
+    dataset_df: pd.DataFrame,
+    md_results: pd.DataFrame,
+    label_column: str,
+    image_path_column: str,
+    columns_to_json: str,
+    resize_min_size: int,
+):
+    resize_transform = _get_resize_transform(resize_min_size)
 
     for _, row in dataset_df.iterrows():
         fpath = os.path.join(dataset_dir, row[image_path_column])
@@ -106,32 +120,35 @@ def _dataset_samples(
 
         if resize_min_size is not None or md_results is not None:
             try:
-                image = Image.open(fpath)
-                image = image.convert("RGB")
+                with Image.open(fpath) as image:
+                    image = image.convert("RGB")
+                    if md_results is not None:
+                        try:
+                            md_preds = md_results.loc[row[image_path_column]]
+                            image = _crop_to_bbox(image, md_preds)
+                        except KeyError:
+                            print(
+                                "Skipping crop for the image: ", row[image_path_column]
+                            )
+                        except TypeError:
+                            print(
+                                "Skipping crop for the image: ", row[image_path_column]
+                            )
+                    if resize_min_size is not None:
+                        image = resize_transform(image)
+
+                    image = image.mul(255).add_(0.5).clamp_(0, 255).to(torch.uint8)
+                    image_data = image.numpy().transpose(1, 2, 0)
             except PIL.UnidentifiedImageError:
                 print(f"Unidentified Image Error on file {fpath}", flush=True)
                 continue
             except OSError:
                 print(f"OSError Error on file {fpath}", flush=True)
                 continue
-
-            if md_results is not None:
-                try:
-                    md_preds = md_results.loc[row[image_path_column]]
-                    image = _crop_to_bbox(image, md_preds)
-                except KeyError:
-                    print("Skipping crop for the image: ", row[image_path_column])
-                except TypeError:
-                    print("Skipping crop for the image: ", row[image_path_column])
-
-            if resize_min_size is not None:
-                image = resize_transform(image)
-
-            image = image.mul(255).add_(0.5).clamp_(0, 255).to(torch.uint8)
-            image_data = image.numpy().transpose(1, 2, 0)
         else:
             with open(fpath, "rb") as f:
                 image_data = f.read()
+
         sample = {
             "__key__": os.path.splitext(row[image_path_column])[0]
             .lower()
@@ -150,7 +167,7 @@ def _dataset_samples(
 def create_webdataset(
     annotations_csv: str,
     dataset_dir: str,
-    webdataset_patern: str,
+    webdataset_pattern: str,
     image_path_column: str,
     label_column: str,
     max_shard_size: int,
@@ -163,18 +180,28 @@ def create_webdataset(
     random_seed: int,
 ):
     set_random_seeds(random_seed)
-    with wds.ShardWriter(webdataset_patern, maxsize=max_shard_size) as sink:
-        dataset = _dataset_samples(
-            annotations_csv,
-            dataset_dir,
-            shuffle_images,
-            label_column,
-            image_path_column,
-            category_map_json,
-            save_category_map_json,
-            megadetector_results_json,
-            columns_to_json,
-            resize_min_size,
+    with wds.ShardWriter(webdataset_pattern, maxsize=max_shard_size) as sink:
+        (
+            categories_map,
+            dataset_df,
+            md_results,
+        ) = _dataset_preprocessing(
+            annotations_csv=annotations_csv,
+            category_map_json=category_map_json,
+            label_column=label_column,
+            megadetector_results_json=megadetector_results_json,
+            save_category_map_json=save_category_map_json,
+            shuffle_images=shuffle_images,
+        )
+        dataset = _create_samples(
+            categories_map=categories_map,
+            dataset_df=dataset_df,
+            md_results=md_results,
+            dataset_dir=dataset_dir,
+            image_path_column=image_path_column,
+            label_column=label_column,
+            columns_to_json=columns_to_json,
+            resize_min_size=resize_min_size,
         )
         for sample in dataset:
             sink.write(sample)
