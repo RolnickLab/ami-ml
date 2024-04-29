@@ -20,6 +20,7 @@ To add a new command, create a new function below following these instructions:
 
 - Make sure to use lazy loading when importing modules that are only used by 1 command
 """
+
 import functools
 
 import click
@@ -525,7 +526,10 @@ def clean_dataset_command(
     "--split-prefix",
     type=str,
     required=True,
-    help="Prefix used for saving splits.",
+    help=(
+        "String to use as prefix when creating the CSV files for the train, "
+        "val and test sets",
+    ),
 )
 @click.option(
     "--category-key",
@@ -613,13 +617,7 @@ def split_dataset_command(
     help="CSV column containing image label",
 )
 @click.option(
-    "--shuffle-images",
-    type=bool,
-    default=True,
-    help="Shufle images before to write to tar files",
-)
-@click.option(
-    "--webdataset-patern",
+    "--webdataset-pattern",
     type=str,
     required=True,
     help="Webdataset output file pattern",
@@ -669,10 +667,16 @@ def split_dataset_command(
     ),
 )
 @with_random_seed
+@click.option(
+    "--shuffle-images",
+    type=bool,
+    default=True,
+    help="Shufle images before to write to tar files",
+)
 def create_webdataset_command(
     annotations_csv: str,
-    dataset_dir: str,
-    webdataset_patern: str,
+    dataset_path: str,
+    webdataset_pattern: str,
     image_path_column: str,
     label_column: str,
     max_shard_size: int,
@@ -688,8 +692,8 @@ def create_webdataset_command(
 
     create_webdataset(
         annotations_csv=annotations_csv,
-        dataset_dir=dataset_dir,
-        webdataset_pattern=webdataset_patern,
+        dataset_path=dataset_path,
+        webdataset_pattern=webdataset_pattern,
         image_path_column=image_path_column,
         label_column=label_column,
         max_shard_size=max_shard_size,

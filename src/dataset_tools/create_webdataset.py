@@ -101,7 +101,7 @@ def _dataset_preprocessing(
 # Pretty sure there's a way to refactor for less complexity
 # Instead of checking `resize_min_size` and `md_results` each loop,
 def _create_samples(
-    dataset_dir: str,
+    dataset_path: str,
     categories_map: dict,
     dataset_df: pd.DataFrame,
     md_results: pd.DataFrame,
@@ -113,7 +113,7 @@ def _create_samples(
     resize_transform = _get_resize_transform(resize_min_size)
 
     for _, row in dataset_df.iterrows():
-        fpath = os.path.join(dataset_dir, row[image_path_column])
+        fpath = os.path.join(dataset_path, row[image_path_column])
         if not os.path.isfile(fpath):
             print(f"File {fpath} not found", flush=True)
             continue
@@ -166,7 +166,7 @@ def _create_samples(
 
 def create_webdataset(
     annotations_csv: str,
-    dataset_dir: str,
+    dataset_path: str,
     webdataset_pattern: str,
     image_path_column: str,
     label_column: str,
@@ -197,7 +197,7 @@ def create_webdataset(
             categories_map=categories_map,
             dataset_df=dataset_df,
             md_results=md_results,
-            dataset_dir=dataset_dir,
+            dataset_path=dataset_path,
             image_path_column=image_path_column,
             label_column=label_column,
             columns_to_json=columns_to_json,
