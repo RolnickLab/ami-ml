@@ -98,6 +98,7 @@ def split_dataset(
     split_by_occurrence: bool,
     category_key: str,
     max_instances: int,
+    min_instances: int,
     random_seed: int,
 ):
     set_random_seeds(random_seed)
@@ -144,6 +145,14 @@ def split_dataset(
             val_frac,
             val_set,
         )
+
+    if min_instances > 0:
+        cat_counts = train_set[category_key].value_counts()
+        train_categories = list(cat_counts[cat_counts >= min_instances].keys())
+
+        train_set = train_set[train_set[category_key].isin(train_categories)].copy()
+        val_set = val_set[val_set[category_key].isin(train_categories)].copy()
+        test_set = test_set[test_set[category_key].isin(train_categories)].copy()
 
     data = {"train": train_set, "val": val_set, "test": test_set}
     for set_name in data:

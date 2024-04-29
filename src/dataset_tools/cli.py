@@ -535,13 +535,22 @@ def clean_dataset_command(
     "--category-key",
     type=str,
     default="acceptedTaxonKey",
-    help="Key used as category id for strified spliting",
+    help="Key used as category id for stratified splitting",
 )
 @click.option(
     "--max-instances",
     type=int,
     default=1000,
-    help="Maximun number of instances on training set (and on val/test proportionally)",
+    help="Maximum number of instances on training set (and on val/test proportionally)",
+)
+@click.option(
+    "--min-instances",
+    type=int,
+    default=0,
+    help=(
+        "Minimum number of instances on training set (and on val/test proportionally). "
+        "Categories not achieving this limit are removed."
+    ),
 )
 @with_random_seed
 @click.option(
@@ -573,6 +582,7 @@ def split_dataset_command(
     split_by_occurrence: bool,
     category_key: str,
     max_instances: int,
+    min_instances: int,
     random_seed: int,
 ):
     from src.dataset_tools.split_dataset import split_dataset
@@ -585,6 +595,7 @@ def split_dataset_command(
         split_by_occurrence=split_by_occurrence,
         category_key=category_key,
         max_instances=max_instances,
+        min_instances=min_instances,
         random_seed=random_seed,
     )
 
