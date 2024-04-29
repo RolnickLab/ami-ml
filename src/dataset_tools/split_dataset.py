@@ -63,22 +63,22 @@ def subsample_instances(dataset, max_instances: int, category_key: str):
     "--max-instances",
     type=int,
     default=1000,
-    help="Maximun number of instances on training set (and on val/test proportionally)",
+    help="Maximum number of instances on training set (and on val/test proportionally)",
 )
 @click.option(
     "--min-instances",
     type=int,
     default=0,
     help=(
-        "Minimun number of instances on training set (and on val/test proportionally). "
-        "Categories not achieving this limit are cut out."
+        "Minimum number of instances on training set (and on val/test proportionally). "
+        "Categories not achieving this limit are removed."
     ),
 )
 @click.option(
     "--category-key",
     type=str,
     default="acceptedTaxonKey",
-    help="Key used as category id for strified spliting",
+    help="Key used as category id for stratified spliting",
 )
 @click.option(
     "--random-seed",
