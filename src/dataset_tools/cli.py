@@ -528,7 +528,7 @@ def clean_dataset_command(
     required=True,
     help=(
         "String to use as prefix when creating the CSV files for the train, "
-        "val and test sets",
+        "val and test sets"
     ),
 )
 @click.option(
