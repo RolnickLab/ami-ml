@@ -17,18 +17,12 @@ To add a new command, create a new function below following these instructions:
       function
 
 - If unsure, take some time to look at how other commands have been implemented
+
+- Make sure to use lazy loading when importing modules that are only used by 1 command
 """
 import functools
 
 import click
-
-from src.dataset_tools.clean_dataset import clean_dataset
-from src.dataset_tools.create_webdataset import create_webdataset
-from src.dataset_tools.delete_images import delete_images
-from src.dataset_tools.fetch_images import fetch_images
-from src.dataset_tools.predict_lifestage import predict_lifestage
-from src.dataset_tools.split_dataset import split_dataset
-from src.dataset_tools.verify_images import verify_images
 
 # Command key constants
 # Make sure to add them to COMMAND_KEYS frozenset
@@ -240,6 +234,8 @@ def fetch_images_command(
     request_timeout: int,
     random_seed: int,
 ):
+    from src.dataset_tools.fetch_images import fetch_images
+
     fetch_images(
         dwca_file=dwca_file,
         num_workers=num_workers,
@@ -307,6 +303,8 @@ def verify_images_command(
     subset_list: str,
     subset_key: str,
 ):
+    from src.dataset_tools.verify_images import verify_images
+
     verify_images(
         dwca_file=dwca_file,
         resume_from_ckpt=resume_from_ckpt,
@@ -339,6 +337,8 @@ def verify_images_command(
     help="Root path for the image list",
 )
 def delete_images_command(error_images_csv: str, base_path: str):
+    from src.dataset_tools.delete_images import delete_images
+
     delete_images(error_images_csv=error_images_csv, base_path=base_path)
 
 
@@ -407,6 +407,8 @@ def predict_lifestage_command(
     category_map_json: str,
     results_csv: str,
 ):
+    from src.dataset_tools.predict_lifestage import predict_lifestage
+
     predict_lifestage(
         verified_data_csv=verified_data_csv,
         dataset_path=dataset_path,
@@ -491,6 +493,8 @@ def clean_dataset_command(
     remove_non_adults: bool,
     life_stage_predictions: str,
 ):
+    from src.dataset_tools.clean_dataset import clean_dataset
+
     clean_dataset(
         dwca_file=dwca_file,
         verified_data_csv=verified_data_csv,
@@ -567,6 +571,8 @@ def split_dataset_command(
     max_instances: int,
     random_seed: int,
 ):
+    from src.dataset_tools.split_dataset import split_dataset
+
     split_dataset(
         dataset_csv=dataset_csv,
         split_prefix=split_prefix,
@@ -678,6 +684,8 @@ def create_webdataset_command(
     megadetector_results_json: str,
     random_seed: int,
 ):
+    from src.dataset_tools.create_webdataset import create_webdataset
+
     create_webdataset(
         annotations_csv=annotations_csv,
         dataset_dir=dataset_dir,
