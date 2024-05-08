@@ -7,6 +7,7 @@ About: Evaluation of AMI-GBIF trained moth fine-grained classifier on AMI-Traps 
 import os
 import glob
 import json
+import math
 import pandas as pd
 import pickle
 from PIL import Image
@@ -18,7 +19,7 @@ import typer
 from model_inference import ModelInference
 
 
-def check_prediction(gt_label, pred_label):
+def check_prediction(gt_label: str, pred_label: list[list[str, float]]):
     """
     Check for top1 and top5 prediction
     
@@ -37,7 +38,11 @@ def check_prediction(gt_label, pred_label):
     return top1, top5
 
 
-def get_higher_taxon_pred(sp_pred: list[list[str, float]], taxonomy_map: pd.DataFrame, gbif_taxonomy_hierarchy: dict):
+
+def get_higher_taxon_pred(
+    sp_pred: list[list[str, float]], 
+    gbif_taxonomy_hierarchy: dict
+):
     """Rollup model species prediction at genus and family level"""
     
     # Variables definitions
@@ -84,6 +89,31 @@ def get_higher_taxon_gt(label: str, rank: str, taxonomy_map: pd.DataFrame):
 
 
 
+def accuracy_versus_confidence(
+    gt_label: str, 
+    pred_label: list[list[str, float]], 
+    accuracy_vs_conf_df: pd.DataFrame
+):
+    """Calculate accuracy alongside model prediction confidence"""
+
+    top1_class, top1_acc = pred_label[0][0], math.floor(pred_label[0][1]*100)
+    thresh = 0 # for cases with confidence < 10%
+
+    for thresh in range(10, top1_acc, 10):  
+        # Add the counts upto the threshold  
+        accuracy_vs_conf_df.loc["conf-total"]["conf-"+str(thresh)] += 1
+
+        # Add only correct counts
+        if top1_class == gt_label: 
+            accuracy_vs_conf_df.loc["correct"]["conf-"+str(thresh)] += 1
+
+    # Add counts for upwards rejected thresholds
+    for upwards_thresh in range(thresh+10, 100, 10):
+        accuracy_vs_conf_df.loc["reject"]["conf-"+str(upwards_thresh)] += 1
+
+    return accuracy_vs_conf_df
+
+
 def fgrained_model_evaluation(
     run_name: str,
     artifact: str,
@@ -95,7 +125,8 @@ def fgrained_model_evaluation(
     sp_exclusion_list_file: str,
     ami_traps_taxonomy_map_file: str,
     ami_gbif_taxonomy_map_file: str,
-    gbif_taxonomy_hierarchy_file: str
+    gbif_taxonomy_hierarchy_file: str,
+    save_acccuracy_vs_conf: bool = True
 ):
     """Main function for fine-grained model evaluation"""
 
@@ -127,11 +158,16 @@ def fgrained_model_evaluation(
         open(os.path.join(insect_crops_dir, "fgrained_labels.json"))
     )
 
-    # Evaluation metrics variables
+    # Classification evaluation metrics 
     sp_top1, sp_top5 = 0, 0
     gs_top1, gs_top5 = 0, 0
     fm_top1, fm_top5 = 0, 0
     sp_count, gs_count, fm_count = 0, 0, 0
+
+    # Accuracy v/s confidence variables 
+    accuracy_w_conf_sp = pd.DataFrame(0, columns=["conf-"+str(thresh) for thresh in range(10, 100, 10)], index=["correct", "conf-total", "reject", "moths-total"])
+    accuracy_w_conf_gs = pd.DataFrame(0, columns=["conf-"+str(thresh) for thresh in range(10, 100, 10)], index=["correct", "conf-total", "reject", "moths-total"])
+    accuracy_w_conf_fm = pd.DataFrame(0, columns=["conf-"+str(thresh) for thresh in range(10, 100, 10)], index=["correct", "conf-total", "reject", "moths-total"])
 
     # Iterate over each moth crop
     for img_name in insect_labels.keys():
@@ -151,7 +187,7 @@ def fgrained_model_evaluation(
             sp_pred = fgrained_classifier.predict(image)
 
             # Get rolled up predictions to genus and family level
-            gs_pred, fm_pred = get_higher_taxon_pred(sp_pred, ami_gbif_taxonomy_map, gbif_taxonomy_hierarchy)
+            gs_pred, fm_pred = get_higher_taxon_pred(sp_pred, gbif_taxonomy_hierarchy)
 
             # Calculate species accuracy
             if gt_rank == "SPECIES":
@@ -162,14 +198,17 @@ def fgrained_model_evaluation(
                 # Species accuracy calculation
                 top1, top5 = check_prediction(str(gt_acceptedTaxonKey), sp_pred)
                 sp_top1 += top1; sp_top5 += top5; sp_count += 1
+                accuracy_w_conf_sp = accuracy_versus_confidence(str(gt_acceptedTaxonKey), sp_pred, accuracy_w_conf_sp)
 
                 # Genus accuracy calculation
                 top1, top5 = check_prediction(gt_label_gs, gs_pred)
                 gs_top1 += top1; gs_top5 += top5; gs_count += 1 
+                accuracy_w_conf_gs = accuracy_versus_confidence(gt_label_gs, gs_pred, accuracy_w_conf_gs)
 
                 # Family accuracy calculation
                 top1, top5 = check_prediction(gt_label_fm, fm_pred)
                 fm_top1 += top1; fm_top5 += top5; fm_count += 1 
+                accuracy_w_conf_fm = accuracy_versus_confidence(gt_label_fm, fm_pred, accuracy_w_conf_fm)
 
             # Calculate genus accuracy
             elif gt_rank == "GENUS":
@@ -180,10 +219,12 @@ def fgrained_model_evaluation(
                 # Genus accuracy calculation
                 top1, top5 = check_prediction(gt_label_gs.split(" ")[0], gs_pred)
                 gs_top1 += top1; gs_top5 += top5; gs_count += 1
+                accuracy_w_conf_gs = accuracy_versus_confidence(gt_label_gs.split(" ")[0], gs_pred, accuracy_w_conf_gs)
 
                 # Family accuracy calculation
                 top1, top5 = check_prediction(gt_label_fm, fm_pred)
-                fm_top1 += top1; fm_top5 += top5; fm_count += 1   
+                fm_top1 += top1; fm_top5 += top5; fm_count += 1 
+                accuracy_w_conf_fm = accuracy_versus_confidence(gt_label_fm, fm_pred, accuracy_w_conf_fm)  
 
             # Calculate sub-tribe, tribe and family accuracy
             else:
@@ -196,6 +237,7 @@ def fgrained_model_evaluation(
                 # Family accuracy calculation
                 top1, top5 = check_prediction(gt_label_fm, fm_pred)
                 fm_top1 += top1; fm_top5 += top5; fm_count += 1 
+                accuracy_w_conf_fm = accuracy_versus_confidence(gt_label_fm, fm_pred, accuracy_w_conf_fm)
 
     print(
         f"\nFine-grained classification evaluation for {run_name}:\
@@ -205,6 +247,17 @@ def fgrained_model_evaluation(
         \n",
         flush=True,
     )
+
+    # Save accuracy v/s confidence data
+    if save_acccuracy_vs_conf:
+        for thresh in range(10, 100, 10):
+            accuracy_w_conf_sp.loc["moths-total"]["conf-"+str(thresh)] = sp_count
+            accuracy_w_conf_gs.loc["moths-total"]["conf-"+str(thresh)] = gs_count
+            accuracy_w_conf_fm.loc["moths-total"]["conf-"+str(thresh)] = fm_count
+        accuracy_w_conf_sp.to_csv(os.path.join("./plots", run_name + "-sp_acc_rej_vs_conf.csv"))
+        accuracy_w_conf_gs.to_csv(os.path.join("./plots", run_name + "-gs_acc_rej_vs_conf.csv"))
+        accuracy_w_conf_fm.to_csv(os.path.join("./plots", run_name + "-fm_acc_rej_vs_conf.csv"))
+
 
 
 if __name__ == "__main__":
