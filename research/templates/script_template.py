@@ -1,12 +1,15 @@
 # System packages
 import os
 import pathlib
+import time
 import unittest
 
 # 3rd party packages
 import dotenv
 
 # Load secrets and config from optional .env file
+# This is necessary if the environment variables have not been set
+# in the environment outside of the script.
 dotenv.load_dotenv()
 
 # Optional environment variable
@@ -19,7 +22,9 @@ def write_log(message: str) -> pathlib.Path:
     except KeyError:
         raise KeyError("OUTPUT_LOGS_DIR environment variable not set")
 
-    path = pathlib.Path(output_logs_dir)
+    subdir = time.strftime("%Y-%m-%d")
+
+    path = pathlib.Path(output_logs_dir) / "tmp" / subdir
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
 
