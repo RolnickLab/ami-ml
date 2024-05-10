@@ -114,10 +114,11 @@ def accuracy_versus_confidence(
     return accuracy_vs_conf_df
 
 
-def update_taxa_accuracy(macro_acc: dict, top1: int, top5: int, rank: str):
+def update_taxa_accuracy(macro_acc: dict, top1: int, top5: int, gt_label: str, gt_rank: str):
     """Update accuracy data for every class at every taxonomic level"""
 
     pass
+
 
 
 def calculate_macro_accuracy(macro_acc: dict):
@@ -217,7 +218,7 @@ def fgrained_model_evaluation(
                 top1, top5 = check_prediction(str(gt_acceptedTaxonKey), sp_pred)
                 sp_top1 += top1; sp_top5 += top5; sp_count += 1
                 accuracy_w_conf_sp = accuracy_versus_confidence(str(gt_acceptedTaxonKey), sp_pred, accuracy_w_conf_sp)
-                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, "SPECIES")
+                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, gt_label_sp, "SPECIES")
 
                 # Genus accuracy calculation
                 top1, top5 = check_prediction(gt_label_gs, gs_pred)
@@ -294,4 +295,17 @@ def fgrained_model_evaluation(
 
 
 if __name__ == "__main__":
-    typer.run(fgrained_model_evaluation)
+    run_name = "ne-america_resnet50_baseline_run1"
+    artifact =  "moth-ai/ami-gbif-fine-grained/model:v13" 
+    region = "NorthEasternAmerica"
+    model_type = "resnet50"
+    model_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/models/fine_grained"
+    category_map = "01_ami-gbif_fine-grained_ne-america_category_map.json"
+    insect_crops_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/insect_crops"
+    sp_exclusion_list_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle"    
+    ami_traps_taxonomy_map_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv"
+    gbif_taxonomy_hierarchy_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/gbif_taxonomy_hierarchy.json"
+
+    fgrained_model_evaluation(run_name, artifact, region, model_type, model_dir, category_map, insect_crops_dir, sp_exclusion_list_file, ami_traps_taxonomy_map_file, gbif_taxonomy_hierarchy_file)
+
+    # typer.run(fgrained_model_evaluation)

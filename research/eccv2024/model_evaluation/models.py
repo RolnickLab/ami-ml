@@ -40,6 +40,7 @@ def model_builder(model_name: str, num_classes: int, pretrained: bool = True):
         model = models.resnet50(weights="IMAGENET1K_V1" if pretrained else None)
         num_ftrs = model.fc.in_features
         model.fc = torch.nn.Linear(num_ftrs, num_classes)
+        
     elif model_name == "timm_mobilenetv3large":
         model = timm.create_model(
             "mobilenetv3_large_100", pretrained=pretrained, num_classes=num_classes
