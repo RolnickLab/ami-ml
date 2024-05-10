@@ -114,25 +114,35 @@ def accuracy_versus_confidence(
     return accuracy_vs_conf_df
 
 
-def update_taxa_accuracy(macro_acc_data: dict):
+def update_taxa_accuracy(macro_acc: dict, top1: int, top5: int, rank: str):
+    """Update accuracy data for every class at every taxonomic level"""
+
     pass
 
 
-def calculate_macro_accuracy(macro_acc_data: dict):
-    pass
+def calculate_macro_accuracy(macro_acc: dict):
+    """Calculate macro accuracy at all taxonomic levels"""
+    
+    sp_top1, sp_top5 = ..., ...
+    gs_top1, gs_top5 = ..., ...
+    fm_top1, fm_top5 = ..., ...
+
+    return [sp_top1, sp_top5, gs_top1, gs_top5, fm_top1, fm_top5]
+
+
+
 
 def fgrained_model_evaluation(
-    run_name: str,
-    artifact: str,
-    region: str,
-    model_type: str,
-    model_dir: str,
-    category_map: str,
-    insect_crops_dir: str,
-    sp_exclusion_list_file: str,
-    ami_traps_taxonomy_map_file: str,
-    ami_gbif_taxonomy_map_file: str,
-    gbif_taxonomy_hierarchy_file: str,
+    run_name: str = typer.Option(),
+    artifact: str = typer.Option(),
+    region: str = typer.Option(),
+    model_type: str = typer.Option(),
+    model_dir: str = typer.Option(),
+    category_map: str = typer.Option(),
+    insect_crops_dir: str = typer.Option(),
+    sp_exclusion_list_file: str = typer.Option(),
+    ami_traps_taxonomy_map_file: str = typer.Option(),
+    gbif_taxonomy_hierarchy_file: str = typer.Option(),
     save_acccuracy_vs_conf: bool = False
 ):
     """Main function for fine-grained model evaluation"""
@@ -142,7 +152,6 @@ def fgrained_model_evaluation(
     print(f"Device {device} is available.")
     sp_exclusion_list = pickle.load(open(sp_exclusion_list_file, "rb"))
     ami_traps_taxonomy_map = pd.read_csv(ami_traps_taxonomy_map_file)
-    ami_gbif_taxonomy_map = pd.read_csv(ami_gbif_taxonomy_map_file)
     gbif_taxonomy_hierarchy = json.load(open(gbif_taxonomy_hierarchy_file))
 
     # Download the model
@@ -165,7 +174,7 @@ def fgrained_model_evaluation(
         open(os.path.join(insect_crops_dir, "fgrained_labels.json"))
     )
 
-    # Classification evaluation metrics 
+    # Evaluation metrics 
     sp_top1, sp_top5 = 0, 0
     gs_top1, gs_top5 = 0, 0
     fm_top1, fm_top5 = 0, 0
@@ -255,11 +264,19 @@ def fgrained_model_evaluation(
                 accuracy_w_conf_fm = accuracy_versus_confidence(gt_label_fm, fm_pred, accuracy_w_conf_fm)
                 macro_acc = update_taxa_accuracy(macro_acc, top1, top5, "FAMILY")
 
+    # Calculate the taxa-wise accuracy
+    macro_acc_result = calculate_macro_accuracy(macro_acc)
+
     print(
         f"\nFine-grained classification micro-accuracy (Top1, Top5) for {run_name}:\
         \nSpecies: {round(sp_top1/sp_count*100,2)}%, {round(sp_top5/sp_count*100,2)}%\
         \nGenus: {round(gs_top1/gs_count*100,2)}%, {round(gs_top5/gs_count*100,2)}%\
         \nFamily: {round(fm_top1/fm_count*100,2)}%, {round(fm_top5/fm_count*100,2)}%\
+        \n\
+        \nFine-grained classification macro-accuracy (Top1, Top5) for {run_name}:\
+        \nSpecies: {macro_acc_result[0]}%, {macro_acc_result[1]}%\
+        \nGenus: {macro_acc_result[2]}%, {macro_acc_result[3]}%\
+        \nFamily: {macro_acc_result[4]}%, {macro_acc_result[5]}%\
         \n",
         flush=True,
     )
