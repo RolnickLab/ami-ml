@@ -117,19 +117,37 @@ def accuracy_versus_confidence(
 def update_taxa_accuracy(macro_acc: dict, top1: int, top5: int, gt_label: str, gt_rank: str):
     """Update accuracy data for every class at every taxonomic level"""
 
-    pass
+    # Every value in each taxa key is [top1_correct, top5_correct, total]
+
+    # Make a key in the dict if the taxa seen first time
+    if gt_label not in macro_acc[gt_rank].keys():
+        macro_acc[gt_rank][gt_label] = [0, 0, 0]
+
+    # Update the accuracy numbers
+    macro_acc[gt_rank][gt_label][0] += top1
+    macro_acc[gt_rank][gt_label][1] += top5
+    macro_acc[gt_rank][gt_label][2] += 1
+
+    return macro_acc
 
 
 
-def calculate_macro_accuracy(macro_acc: dict):
-    """Calculate macro accuracy at all taxonomic levels"""
+def calculate_macro_accuracy(macro_acc_taxa: dict):
+    """Calculate macro accuracy at the given taxonomic level"""
     
-    sp_top1, sp_top5 = ..., ...
-    gs_top1, gs_top5 = ..., ...
-    fm_top1, fm_top5 = ..., ...
+    # Lists containing each class' top1 and top5 accuracy
+    top1_acc, top5_acc = [], []
 
-    return [sp_top1, sp_top5, gs_top1, gs_top5, fm_top1, fm_top5]
+    # Calculate the individual taxa accuracy
+    for taxa in macro_acc_taxa.keys():
+        top1_acc.append(macro_acc_taxa[taxa][0]/macro_acc_taxa[taxa][2])
+        top5_acc.append(macro_acc_taxa[taxa][1]/macro_acc_taxa[taxa][2])
 
+    # Calculate the macro accuracy
+    macro_top1_acc = round(sum(top1_acc)/len(top1_acc)*100, 2)
+    macro_top5_acc = round(sum(top5_acc)/len(top5_acc)*100, 2)
+
+    return macro_top1_acc, macro_top5_acc
 
 
 
@@ -175,13 +193,16 @@ def fgrained_model_evaluation(
         open(os.path.join(insect_crops_dir, "fgrained_labels.json"))
     )
 
-    # Evaluation metrics 
+    # Micro-accuracy evaluation metrics 
     sp_top1, sp_top5 = 0, 0
     gs_top1, gs_top5 = 0, 0
     fm_top1, fm_top5 = 0, 0
     sp_count, gs_count, fm_count = 0, 0, 0
+
+    # Macro-accuracy evaluation metrics
     macro_acc = {}
     macro_acc["SPECIES"], macro_acc["GENUS"], macro_acc["FAMILY"] = {}, {}, {}
+    # Every value in each taxa key will be [top1_correct, top5_correct, total]
 
     # Accuracy v/s confidence variables 
     accuracy_w_conf_sp = pd.DataFrame(0, columns=["conf-"+str(thresh) for thresh in range(10, 100, 10)], index=["correct", "conf-total", "reject", "moths-total"])
@@ -224,13 +245,13 @@ def fgrained_model_evaluation(
                 top1, top5 = check_prediction(gt_label_gs, gs_pred)
                 gs_top1 += top1; gs_top5 += top5; gs_count += 1 
                 accuracy_w_conf_gs = accuracy_versus_confidence(gt_label_gs, gs_pred, accuracy_w_conf_gs)
-                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, "GENUS")
+                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, gt_label_gs, "GENUS")
 
                 # Family accuracy calculation
                 top1, top5 = check_prediction(gt_label_fm, fm_pred)
                 fm_top1 += top1; fm_top5 += top5; fm_count += 1 
                 accuracy_w_conf_fm = accuracy_versus_confidence(gt_label_fm, fm_pred, accuracy_w_conf_fm)
-                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, "FAMILY")
+                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, gt_label_fm, "FAMILY")
 
 
             # Calculate genus accuracy
@@ -243,13 +264,13 @@ def fgrained_model_evaluation(
                 top1, top5 = check_prediction(gt_label_gs.split(" ")[0], gs_pred)
                 gs_top1 += top1; gs_top5 += top5; gs_count += 1
                 accuracy_w_conf_gs = accuracy_versus_confidence(gt_label_gs.split(" ")[0], gs_pred, accuracy_w_conf_gs)
-                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, "GENUS")
+                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, gt_label_gs.split(" ")[0], "GENUS")
 
                 # Family accuracy calculation
                 top1, top5 = check_prediction(gt_label_fm, fm_pred)
                 fm_top1 += top1; fm_top5 += top5; fm_count += 1 
                 accuracy_w_conf_fm = accuracy_versus_confidence(gt_label_fm, fm_pred, accuracy_w_conf_fm) 
-                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, "FAMILY") 
+                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, gt_label_fm, "FAMILY") 
 
             # Calculate sub-tribe, tribe and family accuracy
             else:
@@ -263,10 +284,13 @@ def fgrained_model_evaluation(
                 top1, top5 = check_prediction(gt_label_fm, fm_pred)
                 fm_top1 += top1; fm_top5 += top5; fm_count += 1 
                 accuracy_w_conf_fm = accuracy_versus_confidence(gt_label_fm, fm_pred, accuracy_w_conf_fm)
-                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, "FAMILY")
+                macro_acc = update_taxa_accuracy(macro_acc, top1, top5, gt_label_fm, "FAMILY")
 
-    # Calculate the taxa-wise accuracy
-    macro_acc_result = calculate_macro_accuracy(macro_acc)
+    # Calculate the macro-accuracy at each taxonomic level
+    macro_sp_top1, macro_sp_top5 = calculate_macro_accuracy(macro_acc["SPECIES"])
+    macro_gs_top1, macro_gs_top5 = calculate_macro_accuracy(macro_acc["GENUS"])
+    macro_fm_top1, macro_fm_top5 = calculate_macro_accuracy(macro_acc["FAMILY"])
+
 
     print(
         f"\nFine-grained classification micro-accuracy (Top1, Top5) for {run_name}:\
@@ -275,9 +299,9 @@ def fgrained_model_evaluation(
         \nFamily: {round(fm_top1/fm_count*100,2)}%, {round(fm_top5/fm_count*100,2)}%\
         \n\
         \nFine-grained classification macro-accuracy (Top1, Top5) for {run_name}:\
-        \nSpecies: {macro_acc_result[0]}%, {macro_acc_result[1]}%\
-        \nGenus: {macro_acc_result[2]}%, {macro_acc_result[3]}%\
-        \nFamily: {macro_acc_result[4]}%, {macro_acc_result[5]}%\
+        \nSpecies: {macro_sp_top1}%, {macro_sp_top5}%\
+        \nGenus: {macro_gs_top1}%, {macro_gs_top5}%\
+        \nFamily: {macro_fm_top1}%, {macro_fm_top5}%\
         \n",
         flush=True,
     )
@@ -295,17 +319,17 @@ def fgrained_model_evaluation(
 
 
 if __name__ == "__main__":
-    run_name = "ne-america_resnet50_baseline_run1"
-    artifact =  "moth-ai/ami-gbif-fine-grained/model:v13" 
-    region = "NorthEasternAmerica"
-    model_type = "resnet50"
-    model_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/models/fine_grained"
-    category_map = "01_ami-gbif_fine-grained_ne-america_category_map.json"
-    insect_crops_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/insect_crops"
-    sp_exclusion_list_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle"    
-    ami_traps_taxonomy_map_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv"
-    gbif_taxonomy_hierarchy_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/gbif_taxonomy_hierarchy.json"
+    # run_name = "ne-america_resnet50_baseline_run1"
+    # artifact =  "moth-ai/ami-gbif-fine-grained/model:v13" 
+    # region = "NorthEasternAmerica"
+    # model_type = "resnet50"
+    # model_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/models/fine_grained"
+    # category_map = "01_ami-gbif_fine-grained_ne-america_category_map.json"
+    # insect_crops_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/insect_crops"
+    # sp_exclusion_list_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle"    
+    # ami_traps_taxonomy_map_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv"
+    # gbif_taxonomy_hierarchy_file = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps/metadata/gbif_taxonomy_hierarchy.json"
 
-    fgrained_model_evaluation(run_name, artifact, region, model_type, model_dir, category_map, insect_crops_dir, sp_exclusion_list_file, ami_traps_taxonomy_map_file, gbif_taxonomy_hierarchy_file)
+    # fgrained_model_evaluation(run_name, artifact, region, model_type, model_dir, category_map, insect_crops_dir, sp_exclusion_list_file, ami_traps_taxonomy_map_file, gbif_taxonomy_hierarchy_file)
 
-    # typer.run(fgrained_model_evaluation)
+    typer.run(fgrained_model_evaluation)
