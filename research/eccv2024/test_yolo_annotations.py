@@ -4,17 +4,20 @@ Date last modified: November 6, 2023
 About: Test the yolo annotations visually on a few raw images
 """
 
-import os
-import cv2
-import random
 import json
+import os
+import random
 
-# User-input variables
-yolo_data_dir = "/home/mila/a/aditya.jain/scratch/cvpr2024_data/ami-traps-dataset"
-output_dir = "/home/mila/a/aditya.jain/scratch/cvpr2024_data/eg-visual-annotations"
+import cv2
+
+# 3rd party packages
+from dotenv import load_dotenv
+
+# Load secrets and config from optional .env file
+load_dotenv()
 
 
-def test_annotations(data_dir: str, output_dir: str, n: int=10):
+def test_annotations(data_dir: str, output_dir: str, n: int = 10):
     """Main function to draw the annotations on raw images"""
 
     image_dir = os.path.join(data_dir, "images")
@@ -76,4 +79,10 @@ def test_annotations(data_dir: str, output_dir: str, n: int=10):
 
 
 if __name__ == "__main__":
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+
+    # User-input variables
+    yolo_data_dir = f"{ECCV2024_DATA}/ami-traps-dataset"
+    output_dir = f"{ECCV2024_DATA}/eg-visual-annotations"
+
     test_annotations(yolo_data_dir, output_dir)

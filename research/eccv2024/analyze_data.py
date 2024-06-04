@@ -5,10 +5,16 @@ About: Analyse different metrics for the annotated data
 """
 
 import json
-import pandas as pd
 import os
 
-taxon_db = pd.read_csv("/home/mila/a/aditya.jain/scratch/cvpr2024_data/ami-taxa-20231029.csv")
+import pandas as pd
+
+# 3rd party packages
+from dotenv import load_dotenv
+
+# Load secrets and config from optional .env file
+load_dotenv()
+
 
 def print_statistics():
     """Print statistics to the terminal"""
@@ -20,16 +26,16 @@ def print_statistics():
         \nUK - {uk_count}\
         \nDenmark - {denmark_count}\
         \nPanama - {panama_count}\
-        \nTotal - {vermont_count + quebec_count + uk_count + denmark_count + panama_count}\n"
+        \nTotal - {vermont_count+quebec_count+uk_count+denmark_count+panama_count}\n"
     )
 
     print(
         f"General annotation statistics:\
-        \nBounding boxes - {num_bboxes}\
-        \nNon-moths - {num_nonmoths} ({round(num_nonmoths/num_bboxes*100,2)}%)\
-        \nMoths - {num_moths} ({round(num_moths/num_bboxes*100,2)}%)\
-        \nUnidentifiables - {num_unidentifiable} ({round(num_unidentifiable/num_bboxes*100,2)}%)\
-        \nUnclassified - {num_unclassified} ({round(num_unclassified/num_bboxes*100,2)}%)\
+        \nBounding boxes - {num_boxes}\
+        \nNon-moths - {num_nonmoths} ({round(num_nonmoths/num_boxes*100,2)}%)\
+        \nMoths - {num_moths} ({round(num_moths/num_boxes*100,2)}%)\
+        \nUnidentifiables - {num_unidentify} ({round(num_unidentify/num_boxes*100,2)}%)\
+        \nUnclassified - {num_unclassify} ({round(num_unclassify/num_boxes*100,2)}%)\
         \n"
     )
 
@@ -43,10 +49,9 @@ def print_statistics():
         \nSub-tribe - {num_sub_tribe} ({round(num_sub_tribe/num_moths*100,2)}%)\
         \nGenus - {num_genus} ({round(num_genus/num_moths*100,2)}%)\
         \nSpecies - {num_species} ({round(num_species/num_moths*100,2)}%)\
-        \nMultiple labels assigned - {num_multiple_labels} ({round(num_multiple_labels/num_moths*100,2)}%)\
+        \nMultiple labels - {num_mul_label} ({round(num_mul_label/num_moths*100,2)}%)\
         \n"
     )
-
 
     print(
         f"Moth class statistics:\
@@ -63,36 +68,37 @@ def print_statistics():
 def update_moth_annotation_statistics(label_list: list[str], taxon_info: pd.DataFrame):
     """Update moth annotation statistics given a label list and taxonomy backbone"""
 
-    global num_order, num_family, num_sub_family, num_tribe, num_sub_tribe, num_genus, num_species
+    global num_order, num_family, num_sub_family, num_tribe, num_sub_tribe
+    global num_genus, num_species
 
     for taxon in label_list:
-        # Match the name in the AMI database    
+        # Match the name in the AMI database
         try:
             taxon_level = taxon_info.loc[taxon_info["name"] == taxon, "rank"].values
-        except:
+        except KeyError:
             print(f"Taxon {taxon} is not found in the database.")
             continue
-                    
+
         # Check the hierarchy for the taxon
-        if taxon_level =="ORDER":
+        if taxon_level == "ORDER":
             list_order.append(taxon)
             num_order += 1
-        elif taxon_level =="FAMILY":
+        elif taxon_level == "FAMILY":
             list_family.append(taxon)
             num_family += 1
-        elif taxon_level =="SUBFAMILY":
+        elif taxon_level == "SUBFAMILY":
             list_sub_family.append(taxon)
             num_sub_family += 1
-        elif taxon_level =="TRIBE":
+        elif taxon_level == "TRIBE":
             list_tribe.append(taxon)
             num_tribe += 1
-        elif taxon_level =="SUBTRIBE":
+        elif taxon_level == "SUBTRIBE":
             list_sub_tribe.append(taxon)
             num_sub_tribe += 1
-        elif taxon_level =="GENUS":
+        elif taxon_level == "GENUS":
             list_genus.append(taxon)
             num_genus += 1
-        elif taxon_level =="SPECIES":
+        elif taxon_level == "SPECIES":
             list_species.append(taxon)
             num_species += 1
         else:
@@ -103,10 +109,11 @@ def update_moth_annotation_statistics(label_list: list[str], taxon_info: pd.Data
 def analyze_data(data: list[dict]):
     """Main function to analze the AMI benchmark annotation data"""
 
-    global vermont_count, quebec_count, uk_count, denmark_count, panama_count, \
-    num_order, num_family, num_sub_family, num_sub_tribe, num_tribe, num_genus, num_species, \
-    list_order, list_family, list_sub_family, list_tribe, list_sub_tribe, list_genus, list_species, \
-    num_bboxes, num_nonmoths, num_moths, num_unidentifiable, num_unclassified, num_multiple_labels
+    global vermont_count, quebec_count, uk_count, denmark_count, panama_count
+    global num_order, num_family, num_sub_family, num_sub_tribe, num_tribe
+    global num_genus, num_species, list_order, list_family, list_sub_family
+    global list_tribe, list_sub_tribe, list_genus, list_species, num_boxes
+    global num_nonmoths, num_moths, num_unidentify, num_unclassify, num_mul_label
 
     # Region-wise counts
     vermont_count = 0
@@ -116,12 +123,12 @@ def analyze_data(data: list[dict]):
     panama_count = 0
 
     # Annotation statitics
-    num_bboxes = 0
+    num_boxes = 0
     num_nonmoths = 0
     num_moths = 0
     num_moths_dir_label = 0
-    num_unidentifiable = 0
-    num_unclassified = 0
+    num_unidentify = 0
+    num_unclassify = 0
     num_labels = 0
     num_order = 0
     num_family = 0
@@ -137,9 +144,9 @@ def analyze_data(data: list[dict]):
     list_sub_tribe = []
     list_genus = []
     list_species = []
-    num_multiple_labels = 0
+    num_mul_label = 0
     img_names = []
-    
+
     for i in range(len(data)):
         data_point = data[i]
 
@@ -156,16 +163,19 @@ def analyze_data(data: list[dict]):
         elif "Vermont" in deployment:
             vermont_count += 1
         else:
-            print(f"No region name found in the data.")
-        
+            print("No region name found in the data.")
+
         # Check for duplicate images
         image_url = data_point["data"]["image"]
         image_name = os.path.basename(os.path.normpath(image_url))
-        if image_name in img_names: 
+        if image_name in img_names:
             print(f"Image {image_name} for {deployment} has duplicate entry.")
-            if "Denmark" in deployment: denmark_count -= 1
-            else: print(f"{deployment} region also has duplicate images.")
-        else: img_names.append(image_name)
+            if "Denmark" in deployment:
+                denmark_count -= 1
+            else:
+                print(f"{deployment} region also has duplicate images.")
+        else:
+            img_names.append(image_name)
 
         # Take results from reviewer annotations, if available
         annotator_results = data_point["annotations"][0]["result"]
@@ -176,59 +186,67 @@ def analyze_data(data: list[dict]):
             annotations = annotator_results
 
         # Iterate over all annotations
-        labels_ids = [] 
-        taxonomy_ids = [] 
-        for item in annotations:            
+        labels_ids = []
+        taxonomy_ids = []
+        for item in annotations:
             # Total bounding boxes
             if item["type"] == "rectangle":
-                num_bboxes += 1 
+                num_boxes += 1
 
             # Binary classification statistics
             if item["type"] == "labels":
-                labels_ids.append(item["id"]) 
+                labels_ids.append(item["id"])
                 num_labels += 1
                 if not item["value"]["labels"]:
-                    num_unclassified += 1
+                    num_unclassify += 1
                 elif item["value"]["labels"][0] == "Non-Moth":
                     num_nonmoths += 1
                 elif item["value"]["labels"][0] == "Moth":
                     num_moths += 1
-                elif item["value"]["labels"][0] == "Unidentifiable":  
-                    num_unidentifiable += 1
+                elif item["value"]["labels"][0] == "Unidentifiable":
+                    num_unidentify += 1
                 else:
                     print(item["value"]["labels"][0])
 
             # Fine-grained moth classification statistics
             if item["type"] == "taxonomy":
-                taxonomy_ids.append(item["id"]) 
+                taxonomy_ids.append(item["id"])
                 # Sort based on higher to lower taxon classification
-                taxonomy_labels = sorted(item["value"]["taxonomy"], key=len)  
-                if len(taxonomy_labels)==1:
+                taxonomy_labels = sorted(item["value"]["taxonomy"], key=len)
+                if len(taxonomy_labels) == 1:
                     # Add single annotation
-                    update_moth_annotation_statistics(taxonomy_labels[0], taxon_db)   
+                    update_moth_annotation_statistics(taxonomy_labels[0], taxon_db)
                 else:
-                    num_multiple_labels += 1
-                    for i in range(len(taxonomy_labels)-1): 
-                        # Check all annotations if it is a subset of the lower most classification
-                        if not set(taxonomy_labels[i]).issubset(set(taxonomy_labels[-1])): 
-                            update_moth_annotation_statistics(taxonomy_labels[i], taxon_db)
+                    num_mul_label += 1
+                    for i in range(len(taxonomy_labels) - 1):
+                        # Check all annotations if it is a subset of the ...
+                        # ... lower most classification
+                        if not set(taxonomy_labels[i]).issubset(
+                            set(taxonomy_labels[-1])
+                        ):
+                            update_moth_annotation_statistics(
+                                taxonomy_labels[i], taxon_db
+                            )
                     # Add the deepest label
                     update_moth_annotation_statistics(taxonomy_labels[-1], taxon_db)
 
-        # Count the moth crops that are directly labelled 
+        # Count the moth crops that are directly labelled
         # at taxonomy level, w/o coarse labelling
         for id in taxonomy_ids:
-            if id not in labels_ids: num_moths_dir_label += 1
+            if id not in labels_ids:
+                num_moths_dir_label += 1
 
-    num_unclassified += (num_bboxes - num_labels - num_moths_dir_label)
+    num_unclassify += num_boxes - num_labels - num_moths_dir_label
     num_moths += num_moths_dir_label
     print_statistics()
 
-if __name__=="__main__":
-    annotation_file = (
-        "/home/mila/a/aditya.jain/scratch/cvpr2024_data/annotated-tasks-20240110.json"
-    )
-    annotation_data = json.load(open(annotation_file))
+
+if __name__ == "__main__":
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+    taxon_db = pd.read_csv(f"{ECCV2024_DATA}/ami-taxa-20231029.csv")
+
+    annotation_file = f"{ECCV2024_DATA}/annotated-tasks-20240110.json"
+    with open(annotation_file) as f:
+        annotation_data = json.load(f)
 
     analyze_data(annotation_data)
-    

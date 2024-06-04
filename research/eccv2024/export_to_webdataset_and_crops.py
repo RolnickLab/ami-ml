@@ -7,11 +7,18 @@ Date started  : April 9, 2024
 About         : Exports the AMI-Traps dataset to webdataset format and individual crops
 """
 
-import os
 import json
-from PIL import Image
-import webdataset as wds
+import os
+
 import pandas as pd
+import webdataset as wds
+
+# 3rd party packages
+from dotenv import load_dotenv
+from PIL import Image
+
+# Load secrets and config from optional .env file
+load_dotenv()
 
 
 def get_synonym(sp_checklist: pd.DataFrame, species: str):
@@ -22,7 +29,7 @@ def get_synonym(sp_checklist: pd.DataFrame, species: str):
         synonym = sp_checklist.loc[sp_checklist["search_species"] == species][
             "gbif_species"
         ].values[0]
-    except:
+    except IndexError:
         synonym = None
         # print(f"{species} is not found in the search species column.", flush=True)
 
@@ -42,7 +49,7 @@ def get_gbif_keys(sp_key_map: pd.DataFrame, sp_checklist: pd.DataFrame, species:
         speciesKey = int(
             sp_key_map.loc[sp_key_map["species"] == species]["speciesKey"].values[0]
         )
-    except:
+    except IndexError:
         pass
 
     # Get accepted taxon key from checklist
@@ -52,14 +59,14 @@ def get_gbif_keys(sp_key_map: pd.DataFrame, sp_checklist: pd.DataFrame, species:
                 "accepted_taxon_key"
             ].values[0]
         )
-    except:
+    except IndexError:
         try:
             acceptedTaxonKey = int(
                 sp_checklist.loc[sp_checklist["gbif_species"] == species][
                     "accepted_taxon_key"
                 ].values[0]
             )
-        except:
+        except IndexError:
             pass
 
     return speciesKey, acceptedTaxonKey
@@ -108,8 +115,10 @@ def export_to_webdataset_and_crops(
         try:
             raw_image = Image.open(os.path.join(image_dir, image))
             img_width, img_height = raw_image.size
-        except:
-            raise Exception(f"Issue with image {image}")
+        except FileNotFoundError:
+            raise Exception(f"Image file not found: {os.path.join(image_dir, image)}")
+        except Exception as e:
+            raise Exception(f"Error opening image {image}: {str(e)}")
 
         # Get the ground truth bounding box and label
         labels = open(os.path.join(labels_dir, img_basename + ".txt"), "r")
@@ -142,11 +151,17 @@ def export_to_webdataset_and_crops(
                 )
 
                 # Save the insect crop as image
-                insect_crop.save(os.path.join(export_dir, "insect_crops", str(binary_crop_count)+".jpg"))
+                insect_crop.save(
+                    os.path.join(
+                        export_dir, "insect_crops", str(binary_crop_count) + ".jpg"
+                    )
+                )
 
                 # Export to webdataset for binary classification
-                if label_name!="Non-Moth": binary_class = "Moth"
-                else: binary_class = "Non-Moth"
+                if label_name != "Non-Moth":
+                    binary_class = "Moth"
+                else:
+                    binary_class = "Non-Moth"
                 sample_binary_annotation = {"label": binary_class, "region": region}
                 sample_binary = {
                     "__key__": img_basename + "_" + str(binary_crop_count),
@@ -156,7 +171,7 @@ def export_to_webdataset_and_crops(
                 sink_binary.write(sample_binary)
 
                 # Save the binary annotation for the individual crop
-                label_binary[str(binary_crop_count)+".jpg"] = sample_binary_annotation
+                label_binary[str(binary_crop_count) + ".jpg"] = sample_binary_annotation
 
                 # Export to webdataset for finegrained classification, if moth crop
                 if label_rank != "NA":
@@ -187,7 +202,9 @@ def export_to_webdataset_and_crops(
                     sink_fgrained.write(sample_fgrained)
 
                     # Save the finegrained annotation for the individual crop
-                    label_fgrained[str(binary_crop_count)+".jpg"] = sample_fgrained_annotation
+                    label_fgrained[
+                        str(binary_crop_count) + ".jpg"
+                    ] = sample_fgrained_annotation
                     fgrained_crop_count += 1
 
                 binary_crop_count += 1
@@ -196,20 +213,27 @@ def export_to_webdataset_and_crops(
     sink_fgrained.close()
     with open(os.path.join(export_dir, "insect_crops", "binary_labels.json"), "w") as f:
         json.dump(label_binary, f, indent=3)
-    with open(os.path.join(export_dir, "insect_crops", "fgrained_labels.json"), "w") as f:
+    with open(
+        os.path.join(export_dir, "insect_crops", "fgrained_labels.json"), "w"
+    ) as f:
         json.dump(label_fgrained, f, indent=3)
-    print(f"The export of the AMI-Traps dataset to webdataset and individual crops is complete!", flush=True)
+    print(
+        "The export is complete!",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
-    data_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/ami_traps_dataset"
-    export_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/camera_ready_amitraps"
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+    SPECIES_LISTS_DIR_PATH = os.getenv("SPECIES_LISTS_DIR_PATH")
+    MASTER_SPECIES_LIST = os.getenv("MASTER_SPECIES_LIST")
 
-    species_checklist = pd.read_csv(
-        "/home/mila/a/aditya.jain/mothAI/species_lists/quebec-vermont-uk-denmark-panama_checklist_20231124.csv"
-    )
-    species_key_map = pd.read_csv(
-        "/home/mila/a/aditya.jain/scratch/eccv2024_data/speciesKey_map.csv"
-    )
+    data_dir = f"{ECCV2024_DATA}/ami_traps_dataset"
+    export_dir = f"{ECCV2024_DATA}/camera_ready_amitraps"
 
-    export_to_webdataset_and_crops(data_dir, export_dir, species_checklist, species_key_map)
+    species_checklist = pd.read_csv(f"{SPECIES_LISTS_DIR_PATH}/{MASTER_SPECIES_LIST}")
+    species_key_map = pd.read_csv(f"{ECCV2024_DATA}/speciesKey_map.csv")
+
+    export_to_webdataset_and_crops(
+        data_dir, export_dir, species_checklist, species_key_map
+    )

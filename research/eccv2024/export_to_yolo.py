@@ -6,12 +6,20 @@ About: Export AMI annotated data to the yolo format
 
 import json
 import os
-import pandas as pd
 import urllib.request
-from tqdm import tqdm
+
+import pandas as pd
+
+# 3rd party packages
+from dotenv import load_dotenv
 from PIL import Image
+from tqdm import tqdm
+
+# Load secrets and config from optional .env file
+load_dotenv()
 
 unidentfiable_cnt = 0
+
 
 def get_raw_image_dim(img_path: str):
     """Get raw image dimensions"""
@@ -20,8 +28,10 @@ def get_raw_image_dim(img_path: str):
     try:
         raw_image = Image.open(img_path)
         img_width, img_height = raw_image.size
-    except:
-        raise Exception(f"Issue with image {img_path}")
+    except FileNotFoundError:
+        raise Exception(f"Image file not found: {img_path}")
+    except Exception as e:
+        raise Exception(f"Error reading image: {img_path}. {str(e)}")
 
     return img_width, img_height
 
@@ -64,8 +74,12 @@ def get_only_taxon_labels(annotations: list[dict]):
     # it does not have its corresponding
     # "taxonomy" label
     for item in annotations:
-        if item["type"] == "labels" and item["id"] not in item_ids \
-        and item["value"]["labels"] and item["value"]["labels"][0]!="Unclassified":
+        if (
+            item["type"] == "labels"
+            and item["id"] not in item_ids
+            and item["value"]["labels"]
+            and item["value"]["labels"][0] != "Unclassified"
+        ):
             processed_list.append(item)
 
     return processed_list
@@ -77,7 +91,8 @@ def filter_label_name(annotation: dict):
     """
 
     if annotation["type"] == "labels":
-        if annotation["value"]["labels"]: return annotation["value"]["labels"][0]
+        if annotation["value"]["labels"]:
+            return annotation["value"]["labels"][0]
 
     elif annotation["type"] == "taxonomy":
         # Sort annotation based on higher to lower taxon classification
@@ -92,12 +107,6 @@ def filter_label_name(annotation: dict):
     else:
         raise Exception("Annotation can onle be of type labels or taxonomy.")
 
-
-def check_for_synonyms(label: str, sp_list: pd.DataFrame):
-    """Return GBIF accepted names for synonyms"""
-    
-    a = label
-    pass
 
 def export_to_yolo(data: list[dict], output_dir: str, sp_list: pd.DataFrame):
     """Main function for exporting the data to yolo format"""
@@ -136,7 +145,7 @@ def export_to_yolo(data: list[dict], output_dir: str, sp_list: pd.DataFrame):
             try:
                 urllib.request.urlretrieve(image_url, image_path)
             except Exception as e:
-                print("Error fetching {image_name}. The error is: {e}.", flush=True)
+                print(f"Error fetching {image_name}. The error is: {e}.", flush=True)
 
         # Take results from reviewer annotations, if available
         annotator_results = data_point["annotations"][0]["result"]
@@ -161,15 +170,16 @@ def export_to_yolo(data: list[dict], output_dir: str, sp_list: pd.DataFrame):
                 item["value"]["height"],
             )
 
-            # Check for synonym names and return only GBIF accepted names
-            label_name = filter_label_name(item)   
-            label_name = check_for_synonyms(label_name, sp_list)         
+            # Get the label name
+            label_name = filter_label_name(item)
 
-            #Find the numeric label id from the json file
+            # Find the numeric label id from the json file
             try:
                 label_id = str(categories[label_name])
-            except:
-                raise (f"{label_name} class is not found in the notes.json label file")
+            except KeyError:
+                raise Exception(
+                    f"{label_name} class is not found in the notes.json label file"
+                )
 
             # Add entry to the file
             yolo_row = label_id + " " + str(xywh)[1:-1].replace(",", "")
@@ -196,18 +206,24 @@ def export_to_yolo(data: list[dict], output_dir: str, sp_list: pd.DataFrame):
 
         # Write the image metadata information to file
         image_width, image_height = get_raw_image_dim(image_path)
-        metadata = {"region": region, "image_width": image_width, "image_height": image_height}
+        metadata = {
+            "region": region,
+            "image_width": image_width,
+            "image_height": image_height,
+        }
         metadata_filename = os.path.splitext(image_name)[0] + ".json"
         with open(os.path.join(metadata_dir, metadata_filename), "w") as f:
             json.dump(metadata, f, indent=2)
 
 
 if __name__ == "__main__":
-    # Input data
-    annotation_file = (
-        "/home/mila/a/aditya.jain/scratch/eccv2024_data/annotated-tasks-20240110.json"
-    )
-    annotation_data = json.load(open(annotation_file))
-    yolo_data_dir = "/home/mila/a/aditya.jain/scratch/eccv2024_data/ami_traps_dataset"
-    species_list = pd.read_csv("/home/mila/a/aditya.jain/mothAI/species_lists/quebec-vermont-uk-denmark-panama_checklist_20231124.csv")
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+    SPECIES_LISTS_DIR_PATH = os.getenv("SPECIES_LISTS_DIR_PATH")
+    MASTER_SPECIES_LIST = os.getenv("MASTER_SPECIES_LIST")
+
+    annotation_file = f"{ECCV2024_DATA}/annotated-tasks-20240110.json"
+    with open(annotation_file) as f:
+        annotation_data = json.load(f)
+    yolo_data_dir = f"{ECCV2024_DATA}/ami_traps_dataset"
+    species_list = pd.read_csv(f"{SPECIES_LISTS_DIR_PATH}/{MASTER_SPECIES_LIST}")
     export_to_yolo(annotation_data, yolo_data_dir, species_list)
