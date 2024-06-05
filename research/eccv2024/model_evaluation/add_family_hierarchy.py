@@ -4,8 +4,9 @@ Date last modified: January 15, 2023
 About: Add family info for subfamily, tribe and subtribe
 """
 
-import os
 import json
+import os
+
 from pygbif import species as species_api
 
 
@@ -35,11 +36,10 @@ def add_family_level(data_dir: str, taxon_file: str):
                     family = gbif_lookup["family"]
                     taxon_data[gt_label] = family
 
-    # Write the final data to disk        
+    # Write the final data to disk
     with open(taxon_file, "w") as f:
-        json.dump(taxon_data, f, indent=2)     
+        json.dump(taxon_data, f, indent=2)
 
-    
 
 if __name__ == "__main__":
     data_dir = "/home/mila/a/aditya.jain/scratch/cvpr2024_data"

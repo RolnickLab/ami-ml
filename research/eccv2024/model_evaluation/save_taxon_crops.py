@@ -4,12 +4,13 @@ Date last modified: February 22, 2024
 About: Save crops for a specific taxonomic name
 """
 
-import os
 import json
-from PIL import Image
+import os
+
 from numpy import random
-from torchvision.utils import save_image
+from PIL import Image
 from torchvision import transforms
+from torchvision.utils import save_image
 
 
 def _helper_save_crop(
@@ -32,8 +33,8 @@ def _helper_save_crop(
     try:
         raw_image = Image.open(os.path.join(image_dir, image_name))
         img_width, img_height = raw_image.size
-    except:
-        raise Exception(f"Issue with image reading {image_name}")
+    except OSError as e:
+        print(f"Error {e} with image {image_name}")
 
     # Convert the raw image to tensor˚z
     transform_totensor = transforms.Compose([transforms.ToTensor()])
@@ -53,11 +54,19 @@ def _helper_save_crop(
     save_image(cropped_image, os.path.join(save_dir, crop_name))
 
 
-def save_insect_crop(data_dir: str, save_dir: str, taxon: str, num_crops_reqd: int, prob_random: float = 0.5):
+def save_insect_crop(
+    data_dir: str,
+    save_dir: str,
+    taxon: str,
+    num_crops_reqd: int,
+    prob_random: float = 0.5,
+):
     """Main function for saving insect crops for a particular taxon"""
 
     # Get the image list and associated predctions
-    pred_dir = os.path.join(data_dir, "ami_traps_dataset", "model_predictions", "baseline")
+    pred_dir = os.path.join(
+        data_dir, "ami_traps_dataset", "model_predictions", "baseline"
+    )
     image_pred_list = os.listdir(pred_dir)
 
     # Iterate over each image predictions
@@ -85,8 +94,8 @@ def save_insect_crop(data_dir: str, save_dir: str, taxon: str, num_crops_reqd: i
 
 
 if __name__ == "__main__":
-    data_dir = "/home/mila/a/aditya.jain/scratch/cvpr2024_data"
-    save_dir = "/home/mila/a/aditya.jain/mothAI/cvpr2024/model_evaluation/plots/long-tail_traps_images"
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+    save_dir = f"{ECCV2024_DATA}/model_evaluation/plots/long-tail_traps_images"
     taxon = "Euchoeca nebulata"
     num_crops_reqd = 10
-    save_insect_crop(data_dir, save_dir, taxon, num_crops_reqd, 1)
+    save_insect_crop(ECCV2024_DATA, save_dir, taxon, num_crops_reqd, 1)

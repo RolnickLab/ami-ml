@@ -1,22 +1,22 @@
-import numpy as np
-import torch
-from torchvision import transforms
 import json
+
 import PIL
 import timm
-from models import model_builder
+import torch
+from torchvision import transforms
+
 
 class ModelInference:
     """Model inference class definition"""
 
     def __init__(
         self,
-        model_path: str,   
-        model_type: str,     
+        model_path: str,
+        model_type: str,
         category_map_json: str,
-        device: str,        
+        device: str,
         input_size: int = 128,
-        topk: int = 10
+        topk: int = 10,
     ):
         self.device = device
         self.topk = topk
@@ -44,12 +44,10 @@ class ModelInference:
         else:
             return transforms.Pad(padding=[0, 0, 0, 0])
 
-
-
     def get_transforms(self):
         mean, std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
         return transforms.Compose(
-            [   
+            [
                 self._pad_to_square(),
                 transforms.Resize((self.input_size, self.input_size)),
                 transforms.Normalize(mean, std),
@@ -59,36 +57,36 @@ class ModelInference:
     def _load_model(self, model_path: str, num_classes: int, pretrained: bool = True):
         if self.model_type == "resnet50":
             model = timm.create_model(
-            "resnet50", pretrained=pretrained, num_classes=num_classes
-        )
+                "resnet50", pretrained=pretrained, num_classes=num_classes
+            )
 
         elif self.model_type == "timm_convnext-t":
             model = timm.create_model(
-            "convnext_tiny_in22k", pretrained=pretrained, num_classes=num_classes
-        )
-            
+                "convnext_tiny_in22k", pretrained=pretrained, num_classes=num_classes
+            )
+
         elif self.model_type == "timm_convnext-b":
             model = timm.create_model(
-            "convnext_base_in22k", pretrained=pretrained, num_classes=num_classes
-        )
+                "convnext_base_in22k", pretrained=pretrained, num_classes=num_classes
+            )
 
         elif self.model_type == "efficientnetv2-b3":
             model = timm.create_model(
-            "tf_efficientnetv2_b3", pretrained=pretrained, num_classes=num_classes
-        )
-            
+                "tf_efficientnetv2_b3", pretrained=pretrained, num_classes=num_classes
+            )
+
         elif self.model_type == "timm_mobilenetv3large":
             model = timm.create_model(
-            "mobilenetv3_large_100", pretrained=pretrained, num_classes=num_classes
-        )
-            
+                "mobilenetv3_large_100", pretrained=pretrained, num_classes=num_classes
+            )
+
         elif self.model_type == "timm_vit-b16-128":
             model = timm.create_model(
-            "vit_base_patch16_224_in21k",
-            pretrained=pretrained,
-            img_size=128,
-            num_classes=num_classes,
-        )
+                "vit_base_patch16_224_in21k",
+                pretrained=pretrained,
+                img_size=128,
+                num_classes=num_classes,
+            )
 
         else:
             raise RuntimeError(f"Model {self.model_type} not implemented")
@@ -117,15 +115,20 @@ class ModelInference:
             predictions = self.model(image)
             predictions = torch.nn.functional.softmax(predictions, dim=1)
             predictions = predictions.cpu()
-            if self.topk == 0 or self.topk > len(predictions[0]): # topk=0 means get all predictions
+            if self.topk == 0 or self.topk > len(
+                predictions[0]
+            ):  # topk=0 means get all predictions
                 predictions = torch.topk(predictions, len(predictions[0]))
             else:
                 predictions = torch.topk(predictions, self.topk)
 
             # Process the results
-            values, indices = predictions.values.numpy()[0], predictions.indices.numpy()[0]
+            values, indices = (
+                predictions.values.numpy()[0],
+                predictions.indices.numpy()[0],
+            )
             pred_results = []
-            
+
             for i in range(len(indices)):
                 idx, value = indices[i], values[i]
                 categ = self.id2categ[idx]

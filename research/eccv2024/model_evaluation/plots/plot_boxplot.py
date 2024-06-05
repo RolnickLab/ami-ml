@@ -1,17 +1,21 @@
-import matplotlib.pyplot as plt
-import numpy as np
 import json
 import os
+
 import pandas as pd
 
+GBIF_COUNT_FILE = os.getenv("GBIF_COUNT_FILE")
+MASTER_SPECIES_LIST = os.getenv("MASTER_SPECIES_LIST")
+
 # Important variables
-xaxis_labels = ["4-10", "11-20", "21-50", "51-100", "101-200", "201-500", "500-1K"] 
+xaxis_labels = ["4-10", "11-20", "21-50", "51-100", "101-200", "201-500", "500-1K"]
 yaxis_data = [[], [], [], [], [], [], []]
-min_imgs = 0 # Minimum images in AMI-Traps to consider for evaluation
-dir = "/home/mila/a/aditya.jain/mothAI/cvpr2024/model_evaluation/plots"
+min_imgs = 0  # Minimum images in AMI-Traps to consider for evaluation
+dir = "./plots"
 acc_data = json.load(open(os.path.join(dir, "species_accuracy.json")))
-gbif_training_count = json.load(open("/home/mila/a/aditya.jain/scratch/cvpr2024_data/gbif_train_counts.json"))
-species_list = pd.read_csv("/home/mila/a/aditya.jain/mothAI/species_lists/quebec-vermont-uk-denmark-panama_checklist_20231124.csv")
+with open(GBIF_COUNT_FILE) as f:
+    gbif_training_count = json.load(f)
+species_list = pd.read_csv(MASTER_SPECIES_LIST)
+
 
 def get_num_gbif_images(species: str, gbif_count: dict, species_list: pd.DataFrame):
     """Get number of GBF images for a species"""
@@ -21,7 +25,7 @@ def get_num_gbif_images(species: str, gbif_count: dict, species_list: pd.DataFra
         numeric_id = species_list.loc[
             species_list["gbif_species"] == species, "accepted_taxon_key"
         ].values[0]
-    except:
+    except Exception:
         numeric_id = species_list.loc[
             species_list["search_species"] == species, "accepted_taxon_key"
         ].values[0]
@@ -32,14 +36,16 @@ def get_num_gbif_images(species: str, gbif_count: dict, species_list: pd.DataFra
 
     # Find image count using taxon key
     try:
-        return gbif_count[str(numeric_id)]  
-    except:
-        print(f"Taxon name {species} with id {numeric_id} has no count in the data file.")
+        return gbif_count[str(numeric_id)]
+    except KeyError:
+        print(
+            f"Taxon name {species} with id {numeric_id} has no count in the data file."
+        )
         return 0
 
 
 for species in acc_data.keys():
-    total_imgs, accuracy = acc_data[species][1], acc_data[species][2]*100
+    total_imgs, accuracy = acc_data[species][1], acc_data[species][2] * 100
 
     if total_imgs >= min_imgs:
         num_gbif_imgs = get_num_gbif_images(species, gbif_training_count, species_list)
@@ -65,6 +71,3 @@ for species in acc_data.keys():
 
 # for x_categ in yaxis_data:
 #     print(len(x_categ))
-
-
-

@@ -4,16 +4,16 @@ Date started: April 18, 2024
 About: Evaluation of AMI-GBIF trained binary classifier on AMI-Traps data
 """
 
-import os
+import argparse
 import glob
 import json
-import argparse
-from PIL import Image
-import torch
-from torchvision import transforms
-import wandb
+import os
 
+import torch
+import wandb
 from model_inference import ModelInference
+from PIL import Image
+from torchvision import transforms
 
 
 def binary_model_evaluation(
@@ -104,8 +104,8 @@ def binary_model_evaluation(
         f"\nBinary classification evaluation for {run_name}:\
         \nSkip small crops - {skip_small_crops}; Min. crop dimension - {min_crop_dim}\
         \nTotal insect crops - {total_crops}\
-        \nGround-truth moth crops - {gt_moths} ({round(gt_moths/total_crops*100,2)}%)\
-        \nGround-truth non-moth crops - {gt_nonmoths} ({round(gt_nonmoths/total_crops*100,2)}%)\
+        \nGT moth crops - {gt_moths} ({round(gt_moths/total_crops*100,2)}%)\
+        \nGT non-moth crops - {gt_nonmoths} ({round(gt_nonmoths/total_crops*100,2)}%)\
         \nAccuracy - {accuracy}%\
         \nPrecision - {precision}%\
         \nRecall - {recall}%\
