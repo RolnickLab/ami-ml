@@ -6,6 +6,12 @@ __pycache__/
 # C extensions
 *.so
 
+### macOS ###
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
 # Distribution / packaging
 .Python
 build/
@@ -159,7 +165,5 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Project related files
+# Training related files
 **/*.out
-**/*.png
-**/*.jpg
