@@ -6,15 +6,23 @@
 #SBATCH --mem=10G                             # Ask for 10 GB of RAM
 #SBATCH --output=northamerica_resnet50_baseline_run1.out
 
+## Run this from the projet root directory.
+## ./research/<sub_dir(s)>/<filename>.sh
+
 # 1. Load the required modules
 module load anaconda/3
 
 # 2. Load your environment
 conda activate milamoth_ai
 
-# 3. Launch your script
+# 3. Load the environment variables outside of python script
+set -o allexport
+source .env
+set +o allexport
+
+# 4. Run python file
 python model_prediction_on_trap_data.py \
---data_dir /home/mila/a/aditya.jain/scratch/cvpr2024_data \
+--data_dir $ECCV2024_DATA \
 --binary_model moth-nonmoth_resnet50_20230604_065440_30.pth \
 --binary_model_type resnet50 \
 --moth_model northamerica_resnet50_baseline_run1.pth \
@@ -22,7 +30,4 @@ python model_prediction_on_trap_data.py \
 --category_map_binary_model "05-moth-nonmoth_category_map.json" \
 --category_map_moth_model "01_moths_northAmericaEast_category_map.json" \
 --region NorthEasternAmerica \
---global_species_list /home/mila/a/aditya.jain/mothAI/species_lists/quebec-vermont-uk-denmark-panama_checklist_20231124.csv
-
-
-
+--global_species_list $SPECIES_LISTS_DIR/quebec-vermont-uk-denmark-panama_checklist_20231124.csv
