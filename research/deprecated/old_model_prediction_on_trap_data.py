@@ -1,4 +1,3 @@
-# flake8: noqa
 # *** DEPRECATED; DO NOT USE AS IS; FOR REFERENCE ONLY ***
 
 """

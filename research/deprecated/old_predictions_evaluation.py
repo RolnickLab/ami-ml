@@ -1,4 +1,3 @@
-# flake8: noqa
 # *** DEPRECATED; DO NOT USE AS IS; FOR REFERENCE ONLY ***
 
 """
@@ -1044,8 +1043,8 @@ def data_statistics(data_dir: str, taxonomy_db: str):
 
 
 if __name__ == "__main__":
-    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
-    SPECIES_LISTS_DIR_PATH = os.getenv("SPECIES_LISTS_DIR_PATH")
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA")
+    SPECIES_LISTS_DIR = os.getenv("SPECIES_LISTS_DIR")
 
     plot_dir = "./plots"
     taxonomy = f"{ECCV2024_DATA}/ami-taxonomy-joined-20240119.csv"
@@ -1054,5 +1053,5 @@ if __name__ == "__main__":
     # data_statistics(data_dir, taxonomy)
     # binary_classification_eval(data_dir, plot_dir)
     fine_grained_classification_eval(
-        ECCV2024_DATA, plot_dir, SPECIES_LISTS_DIR_PATH, taxonomy, exclusion_sp_file
+        ECCV2024_DATA, plot_dir, SPECIES_LISTS_DIR, taxonomy, exclusion_sp_file
     )
