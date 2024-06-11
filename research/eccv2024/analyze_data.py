@@ -242,7 +242,7 @@ def analyze_data(data: list[dict]):
 
 
 if __name__ == "__main__":
-    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA")
     taxon_db = pd.read_csv(f"{ECCV2024_DATA}/ami-taxa-20231029.csv")
 
     annotation_file = f"{ECCV2024_DATA}/annotated-tasks-20240110.json"

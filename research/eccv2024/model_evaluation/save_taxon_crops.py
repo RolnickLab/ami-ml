@@ -6,6 +6,7 @@ About: Save crops for a specific taxonomic name
 
 import json
 import os
+from pathlib import Path
 
 from numpy import random
 from PIL import Image
@@ -24,19 +25,19 @@ def _helper_save_crop(
     """Save the insect crop image on the disk"""
 
     # Directory for loading image
-    image_dir = os.path.join(data_dir, "ami_traps_dataset", "images")
+    image_dir = Path(data_dir) / "ami_traps_dataset" / "images"
 
     # Parse the image name
     image_name = image_pred_file.split("_")[0] + ".jpg"
 
     # Read the raw image
     try:
-        raw_image = Image.open(os.path.join(image_dir, image_name))
+        raw_image = Image.open(image_dir / image_name)
         img_width, img_height = raw_image.size
     except OSError as e:
         print(f"Error {e} with image {image_name}")
 
-    # Convert the raw image to tensor˚z
+    # Convert the raw image to tensor
     transform_totensor = transforms.Compose([transforms.ToTensor()])
     try:
         image = transform_totensor(raw_image)
@@ -51,7 +52,7 @@ def _helper_save_crop(
     w_px, h_px = int(w * img_width), int(h * img_height)
     cropped_image = image[:, y_start : y_start + h_px, x_start : x_start + w_px]
     crop_name = taxon + "_" + str(img_counter + 1) + ".png"
-    save_image(cropped_image, os.path.join(save_dir, crop_name))
+    save_image(cropped_image, Path(save_dir) / crop_name)
 
 
 def save_insect_crop(
@@ -64,9 +65,7 @@ def save_insect_crop(
     """Main function for saving insect crops for a particular taxon"""
 
     # Get the image list and associated predctions
-    pred_dir = os.path.join(
-        data_dir, "ami_traps_dataset", "model_predictions", "baseline"
-    )
+    pred_dir = Path(data_dir) / "ami_traps_dataset" / "model_predictions" / "baseline"
     image_pred_list = os.listdir(pred_dir)
 
     # Iterate over each image predictions
@@ -74,7 +73,8 @@ def save_insect_crop(
     complete_flag = False
     for image_pred in image_pred_list:
         if not complete_flag:
-            pred_data = json.load(open(os.path.join(pred_dir, image_pred)))
+            with open(pred_dir / image_pred, "r") as f:
+                pred_data = json.load(f)
 
             # Iterate over each bounding box
             for bbox in pred_data:
@@ -94,7 +94,7 @@ def save_insect_crop(
 
 
 if __name__ == "__main__":
-    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA")
     save_dir = f"{ECCV2024_DATA}/model_evaluation/plots/long-tail_traps_images"
     taxon = "Euchoeca nebulata"
     num_crops_reqd = 10

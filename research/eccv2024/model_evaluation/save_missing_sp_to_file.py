@@ -7,6 +7,7 @@ About: Check and save AMI-Traps species missing in AMI-GBIF database
 import json
 import os
 import pickle
+from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -14,7 +15,7 @@ from dotenv import load_dotenv
 # Load secrets and config from optional .env file
 load_dotenv()
 
-ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+ECCV2024_DATA = os.getenv("ECCV2024_DATA")
 
 
 def save_missing_species_keys(insect_crops_dir: str, gbif_taxonomy_map: pd.DataFrame):
@@ -28,9 +29,9 @@ def save_missing_species_keys(insect_crops_dir: str, gbif_taxonomy_map: pd.DataF
     gbif_sp_keys = gbif_taxonomy_map["speciesKey"].tolist()
 
     # Get all moth insect crops label information
-    insect_labels = json.load(
-        open(os.path.join(insect_crops_dir, "fgrained_labels.json"))
-    )
+    insect_labels_path = Path(insect_crops_dir) / "fgrained_labels.json"
+    with open(insect_labels_path) as f:
+        insect_labels = json.load(f)
 
     # Iterate over each moth crop
     for img_name in insect_labels.keys():

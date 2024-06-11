@@ -47,7 +47,7 @@ def process_label_file(data_dir: str, yolo_dir: str, taxon_db_file: str):
 
 
 if __name__ == "__main__":
-    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA")
 
     # User-input variables
     root_data_dir = ECCV2024_DATA

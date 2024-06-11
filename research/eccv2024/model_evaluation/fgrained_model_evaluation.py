@@ -9,6 +9,7 @@ import json
 import math
 import os
 import pickle
+from pathlib import Path
 
 import pandas as pd
 import torch
@@ -179,9 +180,11 @@ def fgrained_model_evaluation(
     # Get the environment variable and other files
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device {device} is available.")
-    sp_exclusion_list = pickle.load(open(sp_exclusion_list_file, "rb"))
+    with open(sp_exclusion_list_file, "rb") as f:
+        sp_exclusion_list = pickle.load(f)
     ami_traps_taxonomy_map = pd.read_csv(ami_traps_taxonomy_map_file)
-    gbif_taxonomy_hierarchy = json.load(open(gbif_taxonomy_hierarchy_file))
+    with open(gbif_taxonomy_hierarchy_file) as f:
+        gbif_taxonomy_hierarchy = json.load(f)
 
     # Download the model
     api = wandb.Api()
@@ -189,21 +192,20 @@ def fgrained_model_evaluation(
     artifact.download(root=model_dir)
 
     # Change downloaded model name to the run name
-    files = glob.glob(os.path.join(model_dir, "*"))
+    files = glob.glob(Path(model_dir) / "*")
     latest_file = max(files, key=os.path.getctime)
-    new_model = os.path.join(model_dir, run_name + ".pth")
+    new_model = str(Path(model_dir) / (run_name + ".pth"))
     os.rename(latest_file, new_model)
 
     # Build the fine-grained classification model
-    categ_map_path = os.path.join(model_dir, category_map)
+    categ_map_path = Path(model_dir) / category_map
     fgrained_classifier = ModelInference(
         new_model, model_type, categ_map_path, device, topk=0
     )
 
     # Get all moth insect crops label information
-    insect_labels = json.load(
-        open(os.path.join(insect_crops_dir, "fgrained_labels.json"))
-    )
+    with open(Path(insect_crops_dir) / "fgrained_labels.json") as f:
+        insect_labels = json.load(f)
 
     # Micro-accuracy evaluation metrics
     sp_top1, sp_top5 = 0, 0
@@ -236,7 +238,7 @@ def fgrained_model_evaluation(
     # Iterate over each moth crop
     for img_name in insect_labels.keys():
         # Read the image
-        image = Image.open(os.path.join(insect_crops_dir, img_name))
+        image = Image.open(Path(insect_crops_dir) / img_name)
 
         # Get ground truth label information
         gt_label = insect_labels[img_name]["label"]
@@ -382,13 +384,13 @@ def fgrained_model_evaluation(
             accuracy_w_conf_gs.loc["moths-total"]["conf-" + str(thresh)] = gs_count
             accuracy_w_conf_fm.loc["moths-total"]["conf-" + str(thresh)] = fm_count
         accuracy_w_conf_sp.to_csv(
-            os.path.join("./plots", run_name + "-sp_acc_rej_vs_conf.csv")
+            Path("./plots") / (run_name + "-sp_acc_rej_vs_conf.csv")
         )
         accuracy_w_conf_gs.to_csv(
-            os.path.join("./plots", run_name + "-gs_acc_rej_vs_conf.csv")
+            Path("./plots") / (run_name + "-gs_acc_rej_vs_conf.csv")
         )
         accuracy_w_conf_fm.to_csv(
-            os.path.join("./plots", run_name + "-fm_acc_rej_vs_conf.csv")
+            Path("./plots") / (run_name + "-fm_acc_rej_vs_conf.csv")
         )
 
 

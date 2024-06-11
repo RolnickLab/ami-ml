@@ -7,16 +7,11 @@ About: Export AMI annotated data to the yolo format
 import json
 import os
 import urllib.request
-
-import pandas as pd
+from pathlib import Path
 
 # 3rd party packages
-from dotenv import load_dotenv
 from PIL import Image
 from tqdm import tqdm
-
-# Load secrets and config from optional .env file
-load_dotenv()
 
 unidentfiable_cnt = 0
 
@@ -50,8 +45,9 @@ def convert_to_yolo_dim(x: float, y: float, w: float, h: float):
 def create_categories_dict(yolo_data_dir: str):
     """Create a dictionary using json file with id and names of the classes"""
 
-    filepath = os.path.join(yolo_data_dir, "notes.json")
-    classes = json.load(open(filepath))
+    filepath = Path(yolo_data_dir) / "notes.json"
+    with open(filepath) as f:
+        classes = json.load(f)
     inv_dictionary = dict(list(enumerate([x["name"] for x in classes["categories"]])))
     return {v: k for k, v in inv_dictionary.items()}
 
@@ -108,25 +104,22 @@ def filter_label_name(annotation: dict):
         raise Exception("Annotation can onle be of type labels or taxonomy.")
 
 
-def export_to_yolo(data: list[dict], output_dir: str, sp_list: pd.DataFrame):
+def export_to_yolo(data: list[dict], output_dir: str):
     """Main function for exporting the data to yolo format"""
 
     global unidentfiable_cnt
 
     # Create the images folder if it does not exist
-    image_dir = os.path.join(output_dir, "images")
-    if not os.path.exists(image_dir):
-        os.makedirs(image_dir)
+    image_dir = Path(output_dir) / "images"
+    image_dir.mkdir(parents=True, exist_ok=True)
 
     # Create the label folder if it does not exist
-    labels_dir = os.path.join(output_dir, "labels")
-    if not os.path.exists(labels_dir):
-        os.makedirs(labels_dir)
+    labels_dir = Path(output_dir) / "labels"
+    labels_dir.mkdir(parents=True, exist_ok=True)
 
     # Create the metadata folder if it does not exist
-    metadata_dir = os.path.join(output_dir, "metadata")
-    if not os.path.exists(metadata_dir):
-        os.makedirs(metadata_dir)
+    metadata_dir = Path(output_dir) / "metadata"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
 
     # Get 0-indexed categories
     categories = create_categories_dict(output_dir)
@@ -138,12 +131,12 @@ def export_to_yolo(data: list[dict], output_dir: str, sp_list: pd.DataFrame):
 
         # Fetch image if it does not exist
         image_url = data_point["data"]["image"]
-        image_name = os.path.basename(os.path.normpath(image_url))
-        image_path = os.path.join(image_dir, image_name)
-        if not os.path.isfile(image_path):
+        image_name = Path(image_url).name
+        image_path = image_dir / image_name
+        if not image_path.is_file():
             print(f"Image {image_name} didn't exist.")
             try:
-                urllib.request.urlretrieve(image_url, image_path)
+                urllib.request.urlretrieve(image_url, str(image_path))
             except Exception as e:
                 print(f"Error fetching {image_name}. The error is: {e}.", flush=True)
 
@@ -160,7 +153,7 @@ def export_to_yolo(data: list[dict], output_dir: str, sp_list: pd.DataFrame):
 
         # Iterate over all annotations and save them
         annot_yolo_format = ""
-        label_filename = os.path.splitext(image_name)[0] + ".txt"
+        label_filename = Path(image_name).stem + ".txt"
         for item in taxon_annotations:
             # Get bounding box coordinates
             xywh = convert_to_yolo_dim(
@@ -187,7 +180,7 @@ def export_to_yolo(data: list[dict], output_dir: str, sp_list: pd.DataFrame):
 
         # Write the annotation file to the disk
         try:
-            with open(os.path.join(labels_dir, label_filename), "w") as f:
+            with open(labels_dir / label_filename, "w") as f:
                 f.write(annot_yolo_format)
                 f.close()
         except Exception as e:
@@ -205,25 +198,24 @@ def export_to_yolo(data: list[dict], output_dir: str, sp_list: pd.DataFrame):
             raise Exception("Region information not found in the data")
 
         # Write the image metadata information to file
-        image_width, image_height = get_raw_image_dim(image_path)
+        image_width, image_height = get_raw_image_dim(str(image_path))
         metadata = {
             "region": region,
             "image_width": image_width,
             "image_height": image_height,
         }
-        metadata_filename = os.path.splitext(image_name)[0] + ".json"
-        with open(os.path.join(metadata_dir, metadata_filename), "w") as f:
+        metadata_filename = Path(image_name).stem + ".json"
+        with open(metadata_dir / metadata_filename, "w") as f:
             json.dump(metadata, f, indent=2)
 
 
 if __name__ == "__main__":
-    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
-    SPECIES_LISTS_DIR_PATH = os.getenv("SPECIES_LISTS_DIR_PATH")
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA")
+    SPECIES_LISTS_DIR = os.getenv("SPECIES_LISTS_DIR")
     MASTER_SPECIES_LIST = os.getenv("MASTER_SPECIES_LIST")
 
     annotation_file = f"{ECCV2024_DATA}/annotated-tasks-20240110.json"
     with open(annotation_file) as f:
         annotation_data = json.load(f)
     yolo_data_dir = f"{ECCV2024_DATA}/ami_traps_dataset"
-    species_list = pd.read_csv(f"{SPECIES_LISTS_DIR_PATH}/{MASTER_SPECIES_LIST}")
-    export_to_yolo(annotation_data, yolo_data_dir, species_list)
+    export_to_yolo(annotation_data, yolo_data_dir)

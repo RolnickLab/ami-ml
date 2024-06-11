@@ -2,9 +2,13 @@ import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from dotenv import load_dotenv
 from matplotlib.lines import Line2D
 
-dir = "/home/mila/a/aditya.jain/ami-ml/research/eccv2024/model_evaluation/plots"
+# Load secrets and config from optional .env file
+load_dotenv()
+
+dir = "./plots"
 fm_data = pd.read_csv(
     os.path.join(dir, "w-europe_resnet50_baseline_run2-fm_acc_rej_vs_conf.csv"),
     index_col=0,

@@ -6,6 +6,7 @@ About: Add family info for subfamily, tribe and subtribe
 
 import json
 import os
+from pathlib import Path
 
 from pygbif import species as species_api
 
@@ -14,16 +15,18 @@ def add_family_level(data_dir: str, taxon_file: str):
     """Add family info for subfamily, tribe and subtribe"""
 
     # Get the image list and associated predctions
-    pred_dir = os.path.join(data_dir, "ami_traps_dataset", "model_predictions")
+    pred_dir = Path(data_dir) / "ami_traps_dataset" / "model_predictions"
     image_pred_list = os.listdir(pred_dir)
 
     # Load existing family taxon file
     hierarchy = ["SUBFAMILY", "TRIBE", "SUBTRIBE"]
-    taxon_data = json.load(open(taxon_file))
+    with open(taxon_file, "r") as f:
+        taxon_data = json.load(f)
 
     # Iterate over each image predictions
     for image_pred in image_pred_list:
-        pred_data = json.load(open(os.path.join(pred_dir, image_pred)))
+        with open(pred_dir / image_pred, "r") as f:
+            pred_data = json.load(f)
 
         # Iterate over each bounding box
         for bbox in pred_data:
@@ -42,6 +45,6 @@ def add_family_level(data_dir: str, taxon_file: str):
 
 
 if __name__ == "__main__":
-    data_dir = "/home/mila/a/aditya.jain/scratch/cvpr2024_data"
-    taxon_file = "/home/mila/a/aditya.jain/scratch/cvpr2024_data/family-hierarchy.json"
-    add_family_level(data_dir, taxon_file)
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA")
+    taxon_file = f"{ECCV2024_DATA}/family-hierarchy.json"
+    add_family_level(ECCV2024_DATA, taxon_file)

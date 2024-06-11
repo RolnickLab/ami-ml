@@ -2,6 +2,10 @@ import json
 import os
 
 import pandas as pd
+from dotenv import load_dotenv
+
+# Load secrets and config from optional .env file
+load_dotenv()
 
 GBIF_COUNT_FILE = os.getenv("GBIF_COUNT_FILE")
 MASTER_SPECIES_LIST = os.getenv("MASTER_SPECIES_LIST")

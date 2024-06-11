@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 # Load secrets and config from optional .env file
 load_dotenv()
 
-ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+ECCV2024_DATA = os.getenv("ECCV2024_DATA")
 
 annotation_file = f"{ECCV2024_DATA}/annotated-tasks-20231106.json"
 data = json.load(open(annotation_file))

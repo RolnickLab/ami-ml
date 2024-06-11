@@ -8,6 +8,7 @@ import argparse
 import glob
 import json
 import os
+from pathlib import Path
 
 import torch
 import wandb
@@ -31,6 +32,8 @@ def binary_model_evaluation(
     # Get the environment variables
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device {device} is available.")
+    model_dir = Path(model_dir)
+    insect_crops_dir = Path(insect_crops_dir)
 
     # Download the model
     api = wandb.Api()
@@ -38,20 +41,19 @@ def binary_model_evaluation(
     artifact.download(root=model_dir)
 
     # Change downloaded model name to the run name
-    files = glob.glob(os.path.join(model_dir, "*"))
+    files = glob.glob(model_dir / "*")
     latest_file = max(files, key=os.path.getctime)
-    new_model = os.path.join(model_dir, run_name + ".pth")
+    new_model = model_dir / (run_name + ".pth")
     os.rename(latest_file, new_model)
 
     # Build the binary classification model
-    categ_map_path = os.path.join(model_dir, category_map)
+    categ_map_path = model_dir / category_map
     binary_classifier = ModelInference(new_model, model_type, categ_map_path, device)
 
     # Get all insect crops and label information
-    insect_crops = glob.glob(os.path.join(insect_crops_dir, "*.jpg"))
-    insect_labels = json.load(
-        open(os.path.join(insect_crops_dir, "binary_labels.json"))
-    )
+    insect_crops = glob.glob(insect_crops_dir / "*.jpg")
+    with open(insect_crops_dir / "binary_labels.json") as f:
+        insect_labels = json.load(f)
 
     # Evaluation metrics variables
     tp, tn, fp, fn = 0, 0, 0, 0

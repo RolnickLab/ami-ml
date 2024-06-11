@@ -79,7 +79,7 @@ def test_annotations(data_dir: str, output_dir: str, n: int = 10):
 
 
 if __name__ == "__main__":
-    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA")
 
     # User-input variables
     yolo_data_dir = f"{ECCV2024_DATA}/ami-traps-dataset"

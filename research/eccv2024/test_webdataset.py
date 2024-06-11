@@ -18,14 +18,20 @@ from dotenv import load_dotenv
 # Load secrets and config from optional .env file
 load_dotenv()
 
-ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
+ECCV2024_DATA = os.getenv("ECCV2024_DATA")
+if ECCV2024_DATA is None:
+    print("Please set ECCV2024_DATA in .env file", flush=True)
+    exit(1)
 filename = "binary-000000.tar"
-wds_file = f"{ECCV2024_DATA}/camera_ready_amitraps/webdataset/{filename}"
+wds_file = (
+    f"{ECCV2024_DATA}/camera_ready_amitraps/webdataset/binary_classification/{filename}"
+)
 
 dataset = wds.WebDataset(wds_file).decode("pil").to_tuple("jpg", "json")
 
 count = 0
 for image, annotation in islice(dataset, 0, 3):
-    image.save("/home/mila/a/aditya.jain/ami-ml/src/eccv2024/" + str(count) + ".jpg")
+    image.save("./" + str(count) + ".jpg")
     print(annotation["label"])
     count += 1
+    break

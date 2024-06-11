@@ -9,16 +9,13 @@ About         : Exports the AMI-Traps dataset to webdataset format and individua
 
 import json
 import os
+from pathlib import Path
 
 import pandas as pd
 import webdataset as wds
 
 # 3rd party packages
-from dotenv import load_dotenv
 from PIL import Image
-
-# Load secrets and config from optional .env file
-load_dotenv()
 
 
 def get_synonym(sp_checklist: pd.DataFrame, species: str):
@@ -78,21 +75,24 @@ def export_to_webdataset_and_crops(
     """Main function for exporting AMI-Traps to webdataset and individual crops"""
 
     # Get the list of raw camera trap images and other metadata
-    image_dir = os.path.join(data_dir, "images")
-    metadata_dir = os.path.join(data_dir, "metadata")
-    labels_dir = os.path.join(data_dir, "labels")
+    data_dir = Path(data_dir)
+    export_dir = Path(export_dir)
+    image_dir = data_dir / "images"
+    metadata_dir = data_dir / "metadata"
+    labels_dir = data_dir / "labels"
     image_list = os.listdir(image_dir)
 
     # Get ground truth class names
-    gt_class_list = json.load(open(os.path.join(data_dir, "notes.json")))["categories"]
+    with open(data_dir / "notes.json") as f:
+        gt_class_list = json.load(f)["categories"]
 
     # Webdataset specific variables
     max_shard_size = 50 * 1024 * 1024
-    wbd_pattern_binary = os.path.join(
-        export_dir, "webdataset", "binary_classification", "binary-%06d.tar"
+    wbd_pattern_binary = str(
+        export_dir / "webdataset" / "binary_classification" / "binary-%06d.tar"
     )
-    wbd_pattern_fgrained = os.path.join(
-        export_dir, "webdataset", "fine-grained_classification", "fgrained-%06d.tar"
+    wbd_pattern_fgrained = str(
+        export_dir / "webdataset" / "fine-grained_classification" / "fgrained-%06d.tar"
     )
     sink_binary = wds.ShardWriter(wbd_pattern_binary, maxsize=max_shard_size)
     sink_fgrained = wds.ShardWriter(wbd_pattern_fgrained, maxsize=max_shard_size)
@@ -107,21 +107,23 @@ def export_to_webdataset_and_crops(
         img_basename = os.path.splitext(image)[0]
 
         # Fetch the region name for the image
-        metadata_file = os.path.join(metadata_dir, img_basename + ".json")
-        metadata = json.load(open(metadata_file))
+        metadata_file = metadata_dir / (img_basename + ".json")
+        with open(metadata_file) as f:
+            metadata = json.load(f)
         region = metadata["region"]
 
         # Read the raw image
         try:
-            raw_image = Image.open(os.path.join(image_dir, image))
+            raw_image = Image.open(image_dir / image)
             img_width, img_height = raw_image.size
         except FileNotFoundError:
-            raise Exception(f"Image file not found: {os.path.join(image_dir, image)}")
+            raise Exception(f"Image file not found: {image_dir / image}")
         except Exception as e:
             raise Exception(f"Error opening image {image}: {str(e)}")
 
         # Get the ground truth bounding box and label
-        labels = open(os.path.join(labels_dir, img_basename + ".txt"), "r")
+        with open((labels_dir / (img_basename + ".txt"))) as f:
+            labels = f.readlines()
 
         # Iterate over each annotation/crop separately
         for line in labels:
@@ -152,9 +154,7 @@ def export_to_webdataset_and_crops(
 
                 # Save the insect crop as image
                 insect_crop.save(
-                    os.path.join(
-                        export_dir, "insect_crops", str(binary_crop_count) + ".jpg"
-                    )
+                    export_dir / "insect_crops" / (str(binary_crop_count) + ".jpg")
                 )
 
                 # Export to webdataset for binary classification
@@ -211,11 +211,9 @@ def export_to_webdataset_and_crops(
 
     sink_binary.close()
     sink_fgrained.close()
-    with open(os.path.join(export_dir, "insect_crops", "binary_labels.json"), "w") as f:
+    with open(export_dir / "insect_crops" / "binary_labels.json", "w") as f:
         json.dump(label_binary, f, indent=3)
-    with open(
-        os.path.join(export_dir, "insect_crops", "fgrained_labels.json"), "w"
-    ) as f:
+    with open(export_dir / "insect_crops" / "fgrained_labels.json", "w") as f:
         json.dump(label_fgrained, f, indent=3)
     print(
         "The export is complete!",
@@ -224,14 +222,14 @@ def export_to_webdataset_and_crops(
 
 
 if __name__ == "__main__":
-    ECCV2024_DATA = os.getenv("ECCV2024_DATA_PATH")
-    SPECIES_LISTS_DIR_PATH = os.getenv("SPECIES_LISTS_DIR_PATH")
+    ECCV2024_DATA = os.getenv("ECCV2024_DATA")
+    SPECIES_LISTS_DIR = os.getenv("SPECIES_LISTS_DIR")
     MASTER_SPECIES_LIST = os.getenv("MASTER_SPECIES_LIST")
 
     data_dir = f"{ECCV2024_DATA}/ami_traps_dataset"
     export_dir = f"{ECCV2024_DATA}/camera_ready_amitraps"
 
-    species_checklist = pd.read_csv(f"{SPECIES_LISTS_DIR_PATH}/{MASTER_SPECIES_LIST}")
+    species_checklist = pd.read_csv(f"{SPECIES_LISTS_DIR}/{MASTER_SPECIES_LIST}")
     species_key_map = pd.read_csv(f"{ECCV2024_DATA}/speciesKey_map.csv")
 
     export_to_webdataset_and_crops(

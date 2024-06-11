@@ -7,6 +7,7 @@ About: Long-tailed analysis
 import json
 import os
 import pickle
+from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -27,7 +28,8 @@ def long_tailed_accuracy(
 
     # Iterate over each image prediction
     for image_pred in image_pred_list:
-        pred_data = json.load(open(os.path.join(pred_dir, image_pred)))
+        with open(Path(pred_dir) / image_pred, "r") as f:
+            pred_data = json.load(f)
 
         # Iterate over each bounding box
         for bbox in pred_data:
@@ -102,5 +104,5 @@ if __name__ == "__main__":
     except Exception as e:
         raise Exception(f"Error loading files: {e}")
 
-    model_prediction_dir = os.path.join(GENERAL_PREDICTION_DIR, model)
+    model_prediction_dir = Path(GENERAL_PREDICTION_DIR) / model
     long_tailed_accuracy(model_prediction_dir, exclusion_sp, sp_key_map, gbif_count)
