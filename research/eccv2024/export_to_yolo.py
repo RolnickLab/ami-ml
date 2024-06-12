@@ -13,8 +13,6 @@ from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
-unidentfiable_cnt = 0
-
 
 def get_raw_image_dim(img_path: str):
     """Get raw image dimensions"""
@@ -106,8 +104,6 @@ def filter_label_name(annotation: dict):
 
 def export_to_yolo(data: list[dict], output_dir: str):
     """Main function for exporting the data to yolo format"""
-
-    global unidentfiable_cnt
 
     # Create the images folder if it does not exist
     image_dir = Path(output_dir) / "images"
