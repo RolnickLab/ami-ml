@@ -14,7 +14,7 @@ from PIL import Image
 from tqdm import tqdm
 
 
-def get_raw_image_dim(img_path: str):
+def _get_raw_image_dim(img_path: str):
     """Get raw image dimensions"""
 
     # Read the raw image
@@ -29,7 +29,7 @@ def get_raw_image_dim(img_path: str):
     return img_width, img_height
 
 
-def convert_to_yolo_dim(x: float, y: float, w: float, h: float):
+def _convert_to_yolo_dim(x: float, y: float, w: float, h: float):
     """Convert box exported from Label Studio to YOLO format"""
 
     x_yolo = min((x + w / 2) / 100, 1)
@@ -40,7 +40,7 @@ def convert_to_yolo_dim(x: float, y: float, w: float, h: float):
     return round(x_yolo, 5), round(y_yolo, 5), round(w_yolo, 5), round(h_yolo, 5)
 
 
-def create_categories_dict(yolo_data_dir: str):
+def _create_categories_dict(yolo_data_dir: str):
     """Create a dictionary using json file with id and names of the classes"""
 
     filepath = Path(yolo_data_dir) / "notes.json"
@@ -50,7 +50,7 @@ def create_categories_dict(yolo_data_dir: str):
     return {v: k for k, v in inv_dictionary.items()}
 
 
-def get_only_taxon_labels(annotations: list[dict]):
+def _get_only_taxon_labels(annotations: list[dict]):
     """Process the original annotation list
     to get only taxonomy labels when available
     """
@@ -79,7 +79,7 @@ def get_only_taxon_labels(annotations: list[dict]):
     return processed_list
 
 
-def filter_label_name(annotation: dict):
+def _filter_label_name(annotation: dict):
     """Choose the lower-most class for the fine-grained classification
     or the course label for the binary classification
     """
@@ -118,7 +118,7 @@ def export_to_yolo(data: list[dict], output_dir: str):
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
     # Get 0-indexed categories
-    categories = create_categories_dict(output_dir)
+    categories = _create_categories_dict(output_dir)
 
     # Iterate over each raw annotated image
     for i in tqdm(range(len(data))):
@@ -145,14 +145,14 @@ def export_to_yolo(data: list[dict], output_dir: str):
             annotations = annotator_results
 
         # Filter only taxon labels when available
-        taxon_annotations = get_only_taxon_labels(annotations)
+        taxon_annotations = _get_only_taxon_labels(annotations)
 
         # Iterate over all annotations and save them
         annot_yolo_format = ""
         label_filename = Path(image_name).stem + ".txt"
         for item in taxon_annotations:
             # Get bounding box coordinates
-            xywh = convert_to_yolo_dim(
+            xywh = _convert_to_yolo_dim(
                 item["value"]["x"],
                 item["value"]["y"],
                 item["value"]["width"],
@@ -160,7 +160,7 @@ def export_to_yolo(data: list[dict], output_dir: str):
             )
 
             # Get the label name
-            label_name = filter_label_name(item)
+            label_name = _filter_label_name(item)
 
             # Find the numeric label id from the json file
             try:
@@ -194,7 +194,7 @@ def export_to_yolo(data: list[dict], output_dir: str):
             raise Exception("Region information not found in the data")
 
         # Write the image metadata information to file
-        image_width, image_height = get_raw_image_dim(str(image_path))
+        image_width, image_height = _get_raw_image_dim(str(image_path))
         metadata = {
             "region": region,
             "image_width": image_width,

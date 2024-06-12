@@ -4,23 +4,25 @@ Date started: April 19, 2024
 About: Evaluation of AMI-GBIF trained moth fine-grained classifier on AMI-Traps data
 """
 
-import glob
 import json
 import math
-import os
 import pickle
 from pathlib import Path
 
 import pandas as pd
 import torch
 import typer
-import wandb
 from model_inference import ModelInference
 from PIL import Image
-from torchvision import transforms
+
+from .helper_functions import (
+    apply_transform_to_image,
+    change_model_name,
+    download_model,
+)
 
 
-def check_prediction(gt_label: str, pred_label: list[list[str, float]]):
+def _check_prediction(gt_label: str, pred_label: list[list[str, float]]):
     """
     Check for top1 and top5 prediction
 
@@ -41,7 +43,7 @@ def check_prediction(gt_label: str, pred_label: list[list[str, float]]):
     return top1, top5
 
 
-def get_higher_taxon_pred(
+def _get_higher_taxon_pred(
     sp_pred: list[list[str, float]], gbif_taxonomy_hierarchy: dict
 ):
     """Rollup model species prediction at genus and family level"""
@@ -84,7 +86,7 @@ def get_higher_taxon_pred(
     return genus_pred_sorted, family_pred_sorted
 
 
-def get_higher_taxon_gt(label: str, rank: str, taxonomy_map: pd.DataFrame):
+def _get_higher_taxon_gt(label: str, rank: str, taxonomy_map: pd.DataFrame):
     """Get higher taxon for a ground truth label"""
 
     if rank == "SPECIES":
@@ -102,7 +104,30 @@ def get_higher_taxon_gt(label: str, rank: str, taxonomy_map: pd.DataFrame):
             print(f"{label} of rank {rank} not found in the taxonomy database.")
 
 
-def accuracy_versus_confidence(
+def _get_ground_truth_info(insect_labels: dict, img_name: str):
+    """Get ground truth label information"""
+
+    gt_label = insect_labels[img_name]["label"]
+    gt_rank = insect_labels[img_name]["taxon_rank"]
+    gt_acceptedTaxonKey = insect_labels[img_name]["acceptedTaxonKey"]
+    gt_region = insect_labels[img_name]["region"]
+
+    return gt_label, gt_rank, gt_acceptedTaxonKey, gt_region
+
+
+def _get_accuracy_vs_confidence_df():
+    """Create a DataFrame for accuracy vs confidence calculation"""
+
+    accuracy_vs_conf_df = pd.DataFrame(
+        0,
+        columns=["conf-" + str(thresh) for thresh in range(10, 100, 10)],
+        index=["correct", "conf-total", "reject", "moths-total"],
+    )
+
+    return accuracy_vs_conf_df
+
+
+def _accuracy_vs_confidence(
     gt_label: str, pred_label: list[list[str, float]], accuracy_vs_conf_df: pd.DataFrame
 ):
     """Calculate accuracy alongside model prediction confidence"""
@@ -125,7 +150,7 @@ def accuracy_versus_confidence(
     return accuracy_vs_conf_df
 
 
-def update_taxa_accuracy(
+def _update_taxa_accuracy(
     macro_acc: dict, top1: int, top5: int, gt_label: str, gt_rank: str
 ):
     """Update accuracy data for every class at every taxonomic level"""
@@ -144,7 +169,7 @@ def update_taxa_accuracy(
     return macro_acc
 
 
-def calculate_macro_accuracy(macro_acc_taxa: dict):
+def _calculate_macro_accuracy(macro_acc_taxa: dict):
     """Calculate macro accuracy at the given taxonomic level"""
 
     # Lists containing each class' top1 and top5 accuracy
@@ -187,15 +212,10 @@ def fgrained_model_evaluation(
         gbif_taxonomy_hierarchy = json.load(f)
 
     # Download the model
-    api = wandb.Api()
-    artifact = api.artifact(artifact)
-    artifact.download(root=model_dir)
+    download_model(artifact, model_dir)
 
     # Change downloaded model name to the run name
-    files = glob.glob(Path(model_dir) / "*")
-    latest_file = max(files, key=os.path.getctime)
-    new_model = str(Path(model_dir) / (run_name + ".pth"))
-    os.rename(latest_file, new_model)
+    new_model = change_model_name(model_dir, run_name)
 
     # Build the fine-grained classification model
     categ_map_path = Path(model_dir) / category_map
@@ -219,21 +239,9 @@ def fgrained_model_evaluation(
     # Every value in each taxa key will be [top1_correct, top5_correct, total]
 
     # Accuracy v/s confidence variables
-    accuracy_w_conf_sp = pd.DataFrame(
-        0,
-        columns=["conf-" + str(thresh) for thresh in range(10, 100, 10)],
-        index=["correct", "conf-total", "reject", "moths-total"],
-    )
-    accuracy_w_conf_gs = pd.DataFrame(
-        0,
-        columns=["conf-" + str(thresh) for thresh in range(10, 100, 10)],
-        index=["correct", "conf-total", "reject", "moths-total"],
-    )
-    accuracy_w_conf_fm = pd.DataFrame(
-        0,
-        columns=["conf-" + str(thresh) for thresh in range(10, 100, 10)],
-        index=["correct", "conf-total", "reject", "moths-total"],
-    )
+    accuracy_w_conf_sp = _get_accuracy_vs_confidence_df()
+    accuracy_w_conf_gs = _get_accuracy_vs_confidence_df()
+    accuracy_w_conf_fm = _get_accuracy_vs_confidence_df()
 
     # Iterate over each moth crop
     for img_name in insect_labels.keys():
@@ -241,10 +249,9 @@ def fgrained_model_evaluation(
         image = Image.open(Path(insect_crops_dir) / img_name)
 
         # Get ground truth label information
-        gt_label = insect_labels[img_name]["label"]
-        gt_rank = insect_labels[img_name]["taxon_rank"]
-        gt_acceptedTaxonKey = insect_labels[img_name]["acceptedTaxonKey"]
-        gt_region = insect_labels[img_name]["region"]
+        gt_label, gt_rank, gt_acceptedTaxonKey, gt_region = _get_ground_truth_info(
+            insect_labels, img_name
+        )
 
         if (
             gt_rank != "ORDER"
@@ -253,54 +260,53 @@ def fgrained_model_evaluation(
             and (gt_acceptedTaxonKey not in sp_exclusion_list)
         ):
             # Fine-grained model prediction
-            transform_to_tensor = transforms.Compose([transforms.ToTensor()])
-            image = transform_to_tensor(image)
+            image = apply_transform_to_image(image)
             sp_pred = fgrained_classifier.predict(image)
 
             # Get rolled up predictions to genus and family level
-            gs_pred, fm_pred = get_higher_taxon_pred(sp_pred, gbif_taxonomy_hierarchy)
+            gs_pred, fm_pred = _get_higher_taxon_pred(sp_pred, gbif_taxonomy_hierarchy)
 
             # Calculate species accuracy
             if gt_rank == "SPECIES":
                 # Get ground truth at the labeled rank and above
                 gt_label_sp = gt_label
-                gt_label_gs, gt_label_fm = get_higher_taxon_gt(
+                gt_label_gs, gt_label_fm = _get_higher_taxon_gt(
                     gt_label_sp, gt_rank, ami_traps_taxonomy_map
                 )
 
                 # Species accuracy calculation
-                top1, top5 = check_prediction(str(gt_acceptedTaxonKey), sp_pred)
+                top1, top5 = _check_prediction(str(gt_acceptedTaxonKey), sp_pred)
                 sp_top1 += top1
                 sp_top5 += top5
                 sp_count += 1
-                accuracy_w_conf_sp = accuracy_versus_confidence(
+                accuracy_w_conf_sp = _accuracy_vs_confidence(
                     str(gt_acceptedTaxonKey), sp_pred, accuracy_w_conf_sp
                 )
-                macro_acc = update_taxa_accuracy(
+                macro_acc = _update_taxa_accuracy(
                     macro_acc, top1, top5, gt_label_sp, "SPECIES"
                 )
 
                 # Genus accuracy calculation
-                top1, top5 = check_prediction(gt_label_gs, gs_pred)
+                top1, top5 = _check_prediction(gt_label_gs, gs_pred)
                 gs_top1 += top1
                 gs_top5 += top5
                 gs_count += 1
-                accuracy_w_conf_gs = accuracy_versus_confidence(
+                accuracy_w_conf_gs = _accuracy_vs_confidence(
                     gt_label_gs, gs_pred, accuracy_w_conf_gs
                 )
-                macro_acc = update_taxa_accuracy(
+                macro_acc = _update_taxa_accuracy(
                     macro_acc, top1, top5, gt_label_gs, "GENUS"
                 )
 
                 # Family accuracy calculation
-                top1, top5 = check_prediction(gt_label_fm, fm_pred)
+                top1, top5 = _check_prediction(gt_label_fm, fm_pred)
                 fm_top1 += top1
                 fm_top5 += top5
                 fm_count += 1
-                accuracy_w_conf_fm = accuracy_versus_confidence(
+                accuracy_w_conf_fm = _accuracy_vs_confidence(
                     gt_label_fm, fm_pred, accuracy_w_conf_fm
                 )
-                macro_acc = update_taxa_accuracy(
+                macro_acc = _update_taxa_accuracy(
                     macro_acc, top1, top5, gt_label_fm, "FAMILY"
                 )
 
@@ -308,31 +314,31 @@ def fgrained_model_evaluation(
             elif gt_rank == "GENUS":
                 # Get ground truth at the labeled rank and above
                 gt_label_gs = gt_label
-                gt_label_fm = get_higher_taxon_gt(
+                gt_label_fm = _get_higher_taxon_gt(
                     gt_label_gs, gt_rank, ami_traps_taxonomy_map
                 )
 
                 # Genus accuracy calculation
-                top1, top5 = check_prediction(gt_label_gs.split(" ")[0], gs_pred)
+                top1, top5 = _check_prediction(gt_label_gs.split(" ")[0], gs_pred)
                 gs_top1 += top1
                 gs_top5 += top5
                 gs_count += 1
-                accuracy_w_conf_gs = accuracy_versus_confidence(
+                accuracy_w_conf_gs = _accuracy_vs_confidence(
                     gt_label_gs.split(" ")[0], gs_pred, accuracy_w_conf_gs
                 )
-                macro_acc = update_taxa_accuracy(
+                macro_acc = _update_taxa_accuracy(
                     macro_acc, top1, top5, gt_label_gs.split(" ")[0], "GENUS"
                 )
 
                 # Family accuracy calculation
-                top1, top5 = check_prediction(gt_label_fm, fm_pred)
+                top1, top5 = _check_prediction(gt_label_fm, fm_pred)
                 fm_top1 += top1
                 fm_top5 += top5
                 fm_count += 1
-                accuracy_w_conf_fm = accuracy_versus_confidence(
+                accuracy_w_conf_fm = _accuracy_vs_confidence(
                     gt_label_fm, fm_pred, accuracy_w_conf_fm
                 )
-                macro_acc = update_taxa_accuracy(
+                macro_acc = _update_taxa_accuracy(
                     macro_acc, top1, top5, gt_label_fm, "FAMILY"
                 )
 
@@ -340,28 +346,28 @@ def fgrained_model_evaluation(
             else:
                 # Rollup sub-tribe and tribe to family level
                 if gt_rank != "FAMILY":
-                    gt_label_fm = get_higher_taxon_gt(
+                    gt_label_fm = _get_higher_taxon_gt(
                         gt_label, gt_rank, ami_traps_taxonomy_map
                     )
                 else:
                     gt_label_fm = gt_label
 
                 # Family accuracy calculation
-                top1, top5 = check_prediction(gt_label_fm, fm_pred)
+                top1, top5 = _check_prediction(gt_label_fm, fm_pred)
                 fm_top1 += top1
                 fm_top5 += top5
                 fm_count += 1
-                accuracy_w_conf_fm = accuracy_versus_confidence(
+                accuracy_w_conf_fm = _accuracy_vs_confidence(
                     gt_label_fm, fm_pred, accuracy_w_conf_fm
                 )
-                macro_acc = update_taxa_accuracy(
+                macro_acc = _update_taxa_accuracy(
                     macro_acc, top1, top5, gt_label_fm, "FAMILY"
                 )
 
     # Calculate the macro-accuracy at each taxonomic level
-    macro_sp_top1, macro_sp_top5 = calculate_macro_accuracy(macro_acc["SPECIES"])
-    macro_gs_top1, macro_gs_top5 = calculate_macro_accuracy(macro_acc["GENUS"])
-    macro_fm_top1, macro_fm_top5 = calculate_macro_accuracy(macro_acc["FAMILY"])
+    macro_sp_top1, macro_sp_top5 = _calculate_macro_accuracy(macro_acc["SPECIES"])
+    macro_gs_top1, macro_gs_top5 = _calculate_macro_accuracy(macro_acc["GENUS"])
+    macro_fm_top1, macro_fm_top5 = _calculate_macro_accuracy(macro_acc["FAMILY"])
 
     print(
         f"\nFine-grained classification micro-accuracy (Top1, Top5) for {run_name}:\
