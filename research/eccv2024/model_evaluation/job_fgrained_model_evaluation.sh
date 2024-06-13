@@ -32,3 +32,29 @@ python fgrained_model_evaluation.py \
 --sp-exclusion-list-file $ECCV2024_DATA/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle \
 --ami-traps-taxonomy-map-file $ECCV2024_DATA/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv \
 --gbif-taxonomy-hierarchy-file $ECCV2024_DATA/camera_ready_amitraps/metadata/gbif_taxonomy_hierarchy.json
+
+
+# python fgrained_model_evaluation.py \
+# --run-name c-america_resnet50_abla_imagenetamigbif_10ep_run1 \
+# --artifact moth-ai/ami-gbif-fine-grained/model:v74 \
+# --region CentralAmerica \
+# --model-type resnet50 \
+# --model-dir $ECCV2024_DATA/models/fine_grained \
+# --category-map "03_moths_centralAmerica_category_map.json" \
+# --insect-crops-dir $ECCV2024_DATA/camera_ready_amitraps/insect_crops \
+# --sp-exclusion-list-file $ECCV2024_DATA/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle \
+# --ami-traps-taxonomy-map-file $ECCV2024_DATA/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv \
+# --gbif-taxonomy-hierarchy-file $ECCV2024_DATA/camera_ready_amitraps/metadata/gbif_taxonomy_hierarchy.json
+
+
+# python fgrained_model_evaluation.py \
+# --run-name w-europe_resnet50_abla_imagenetamigbif_10ep_run1 \
+# --artifact moth-ai/ami-gbif-fine-grained/model:v74 \
+# --region WesternEurope \
+# --model-type resnet50 \
+# --model-dir $ECCV2024_DATA/models/fine_grained \
+# --category-map "02_moths_westernEurope_category_map.json" \
+# --insect-crops-dir $ECCV2024_DATA/camera_ready_amitraps/insect_crops \
+# --sp-exclusion-list-file $ECCV2024_DATA/camera_ready_amitraps/metadata/ami-traps_sp_missing_in_ami-gbif.pickle \
+# --ami-traps-taxonomy-map-file $ECCV2024_DATA/camera_ready_amitraps/metadata/ami-traps_taxonomy_map.csv \
+# --gbif-taxonomy-hierarchy-file $ECCV2024_DATA/camera_ready_amitraps/metadata/gbif_taxonomy_hierarchy.json
