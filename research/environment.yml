@@ -1,7 +1,0 @@
-name: ami-ml
-channels:
-  - defaults
-dependencies:
-  - python=3.10
-  - poetry
-prefix: /home/mila/a/aditya.jain/.conda/envs/ami-ml
