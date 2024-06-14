@@ -41,6 +41,7 @@ isort = "^5.12.0"
 mypy = "^1.4.1"
 ipdb = "^0.13.13"
 python-devtools = "^2"
+ipykernel = "^6.29.4"
 
 [build-system]
 requires = ["poetry-core"]

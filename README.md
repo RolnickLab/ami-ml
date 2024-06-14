@@ -25,6 +25,7 @@ Poetry is used to manage the dependencies common to all scripts and sub-projects
 
 1. Install [Poetry](https://python-poetry.org/docs/#installation)
 2. Clone this repository
+2. Create a `.env` or copy `.env.example` and update the values
 3. Run `poetry install` in the root of the repository
 4. Install pre-commit hooks `poetry run pre-commit install`
 
