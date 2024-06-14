@@ -243,74 +243,85 @@ def export_to_webdataset_and_crops(
     binary_crop_count = 1
     fgrained_crop_count = 1
 
-    # Iterate over each image separately
-    for image in image_list:
-        img_basename = os.path.splitext(image)[0]
+    with sink_binary as binary_sink:
+        with sink_fgrained as fgrained_sink:
+            # Iterate over each image separately
+            for image in image_list:
+                img_basename = os.path.splitext(image)[0]
 
-        # Fetch the region name for the image
-        region = _get_region_name(metadata_dir, img_basename)
+                # Fetch the region name for the image
+                region = _get_region_name(metadata_dir, img_basename)
 
-        # Read the raw image
-        raw_image, img_width, img_height = _read_image(image_dir, image)
+                # Read the raw image
+                raw_image, img_width, img_height = _read_image(image_dir, image)
 
-        # Get the ground truth bounding box and label
-        labels = _get_gt_labels(labels_dir, img_basename)
+                # Get the ground truth bounding box and label
+                labels = _get_gt_labels(labels_dir, img_basename)
 
-        # Iterate over each annotation separately
-        for line in labels:
-            label_id, x, y, w, h = _get_bbox_annotation(line)
+                # Iterate over each annotation separately
+                for line in labels:
+                    label_id, x, y, w, h = _get_bbox_annotation(line)
 
-            # Get the ground truth class name and rank
-            label_name, label_rank = _get_gt_class_name(gt_class_list, label_id)
+                    # Get the ground truth class name and rank
+                    label_name, label_rank = _get_gt_class_name(gt_class_list, label_id)
 
-            # Ignore unlabeled crops
-            if label_name != "Unidentifiable" and label_name != "Unclassified":
-                # Get the insect crop
-                insect_crop = _get_insect_crop(
-                    raw_image, x, y, w, h, img_width, img_height
-                )
+                    # Ignore unlabeled crops
+                    if label_name != "Unidentifiable" and label_name != "Unclassified":
+                        # Get the insect crop
+                        insect_crop = _get_insect_crop(
+                            raw_image, x, y, w, h, img_width, img_height
+                        )
 
-                # Save the insect crop as image
-                insect_crop.save(
-                    export_dir / "insect_crops" / (str(binary_crop_count) + ".jpg")
-                )
+                        # Save the insect crop as image
+                        insect_crop.save(
+                            export_dir
+                            / "insect_crops"
+                            / (str(binary_crop_count) + ".jpg")
+                        )
 
-                # Export to webdataset for binary classification
-                sample_binary_wbd, sample_binary_annotation = _get_binary_wbd_sample(
-                    label_name, region, img_basename, binary_crop_count, insect_crop
-                )
-                sink_binary.write(sample_binary_wbd)
+                        # Export to webdataset for binary classification
+                        (
+                            sample_binary_wbd,
+                            sample_binary_annotation,
+                        ) = _get_binary_wbd_sample(
+                            label_name,
+                            region,
+                            img_basename,
+                            binary_crop_count,
+                            insect_crop,
+                        )
+                        binary_sink.write(sample_binary_wbd)
 
-                # Save the binary annotation for the individual crop
-                label_binary[str(binary_crop_count) + ".jpg"] = sample_binary_annotation
+                        # Save the binary annotation for the individual crop
+                        label_binary[
+                            str(binary_crop_count) + ".jpg"
+                        ] = sample_binary_annotation
 
-                # Export to webdataset for finegrained classification, if moth crop
-                if label_rank != "NA":
-                    (
-                        sample_fgrained_wbd,
-                        sample_fgrained_annotation,
-                    ) = _get_fgrained_wbd_sample(
-                        label_name,
-                        region,
-                        img_basename,
-                        fgrained_crop_count,
-                        insect_crop,
-                        label_rank,
-                        sp_checklist,
-                        sp_key_map,
-                    )
-                    sink_fgrained.write(sample_fgrained_wbd)
+                        # Export to webdataset for fgrained classification
+                        if label_rank != "NA":
+                            (
+                                sample_fgrained_wbd,
+                                sample_fgrained_annotation,
+                            ) = _get_fgrained_wbd_sample(
+                                label_name,
+                                region,
+                                img_basename,
+                                fgrained_crop_count,
+                                insect_crop,
+                                label_rank,
+                                sp_checklist,
+                                sp_key_map,
+                            )
+                            fgrained_sink.write(sample_fgrained_wbd)
 
-                    # Save the finegrained annotation for the individual crop
-                    label_fgrained[
-                        str(binary_crop_count) + ".jpg"
-                    ] = sample_fgrained_annotation
-                    fgrained_crop_count += 1
+                            # Save the finegrained annotation for the individual crop
+                            label_fgrained[
+                                str(binary_crop_count) + ".jpg"
+                            ] = sample_fgrained_annotation
+                            fgrained_crop_count += 1
 
-                binary_crop_count += 1
+                        binary_crop_count += 1
 
-    sink_binary.close()
-    sink_fgrained.close()
     with open(export_dir / "insect_crops" / "binary_labels.json", "w") as f:
         json.dump(label_binary, f, indent=3)
     with open(export_dir / "insect_crops" / "fgrained_labels.json", "w") as f:
