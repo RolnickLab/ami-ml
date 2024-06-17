@@ -25,8 +25,16 @@ Poetry is used to manage the dependencies common to all scripts and sub-projects
 
 1. Install [Poetry](https://python-poetry.org/docs/#installation)
 2. Clone this repository
+2. Create a `.env` or copy `.env.example` and update the values
 3. Run `poetry install` in the root of the repository
 4. Install pre-commit hooks `poetry run pre-commit install`
+
+### [Optional] Conda + Poetry
+An optional way to setup the environment is to use [Conda](https://conda.io/projects/conda/en/latest/index.html) for creating and managing the environment, while using [Poetry](https://python-poetry.org/) for managing the packages and dependencies. Run the following steps to setup:
+1. [Install Conda](https://docs.anaconda.com/free/miniconda/)
+2. Create conda environment using the `environment.yml`: `conda env create -f environment.yml`
+3. Activate the conda environment: `conda activate ami-ml`
+4. Install packages in the root of the repository using Poetry: `poetry install`
 
 ## Usage
 
