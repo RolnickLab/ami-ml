@@ -1,0 +1,6 @@
+# Project related files [Add them manually wherever required]
+**/*.out
+**/*.png
+**/*.jpg
+**/*.pdf
+**/*.csv
