@@ -13,3 +13,5 @@ exclude =
     __pycache__,
     # No value in checking the deprecated code
     research/deprecated/*
+    # [TEMP]
+    research/rare_species_detection/*
