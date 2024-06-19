@@ -45,3 +45,42 @@ def load_dwca_data(dwca_file: str):
 def set_random_seeds(random_seed):
     random.seed(random_seed)
     np.random.seed(random_seed)
+
+
+def square_crop(image, x, y, width, height):
+    """
+    Try to crop a square region centered at the bounding box provided. The square
+    region cropped has a padding corresponding to 10% of the side of a tight
+    square cropping around the bbox. If the square region would crop outside the
+    image size, the region will be capped to be at the borders. In this case, the
+    region is not guaranteed to be square.
+
+    Args:
+      image: a PIL image
+      x (float): left coordinate
+      y (float): upper coordinate
+      width (float): bbox width
+      height (float): bbox height
+
+    Returns:
+      image: a cropped image
+    """
+
+    image_width, image_height = image.size
+    x = x * image_width
+    y = y * image_height
+    width = width * image_width
+    height = height * image_height
+
+    side = 1.2 * max(width, height)
+    center_x = x + width / 2
+    center_y = y + height / 2
+
+    upper = max(0.0, center_y - side / 2)
+    left = max(0.0, center_x - side / 2)
+    lower = min(image_height, center_y + side / 2)
+    right = min(image_width, center_x + side / 2)
+
+    image = image.crop((int(left), int(upper), int(right), int(lower)))
+
+    return image

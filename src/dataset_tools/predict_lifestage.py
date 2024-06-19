@@ -7,7 +7,6 @@
 import json
 import os
 
-import click
 import pandas as pd
 import timm
 import torch
@@ -108,63 +107,7 @@ def get_predictions(model, dataset, device, log_frequence):
         return y_pred, ids_cpu
 
 
-@click.command(context_settings={"show_default": True})
-@click.option(
-    "--verified-data-csv",
-    type=str,
-    required=True,
-    help="CSV file containing verified image info",
-)
-@click.option(
-    "--dataset-path",
-    type=str,
-    required=True,
-    help="Path to directory containing dataset images.",
-)
-@click.option("--input-size", type=int, default=300, help="Input size of the model")
-@click.option(
-    "--preprocessing-mode",
-    type=click.Choice(["tf", "torch", "float32"]),
-    default="tf",
-    help=(
-        "Mode for scaling input: tf scales image between -1 and 1;"
-        " torch normalizes inputs using ImageNet mean and std"
-        " float32 uses image on scale 0-1"
-    ),
-)
-@click.option(
-    "--predict-nan-life-stage",
-    type=bool,
-    default=True,
-    help=(
-        "You can use this parameter to specify whether you want to make predictions"
-        " only for images with the 'life_stage' tag as NaN"
-    ),
-)
-@click.option(
-    "--batch-size", type=int, default=32, help="Batch size used during training."
-)
-@click.option(
-    "--model-name",
-    type=click.Choice(["efficientnetv2-b3"]),
-    default="efficientnetv2-b3",
-    help="Name of the model",
-)
-@click.option("--num-classes", type=int, required=True, help="Number of categories")
-@click.option("--model-path", type=str, required=True, help="Path to model checkpoint")
-@click.option(
-    "--log-frequence", type=int, default=50, help="Log inferecen every n steps"
-)
-@click.option(
-    "--category-map-json",
-    type=str,
-    required=True,
-    help="JSON containing the categories id map.",
-)
-@click.option(
-    "--results-csv", type=str, required=True, help="CSV file to save results to"
-)
-def main(
+def predict_lifestage(
     verified_data_csv: str,
     dataset_path: str,
     input_size: int,
@@ -203,7 +146,3 @@ def main(
     df.to_csv(results_csv, index=False)
 
     print("Finished prediction", flush=True)
-
-
-if __name__ == "__main__":
-    main()

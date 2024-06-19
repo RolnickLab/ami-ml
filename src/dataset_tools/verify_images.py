@@ -10,14 +10,16 @@ from datetime import datetime
 from functools import partial
 from multiprocessing import Pool
 
-import click
 import pandas as pd
 import PIL
 from PIL import Image
-from utils import get_image_path, load_dwca_data
+
+from src.dataset_tools.utils import get_image_path, load_dwca_data
+
+ERROR_CSV = ".error.csv"
 
 
-def get_image_info(image_path):
+def _get_image_info(image_path):
     file_size = -1
     image_width = -1
     image_height = -1
@@ -47,9 +49,9 @@ def get_image_info(image_path):
     return file_size, image_width, image_height, fetch_date, corrupted
 
 
-def verify_image(image_data, dataset_path: str):
+def _verify_image(image_data, dataset_path: str):
     image_path = os.path.join(dataset_path, image_data["image_path"])
-    file_size, width, height, fetch_date, corrupted = get_image_info(image_path)
+    file_size, width, height, fetch_date, corrupted = _get_image_info(image_path)
 
     verification_metadata = {
         "image_path": image_data["image_path"],
@@ -62,112 +64,39 @@ def verify_image(image_data, dataset_path: str):
     return verification_metadata
 
 
-@click.command(context_settings={"show_default": True})
-@click.option(
-    "--dwca-file",
-    type=str,
-    required=True,
-    help="Darwin Core Archive file",
-)
-@click.option(
-    "--resume-from-ckpt",
-    type=str,
-    help=(
-        "Checkpoint with partial verification results. If provided, the verification "
-        "continues from a previous execution, skipping the already verfied images."
-    ),
-)
-@click.option(
-    "--save-freq",
-    type=int,
-    default=10000,
-    help="Save partial verification data every n images",
-)
-@click.option(
-    "--num-workers",
-    type=int,
-    default=8,
-    help="Number of processes to verify in images in parallel",
-)
-@click.option(
-    "--dataset-path",
-    type=str,
-    required=True,
-    help="Path to directory containing dataset images.",
-)
-@click.option(
-    "--results-csv",
-    type=str,
-    required=True,
-    help="File to save image verification info",
-)
-@click.option(
-    "--subset-list",
-    type=str,
-    help=(
-        "JSON file with the list of keys to be fetched."
-        "If provided, only occorrences with these keys will be fetched. Use the option"
-        " --subset_key to define the field to be used for filtering."
-    ),
-)
-@click.option(
-    "--subset-key",
-    type=str,
-    default="acceptedTaxonKey",
-    help=(
-        "DwC-A field to use for filtering occurrences to be fetched. "
-        "See --subset_list"
-    ),
-)
-def main(
-    dwca_file: str,
-    resume_from_ckpt: str,
-    save_freq: int,
-    num_workers: int,
-    dataset_path: str,
-    results_csv: str,
-    subset_list: str,
-    subset_key: str,
-):
-    gbif_metadata = load_dwca_data(dwca_file)
-    if subset_list is not None:
-        with open(subset_list) as f:
-            keys_list = json.load(f)
-            keys_list = [int(x) for x in keys_list]
-        gbif_metadata = gbif_metadata[gbif_metadata[subset_key].isin(keys_list)].copy()
-
-    gbif_metadata = gbif_metadata[~gbif_metadata.datasetKey.isna()]
-    gbif_metadata["image_path"] = gbif_metadata.apply(get_image_path, axis=1)
-
-    if resume_from_ckpt is not None:
-        verif_df = pd.read_csv(resume_from_ckpt)
-
-        if os.path.isfile(resume_from_ckpt + ".error.csv"):
-            errors_df = pd.read_csv(resume_from_ckpt + ".error.csv")
-        else:
-            errors_df = pd.DataFrame()
-
-        if not verif_df.empty:
-            verif_df = verif_df[["image_path", "width", "height", "fetch_date"]].copy()
-            gbif_metadata_unverified = gbif_metadata[
-                ~gbif_metadata.image_path.isin(verif_df.image_path)
-            ]
-        else:
-            gbif_metadata_unverified = gbif_metadata
+def _resume_from_ckpt(gbif_metadata, resume_from_ckpt):
+    verif_df = pd.read_csv(resume_from_ckpt)
+    if os.path.isfile(resume_from_ckpt + ERROR_CSV):
+        errors_df = pd.read_csv(resume_from_ckpt + ERROR_CSV)
     else:
-        verif_df = pd.DataFrame()
         errors_df = pd.DataFrame()
+    if not verif_df.empty:
+        verif_df = verif_df[["image_path", "width", "height", "fetch_date"]].copy()
+        gbif_metadata_unverified = gbif_metadata[
+            ~gbif_metadata.image_path.isin(verif_df.image_path)
+        ]
+    else:
         gbif_metadata_unverified = gbif_metadata
+    return errors_df, gbif_metadata_unverified, verif_df
 
-    _, images_list = zip(*gbif_metadata_unverified.iterrows())
-    partial_size = save_freq if save_freq > 0 else len(images_list)
-    images_list = [
-        images_list[i : i + partial_size]
-        for i in range(0, len(images_list), partial_size)
-    ]
 
-    verify_image_f = partial(verify_image, dataset_path=dataset_path)
+def _subset_list(gbif_metadata, subset_key, subset_list):
+    with open(subset_list) as f:
+        keys_list = json.load(f)
+        keys_list = [int(x) for x in keys_list]
+    gbif_metadata = gbif_metadata[gbif_metadata[subset_key].isin(keys_list)].copy()
+    return gbif_metadata
 
+
+def _execute_verification_process(
+    errors_df,
+    gbif_metadata,
+    images_list,
+    num_workers,
+    results_csv,
+    verif_df,
+    verify_image_f,
+):
     for images_list_partial in images_list:
         with Pool(processes=num_workers) as pool:
             results = pool.map(verify_image_f, images_list_partial)
@@ -188,13 +117,56 @@ def main(
             if not errors_partial.empty:
                 errors_partial = errors_partial["image_path"]
                 errors_df = pd.concat([errors_df, errors_partial], ignore_index=True)
-                errors_df.to_csv(results_csv + ".error.csv", index=False)
+                errors_df.to_csv(results_csv + ERROR_CSV, index=False)
+    return errors_df, verif_df
+
+
+def verify_images(
+    dwca_file: str,
+    resume_from_ckpt: str,
+    save_freq: int,
+    num_workers: int,
+    dataset_path: str,
+    results_csv: str,
+    subset_list: str,
+    subset_key: str,
+):
+    gbif_metadata = load_dwca_data(dwca_file)
+    if subset_list is not None:
+        gbif_metadata = _subset_list(gbif_metadata, subset_key, subset_list)
+
+    gbif_metadata = gbif_metadata[~gbif_metadata.datasetKey.isna()]
+    gbif_metadata["image_path"] = gbif_metadata.apply(get_image_path, axis=1)
+
+    verif_df = pd.DataFrame()
+    errors_df = pd.DataFrame()
+    gbif_metadata_unverified = gbif_metadata
+
+    if resume_from_ckpt is not None:
+        errors_df, gbif_metadata_unverified, verif_df = _resume_from_ckpt(
+            gbif_metadata, resume_from_ckpt
+        )
+
+    _, images_list = zip(*gbif_metadata_unverified.iterrows())
+    partial_size = save_freq if save_freq > 0 else len(images_list)
+    images_list = [
+        images_list[i : i + partial_size]
+        for i in range(0, len(images_list), partial_size)
+    ]
+
+    verify_image_f = partial(_verify_image, dataset_path=dataset_path)
+
+    errors_df, verif_df = _execute_verification_process(
+        errors_df,
+        gbif_metadata,
+        images_list,
+        num_workers,
+        results_csv,
+        verif_df,
+        verify_image_f,
+    )
 
     verif_df = pd.merge(gbif_metadata, verif_df, how="inner", on="image_path")
     verif_df.to_csv(results_csv, index=False)
-    errors_df.to_csv(results_csv + ".error.csv", index=False)
+    errors_df.to_csv(results_csv + ERROR_CSV, index=False)
     print(f"Final verification results saved to {results_csv}")
-
-
-if __name__ == "__main__":
-    main()
