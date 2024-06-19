@@ -367,7 +367,7 @@ def delete_images_command(error_images_csv: str, base_path: str):
 )
 @click.option("--input-size", type=int, default=300, help="Input size of the model")
 @click.option(
-    "--log-frequence", type=int, default=50, help="Log inferecen every n steps"
+    "--log-frequence", type=int, default=50, help="Log inference every n steps"
 )
 @click.option(
     "--model-name",
