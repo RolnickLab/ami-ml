@@ -13,7 +13,7 @@
 module load anaconda/3
 
 # 2. Load your environment
-conda activate milamoth_ai
+conda activate ami-ml
 
 # 3. Load the environment variables outside of python script
 set -o allexport
@@ -21,9 +21,9 @@ source .env
 set +o allexport
 
 # 4. Run python file
-python fgrained_model_evaluation.py \
---run-name ne-america_resnet50_abla_imagenetamigbif_10ep_run1 \
---artifact moth-ai/ami-gbif-fine-grained/model:v74 \
+python eccv2024/model_evaluation/fgrained_model_evaluation.py \
+--run-name ne-america_resnet50_abla_imagenetamigbif_10ep_run3 \
+--artifact moth-ai/ami-gbif-fine-grained/model:v75 \
 --region NorthEasternAmerica \
 --model-type resnet50 \
 --model-dir $ECCV2024_DATA/models/fine_grained \

@@ -11,7 +11,7 @@
 module load anaconda/3
 
 # 2. Load your environment
-conda activate milamoth_ai
+conda activate ami-ml
 
 # 3. Load the environment variables outside of python script
 set -o allexport

@@ -3,7 +3,7 @@
 
 import glob
 import os
-import pathlib
+from pathlib import Path
 
 import PIL
 import wandb
@@ -18,12 +18,12 @@ def download_model(artifact: str, model_dir: str):
     artifact.download(root=model_dir)
 
 
-def change_model_name(model_dir: pathlib.PosixPath, run_name: str):
+def change_model_name(model_dir: str, run_name: str):
     """Change the model name to the run name"""
 
-    files = glob.glob(model_dir / "*")
+    files = glob.glob(model_dir + "/*")
     latest_file = max(files, key=os.path.getctime)
-    new_model = model_dir / (run_name + ".pth")
+    new_model = str(Path(model_dir) / (run_name + ".pth"))
     os.rename(latest_file, new_model)
 
     return new_model

@@ -23,18 +23,18 @@ wds_pattern = f"{FINE_TUNING_DIR}/test-%06d.tar"
 with wds.ShardWriter(wds_pattern, maxsize=50 * 1024 * 1024) as sink:
     for img_file in img_files:
         img_basename = Path(img_file).stem
-        img = Image.open(img_file)
+        img = Image.open(img_file)  # DO NOT USE IMAGE OPEN; directly read the file
         img_wds = {
             "__key__": img_basename,
-            "jpg": img,
+            "png": img,
         }
         sink.write(img_wds)
 
 # Read the webdataset file, recover and save the images
 recovered_imgs = wds.WebDataset(f"{FINE_TUNING_DIR}/test-000000.tar").decode("pil")
 for imgs in recovered_imgs:
-    img = imgs["jpg"]
-    img.save(f"{FINE_TUNING_DIR}/assets/wds_recovered_images/{imgs['__key__']}.jpg")
+    img = imgs["png"]
+    img.save(f"{FINE_TUNING_DIR}/assets/wds_recovered_images/{imgs['__key__']}.png")
 
 
 # Check if the recovered image is the same as the original image

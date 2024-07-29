@@ -18,4 +18,4 @@ source .env
 set +o allexport
 
 # 3. Launch your script
-aws s3 sync $ECCV2024_DATA $ECCV2024_DATA_OBJECT_STORE --delete
+aws s3 sync $ECCV2024_CAMERA_READY_DATA $FINAL_AMITRAPS_DATA_OBJECT_STORE --delete

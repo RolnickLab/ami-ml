@@ -173,7 +173,7 @@ def _get_binary_wbd_sample(
     sample_binary_annotation = {"label": binary_class, "region": region}
     sample_binary_wbd = {
         "__key__": img_basename + "_" + str(binary_crop_count),
-        "jpg": insect_crop,
+        "png": insect_crop,
         "json": sample_binary_annotation,
     }
     return sample_binary_wbd, sample_binary_annotation
@@ -212,7 +212,7 @@ def _get_fgrained_wbd_sample(
     }
     sample_fgrained_wbd = {
         "__key__": img_basename + "_" + str(fgrained_crop_count),
-        "jpg": insect_crop,
+        "png": insect_crop,
         "json": sample_fgrained_annotation,
     }
     return sample_fgrained_wbd, sample_fgrained_annotation
@@ -276,7 +276,7 @@ def export_to_webdataset_and_crops(
                         insect_crop.save(
                             export_dir
                             / "insect_crops"
-                            / (str(binary_crop_count) + ".jpg")
+                            / (str(binary_crop_count) + ".png")
                         )
 
                         # Export to webdataset for binary classification
@@ -294,7 +294,7 @@ def export_to_webdataset_and_crops(
 
                         # Save the binary annotation for the individual crop
                         label_binary[
-                            str(binary_crop_count) + ".jpg"
+                            str(binary_crop_count) + ".png"
                         ] = sample_binary_annotation
 
                         # Export to webdataset for fgrained classification
@@ -316,7 +316,7 @@ def export_to_webdataset_and_crops(
 
                             # Save the finegrained annotation for the individual crop
                             label_fgrained[
-                                str(binary_crop_count) + ".jpg"
+                                str(binary_crop_count) + ".png"
                             ] = sample_fgrained_annotation
                             fgrained_crop_count += 1
 
