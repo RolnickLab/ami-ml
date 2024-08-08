@@ -67,7 +67,7 @@ generate a versioned dataset with a DOI ([example](https://www.gbif.org/occurren
 cases, you can use a DwA-A file containing all occurrences at a higher rank, such as families. To avoid fetching images
 from species outside of the list of interest, provide a JSON file containing a list of the species IDs using
 the `--subset-list` option. To select a field for filtering occurrences to be fetched, use the `--subset-key` option,
-which by default uses `speciesKey`. To look up GBIF IDs for a species list, you can use
+which by default uses `acceptedTaxonKey`. To look up GBIF IDs for a species list, you can use
 the [GBIF’s online tool](https://www.gbif.org/tools/species-lookup). JSON Example:
 
 ```json
