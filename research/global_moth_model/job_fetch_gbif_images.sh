@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=fetch_gbif_images
 #SBATCH --partition=long-cpu                 # Ask for long-cpu job
-#SBATCH --cpus-per-task=32                   # Ask for 32 CPUs
+#SBATCH --cpus-per-task=64                   # Ask for 64 CPUs
 #SBATCH --mem=300G                           # Ask for 300 GB of RAM
 #SBATCH --output=fetch_gbif_images_%j.out
 
@@ -16,6 +16,7 @@ set -o allexport
 source .env
 set +o allexport
 
+SECONDS=0
 # 4. Launch your script
 ami-dataset fetch-images \
 --dataset-path $GLOBAL_MODEL_DATASET_PATH \
@@ -24,3 +25,4 @@ ami-dataset fetch-images \
 --num-workers 32 \
 --subset-list $ACCEPTED_KEY_LIST
 
+echo "Time taken: $SECONDS seconds"

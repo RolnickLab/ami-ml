@@ -12,5 +12,5 @@ The below steps are carrried out to train a global model.
 ### Dataset download and curation
 The next steps to download and curate data are followed from [here](https://github.com/RolnickLab/ami-ml/tree/main/src/dataset_tools).
 
-1. **Fetch GBIF images**: Download the images from GBIF using the command `ami-dataset fetch-images`. An example slurm script with the argument options is provided (`job_fetch_gbif_images.sh`). The DwC-A file required xxx amount of RAM to be loaded. There should be smarter ways to load the archive file in (multiple?) smaller memory but we haven't explored it ourselves.
+1. **Fetch GBIF images**: Download the images from GBIF using the command `ami-dataset fetch-images`. An example slurm script with the argument options is provided (`job_fetch_gbif_images.sh`). The DwC-A file requires about 300GB of RAM to be loaded. There should be smarter ways to load the archive file in (multiple?) smaller memory but we haven't explored it ourselves.
 
