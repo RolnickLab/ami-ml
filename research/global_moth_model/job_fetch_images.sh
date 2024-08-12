@@ -16,13 +16,16 @@ set -o allexport
 source .env
 set +o allexport
 
+# Keep track of time
 SECONDS=0
+
 # 4. Launch your script
 ami-dataset fetch-images \
 --dataset-path $GLOBAL_MODEL_DATASET_PATH \
 --dwca-file $DWCA_FILE \
 --num-images-per-category 1000 \
---num-workers 32 \
+--num-workers 64 \
 --subset-list $ACCEPTED_KEY_LIST
 
+# Print time taken to execute the script
 echo "Time taken: $SECONDS seconds"
