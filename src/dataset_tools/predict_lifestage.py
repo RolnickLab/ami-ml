@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
 
-def build_model(model_name, num_classes, model_path, device):
+def _build_model(model_name, num_classes, model_path, device):
     if model_name == "efficientnetv2-b3":
         model = timm.create_model(
             "tf_efficientnetv2_b3", pretrained=True, num_classes=num_classes
@@ -32,7 +32,7 @@ def build_model(model_name, num_classes, model_path, device):
     return model
 
 
-def get_image_transforms(input_size=224, preprocess_mode="torch"):
+def _get_image_transforms(input_size=224, preprocess_mode="torch"):
     if preprocess_mode == "torch":
         # imagenet preprocessing
         mean, std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
@@ -65,7 +65,7 @@ class CSVDataset(Dataset):
         self.dataset_dir = dataset_dir
         if keep_only_nan_life_stage:
             self.img_labels = self.img_labels[self.img_labels.lifeStage.isnull()].copy()
-        self.transform = get_image_transforms(input_size, preprocess_mode)
+        self.transform = _get_image_transforms(input_size, preprocess_mode)
 
     def __len__(self):
         return len(self.img_labels)
@@ -80,7 +80,7 @@ class CSVDataset(Dataset):
         return image, image_id
 
 
-def get_predictions(model, dataset, device, log_frequence):
+def _get_predictions(model, dataset, device, log_frequence):
     with torch.no_grad():
         y_pred = torch.tensor([], dtype=torch.float32, device=device)
         y_pred_cpu = torch.tensor([], dtype=torch.float32, device="cpu")
@@ -132,12 +132,12 @@ def predict_lifestage(
         predict_nan_life_stage,
     )
     test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
-    model = build_model(model_name, num_classes, model_path, device)
+    model = _build_model(model_name, num_classes, model_path, device)
     with open(category_map_json, "r") as f:
         category_map = json.load(f)
     category_map = {v: k for k, v in category_map.items()}
 
-    y_pred, image_path = get_predictions(model, test_dataloader, device, log_frequence)
+    y_pred, image_path = _get_predictions(model, test_dataloader, device, log_frequence)
     y_pred = y_pred.argmax(axis=1)
 
     df = pd.DataFrame({"image_path": image_path, "life_stage_prediction": y_pred})
