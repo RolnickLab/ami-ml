@@ -80,10 +80,11 @@ class CSVDataset(Dataset):
         return image, image_id
 
 
-def _get_predictions(model, dataset, device, log_frequence):
+def _save_predictions(
+    model, dataset, device, log_frequence, category_map: dict, results_csv: str
+) -> None:
     with torch.no_grad():
         y_pred = torch.tensor([], dtype=torch.float32, device=device)
-        y_pred_cpu = torch.tensor([], dtype=torch.float32, device="cpu")
         ids_cpu = []
 
         model.eval()
@@ -96,15 +97,31 @@ def _get_predictions(model, dataset, device, log_frequence):
             y_pred = torch.cat((y_pred, outputs), 0)
             ids_cpu += list(ids)
 
-            if i % log_frequence == 0:
+            if (i % log_frequence == 0) or (i == len(dataset.dataset) - 1):
                 print(f"Finished eval step {i}", flush=True)
-                y_pred_cpu = torch.cat((y_pred_cpu, y_pred.cpu()), 0)
+                y_pred_cpu = y_pred.cpu().argmax(axis=1)
+
+                # Calculate the predictions to be written to disk
+                df = pd.DataFrame(
+                    {"image_path": ids_cpu, "life_stage_prediction": y_pred_cpu}
+                )
+                df["life_stage_prediction"] = df["life_stage_prediction"].astype(int)
+                df["life_stage_prediction"] = df["life_stage_prediction"].map(
+                    category_map
+                )
+
+                # Save the file to disk if there is none
+                if not os.path.isfile(results_csv):
+                    df.to_csv(results_csv, index=False)
+                # Read and concatenate the data if the file already exists
+                else:
+                    df_exist = pd.read_csv(results_csv)
+                    df_merged = pd.concat([df_exist, df], ignore_index=True)
+                    df_merged.to_csv(results_csv, index=False)
+
+                # Re-initialize temporary variables
                 y_pred = torch.tensor([], dtype=torch.float32, device=device)
-
-        y_pred_cpu = torch.cat((y_pred_cpu, y_pred.cpu()), 0)
-        y_pred = y_pred_cpu.numpy()
-
-        return y_pred, ids_cpu
+                ids_cpu = []
 
 
 def predict_lifestage(
@@ -137,12 +154,8 @@ def predict_lifestage(
         category_map = json.load(f)
     category_map = {v: k for k, v in category_map.items()}
 
-    y_pred, image_path = _get_predictions(model, test_dataloader, device, log_frequence)
-    y_pred = y_pred.argmax(axis=1)
+    _save_predictions(
+        model, test_dataloader, device, log_frequence, category_map, results_csv
+    )
 
-    df = pd.DataFrame({"image_path": image_path, "life_stage_prediction": y_pred})
-    df["life_stage_prediction"] = df["life_stage_prediction"].astype(int)
-    df["life_stage_prediction"] = df["life_stage_prediction"].map(category_map)
-    df.to_csv(results_csv, index=False)
-
-    print("Finished prediction", flush=True)
+    print("Finished life stage prediction.", flush=True)
