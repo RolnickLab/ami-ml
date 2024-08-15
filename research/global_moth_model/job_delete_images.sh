@@ -1,8 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=delete_corrupted_images
+#SBATCH --ntasks=1
+#SBATCH --time=4:00:00
 #SBATCH --partition=long-cpu              # Ask for long-cpu job
 #SBATCH --cpus-per-task=2                 # Ask for 2 CPUs
-#SBATCH --mem=2G                          # Ask for 2 GB of RAM
+#SBATCH --mem=4G                          # Ask for 4 GB of RAM
 #SBATCH --output=delete_corrupted_images_%j.out
 
 # 1. Load the required modules

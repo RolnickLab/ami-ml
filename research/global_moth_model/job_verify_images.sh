@@ -1,7 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=verify_gbif_images
+#SBATCH --ntasks=1
+#SBATCH --time=24:00:00
 #SBATCH --partition=long-cpu                 # Ask for long-cpu job
-#SBATCH --cpus-per-task=64                   # Ask for 64 CPUs
+#SBATCH --cpus-per-task=16                   # Ask for 16 CPUs
 #SBATCH --mem=300G                           # Ask for 300 GB of RAM
 #SBATCH --output=verify_gbif_images_%j.out
 
@@ -23,7 +25,7 @@ SECONDS=0
 ami-dataset verify-images \
 --dataset-path $GLOBAL_MODEL_DATASET_PATH \
 --dwca-file $DWCA_FILE \
---num-workers 64 \
+--num-workers 16 \
 --results-csv $VERIFICATION_RESULTS \
 --resume-from-ckpt $VERIFICATION_RESULTS \
 --subset-list $ACCEPTED_KEY_LIST

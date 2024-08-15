@@ -1,5 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=clean_dataset
+#SBATCH --ntasks=1
+#SBATCH --time=3:00:00
 #SBATCH --partition=long-cpu                # Ask for long-cpu job
 #SBATCH --cpus-per-task=2                   # Ask for 2 CPUs
 #SBATCH --mem=300G                          # Ask for 300 GB of RAM
