@@ -14,6 +14,8 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
+import wandb
+
 
 def _build_model(model_name, num_classes, model_path, device):
     if model_name == "efficientnetv2-b3":
@@ -81,7 +83,14 @@ class CSVDataset(Dataset):
 
 
 def _save_predictions(
-    model, dataset, device, log_frequence, category_map: dict, results_csv: str
+    model,
+    dataset,
+    device,
+    log_frequence,
+    category_map: dict,
+    results_csv: str,
+    batch_size: int,
+    wandb_log: bool = True,
 ) -> None:
     with torch.no_grad():
         y_pred = torch.tensor([], dtype=torch.float32, device=device)
@@ -97,7 +106,11 @@ def _save_predictions(
             y_pred = torch.cat((y_pred, outputs), 0)
             ids_cpu += list(ids)
 
-            if (i % log_frequence == 0) or (i == len(dataset.dataset) - 1):
+            # Log to W & B
+            if wandb_log:
+                wandb.log({"images_processed": (i + 1) * batch_size})
+
+            if (i % log_frequence == 0) or (i == len(dataset) - 1):
                 print(f"Finished eval step {i}", flush=True)
                 y_pred_cpu = y_pred.cpu().argmax(axis=1)
 
@@ -137,7 +150,14 @@ def predict_lifestage(
     log_frequence: int,
     category_map_json: str,
     results_csv: str,
+    wandb_entity: str,
+    wandb_project: str,
+    wandb_run: str,
 ):
+    # Weights and Biases logging
+    if wandb_entity:
+        wandb.init(entity=wandb_entity, project=wandb_project, name=wandb_run)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(device)
 
@@ -155,7 +175,13 @@ def predict_lifestage(
     category_map = {v: k for k, v in category_map.items()}
 
     _save_predictions(
-        model, test_dataloader, device, log_frequence, category_map, results_csv
+        model,
+        test_dataloader,
+        device,
+        log_frequence,
+        category_map,
+        results_csv,
+        batch_size,
     )
 
     print("Finished life stage prediction.", flush=True)
