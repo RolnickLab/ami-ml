@@ -8,7 +8,7 @@
 #SBATCH --output=upload_dataset_%j.out
 
 # 1. Load the required modules
-module load anaconda/3
+module load miniconda/3
 
 # 2. Load your environment
 conda activate ami-ml
