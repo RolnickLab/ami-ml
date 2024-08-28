@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=upload_dataset
 #SBATCH --ntasks=1
-#SBATCH --time=48:00:00
+#SBATCH --time=96:00:00
 #SBATCH --partition=long-cpu          # Ask for long cpu job
 #SBATCH --cpus-per-task=2             # Ask for 2 CPUs
 #SBATCH --mem=4G                      # Ask for 4 GB of RAM
