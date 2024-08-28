@@ -167,6 +167,7 @@ cython_debug/
 
 # Training related files
 **/*.out
+**/test.py
 
 # Weights and Biases files
 wandb/
