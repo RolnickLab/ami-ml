@@ -49,13 +49,18 @@ class ModelInference:
         return transforms.Compose(
             [
                 self._pad_to_square(),
-                transforms.Resize((self.input_size, self.input_size)),
+                transforms.Resize((self.input_size, self.input_size), antialias=True),
                 transforms.Normalize(mean, std),
             ]
         )
 
     def _load_model(self, model_path: str, num_classes: int, pretrained: bool = True):
         if self.model_type == "resnet50":
+            model = timm.create_model(
+                "resnet50", pretrained=pretrained, num_classes=num_classes
+            )
+
+        elif self.model_type == "timm_resnet50":
             model = timm.create_model(
                 "resnet50", pretrained=pretrained, num_classes=num_classes
             )
