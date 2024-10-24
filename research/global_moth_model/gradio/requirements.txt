@@ -1,0 +1,4 @@
+torch
+python-dotenv
+timm
+torchvision

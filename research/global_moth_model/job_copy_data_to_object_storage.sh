@@ -22,7 +22,7 @@ set +o allexport
 SECONDS=0
 
 # 4. Launch your script
-aws s3 sync $GLOBAL_MODEL_DIR $GLOBAL_MODEL_OBJECT_STORE 
+aws s3 sync $GLOBAL_MODEL_DIR $GLOBAL_MODEL_OBJECT_STORE --delete
 
 # Print time taken to execute the script
 echo "Time taken to upload the dataset: $SECONDS seconds"

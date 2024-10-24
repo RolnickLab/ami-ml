@@ -1,3 +1,9 @@
+---
+title: Mila_Global_Moth_Classifier
+app_file: gradio_demo.py
+sdk: gradio
+sdk_version: 4.42.0
+---
 # Global Moth Model
 Research related to the development of a global moth species classification model for automated moth monitoring.
 
