@@ -167,3 +167,4 @@ cython_debug/
 
 # Training related files
 **/*.out
+wandb/
