@@ -62,7 +62,7 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     help="Random seed for reproducibility",
 )
 def train_model_command(random_seed: int):
-    from src.classification.train_model import train_model
+    from src.classification.train import train_model
 
     train_model(random_seed=random_seed)
 
