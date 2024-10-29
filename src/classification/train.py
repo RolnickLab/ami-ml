@@ -4,21 +4,12 @@
 
 """ Main script for training classification models
 """
+from typing import Optional
 
 # package imports
 import torch
 
-# 3rd party packages
-from dotenv import load_dotenv
-
-from src.classification.utils import set_random_seeds
-
-# Load secrets and config from optional .env file
-load_dotenv()
-
-
-def train_model_one_epoch():
-    """Training model for one epoch"""
+from src.classification.utils import model_builder, set_random_seeds
 
 
 def prepare_dataloader():
@@ -28,10 +19,25 @@ def prepare_dataloader():
     """
 
 
-def train_model(random_seed: int) -> None:
+def train_model_one_epoch():
+    """Training model for one epoch"""
+
+
+def train_model(
+    random_seed: int, model_type: str, num_classes: int, existing_weights: Optional[str]
+) -> None:
     """Main training function"""
 
-    # Basic initialization
+    # Set random seeds
     set_random_seeds(random_seed)
+
+    # Model initialization
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"The available device is {device}.")
+    model = model_builder(device, model_type, num_classes, existing_weights)
+    print(model)
+
+    # Setup dataloaders
+    # train_dataloader = ...
+    # val_dataloader = ...
+    # test_dataloader = ...

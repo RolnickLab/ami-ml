@@ -21,7 +21,12 @@ To add a new command, create a new function below following these instructions:
 - Make sure to use lazy loading when importing modules that are only used by 1 command
 """
 
+import typing as tp
+from typing import Optional
+
 import click
+
+from src.classification.utils import SupportedModels
 
 # Command key constants
 # Make sure to add them to COMMAND_KEYS frozenset
@@ -61,10 +66,34 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     default=42,
     help="Random seed for reproducibility",
 )
-def train_model_command(random_seed: int):
+@click.option(
+    "--model_type",
+    type=click.Choice(tp.get_args(SupportedModels)),
+    required=True,
+    help="Model architecture",
+)
+@click.option(
+    "--num_classes",
+    type=int,
+    required=True,
+    help="Number of model's output classes",
+)
+@click.option(
+    "--existing_weights",
+    type=str,
+    help="Existing weights to be loaded, if available",
+)
+def train_model_command(
+    random_seed: int, model_type: str, num_classes: int, existing_weights: Optional[str]
+):
     from src.classification.train import train_model
 
-    train_model(random_seed=random_seed)
+    train_model(
+        random_seed=random_seed,
+        model_type=model_type,
+        num_classes=num_classes,
+        existing_weights=existing_weights,
+    )
 
 
 # # # # # # # # # # # # # #
@@ -80,7 +109,6 @@ class OrderCommands(click.Group):
 @click.group(cls=OrderCommands)
 def cli():
     """This is the main command line interface for the classification tools."""
-    pass
 
 
 # Following is an automated way to add all functions containing the word `command`
