@@ -4,12 +4,14 @@
 
 """ Main script for training classification models
 """
+
 from typing import Optional
 
-# package imports
 import torch
 
-from src.classification.utils import model_builder, set_random_seeds
+# from src.classification.dataloader import webdataset_pipeline
+from src.classification.models import model_builder
+from src.classification.utils import set_random_seeds
 
 
 def prepare_dataloader():
@@ -38,6 +40,4 @@ def train_model(
     print(model)
 
     # Setup dataloaders
-    # train_dataloader = ...
-    # val_dataloader = ...
-    # test_dataloader = ...
+    # train_data = webdataset_pipeline()

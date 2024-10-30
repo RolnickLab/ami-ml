@@ -1,12 +1,14 @@
 """ List of available models to train
 """
 
+import typing as tp
+
 import timm
 import torch
 from torchvision import models
 
 
-def model_list(model_name: str, num_classes: int, pretrained: bool):
+def _model_list(model_name: str, num_classes: int, pretrained: bool):
     """Main model builder function"""
 
     if model_name == "efficientnetv2-b3":
@@ -64,5 +66,30 @@ def model_list(model_name: str, num_classes: int, pretrained: bool):
         )
     else:
         raise RuntimeError(f"Model {model_name} not implemented")
+
+    return model
+
+
+def model_builder(
+    device: str,
+    model_type: str,
+    num_classes: int,
+    existing_weights: tp.Optional[str],
+    pretrained: bool = True,
+):
+    """Model builder"""
+
+    model = _model_list(model_type, num_classes, pretrained)
+
+    # If available, load existing weights
+    if existing_weights:
+        print("Loading existing model weights.")
+        state_dict = torch.load(existing_weights, map_location=torch.device(device))
+        model.load_state_dict(state_dict, strict=False)
+
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model)
+
+    model = model.to(device)
 
     return model
