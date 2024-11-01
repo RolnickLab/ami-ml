@@ -83,8 +83,53 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     type=str,
     help="Existing weights to be loaded, if available",
 )
+@click.option(
+    "--train_webdataset",
+    type=str,
+    required=True,
+    help="Webdataset files for the training set",
+)
+@click.option(
+    "--val_webdataset",
+    type=str,
+    required=True,
+    help="Webdataset files for the validation set",
+)
+@click.option(
+    "--test_webdataset",
+    type=str,
+    required=True,
+    help="Webdataset files for the test set",
+)
+@click.option(
+    "--image_input_size",
+    type=int,
+    default=128,
+    help="Image input size for training and inference",
+)
+@click.option(
+    "--batch_size",
+    type=int,
+    default=32,
+    help="Batch size for training",
+)
+@click.option(
+    "--preprocess_mode",
+    type=click.Choice(["torch", "tf", "other"]),
+    default="torch",
+    help="Preprocessing mode for normalization",
+)
 def train_model_command(
-    random_seed: int, model_type: str, num_classes: int, existing_weights: Optional[str]
+    random_seed: int,
+    model_type: str,
+    num_classes: int,
+    existing_weights: Optional[str],
+    train_webdataset: str,
+    val_webdataset: str,
+    test_webdataset: str,
+    image_input_size: int,
+    batch_size: int,
+    preprocess_mode: str,
 ):
     from src.classification.train import train_model
 
@@ -93,6 +138,12 @@ def train_model_command(
         model_type=model_type,
         num_classes=num_classes,
         existing_weights=existing_weights,
+        train_webdataset=train_webdataset,
+        val_webdataset=val_webdataset,
+        test_webdataset=test_webdataset,
+        image_input_size=image_input_size,
+        batch_size=batch_size,
+        preprocess_mode=preprocess_mode,
     )
 
 
