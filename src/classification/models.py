@@ -1,4 +1,7 @@
-""" List of available models to train
+#!/usr/bin/env python
+# coding: utf-8
+
+""" Model-related functions
 """
 
 import typing as tp
