@@ -119,6 +119,24 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     default="torch",
     help="Preprocessing mode for normalization",
 )
+@click.option(
+    "--optimizer",
+    type=click.Choice(["adamw", "sgd"]),
+    default="adamw",
+    help="Optimizer type",
+)
+@click.option(
+    "--learning_rate",
+    type=float,
+    default=0.001,
+    help="Initial learning rate",
+)
+@click.option(
+    "--weight_decay",
+    type=float,
+    default=1e-5,
+    help="Weight decay for regularization",
+)
 def train_model_command(
     random_seed: int,
     model_type: str,
@@ -130,6 +148,9 @@ def train_model_command(
     image_input_size: int,
     batch_size: int,
     preprocess_mode: str,
+    optimizer_type: str,
+    learning_rate: float,
+    weight_decay: float,
 ):
     from src.classification.train import train_model
 
@@ -144,6 +165,9 @@ def train_model_command(
         image_input_size=image_input_size,
         batch_size=batch_size,
         preprocess_mode=preprocess_mode,
+        optimizer_type=optimizer_type,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
     )
 
 

@@ -34,3 +34,32 @@ SupportedModels = tp.Literal[
     "timm_vit-b16-224",
     "timm_vit-b16-384",
 ]
+
+
+def get_optimizer(
+    optimizer_type: str,
+    model: torch.nn.Module,
+    learning_rate: float,
+    weight_decay: float,
+    momentum: float = 0.9,
+) -> torch.optim.Optimizer:
+    """Optimizer definitions"""
+
+    if optimizer_type == "adamw":
+        return torch.optim.AdamW(
+            model.parameters(), lr=learning_rate, weight_decay=weight_decay
+        )
+    elif optimizer_type == "sgd":
+        return torch.optim.SGD(
+            model.parameters(),
+            lr=learning_rate,
+            momentum=momentum,
+            weight_decay=weight_decay,
+        )
+    else:
+        raise RuntimeError(f"{optimizer_type} optimizer is not implemented.")
+
+
+def get_learning_rate_scheduler() -> None:
+    """Scheduler definitions"""
+    pass

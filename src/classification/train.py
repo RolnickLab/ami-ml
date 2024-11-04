@@ -11,10 +11,14 @@ import torch
 
 from src.classification.dataloader import build_webdataset_pipeline
 from src.classification.models import model_builder
-from src.classification.utils import set_random_seeds
+from src.classification.utils import (
+    get_learning_rate_scheduler,
+    get_optimizer,
+    set_random_seeds,
+)
 
 
-def _train_model_for_one_epoch():
+def _train_model_for_one_epoch() -> None:
     """Training model for one epoch"""
 
 
@@ -29,6 +33,9 @@ def train_model(
     image_input_size: int,
     batch_size: int,
     preprocess_mode: str,
+    optimizer_type: str,
+    learning_rate: float,
+    weight_decay: float,
 ) -> None:
     """Main training function"""
 
@@ -39,7 +46,6 @@ def train_model(
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"The available device is {device}.")
     model = model_builder(device, model_type, num_classes, existing_weights)
-    print(model)
 
     # Setup dataloaders
     training_dataloader = build_webdataset_pipeline(
@@ -55,4 +61,18 @@ def train_model(
     test_dataloader = build_webdataset_pipeline(
         test_webdataset, image_input_size, batch_size, preprocess_mode
     )
-    print(training_dataloader, validation_dataloader, test_dataloader)
+
+    # Other training ingredients
+    optimizer = get_optimizer(optimizer_type, model, learning_rate, weight_decay)
+    learning_rate_scheduler = get_learning_rate_scheduler()
+    # loss = ...
+    print(
+        optimizer,
+        training_dataloader,
+        validation_dataloader,
+        test_dataloader,
+        learning_rate_scheduler,
+    )
+
+    # Model training
+    _train_model_for_one_epoch()
