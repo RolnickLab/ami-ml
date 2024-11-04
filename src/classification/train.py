@@ -9,24 +9,26 @@ from typing import Optional
 
 import torch
 
-# from src.classification.dataloader import webdataset_pipeline
+from src.classification.dataloader import build_webdataset_pipeline
 from src.classification.models import model_builder
 from src.classification.utils import set_random_seeds
 
 
-def prepare_dataloader():
-    """Returns the training, validation and test data loaders,
-     which have different transforms
-    (data augmentation is only applied on the training set)
-    """
-
-
-def train_model_one_epoch():
+def _train_model_for_one_epoch():
     """Training model for one epoch"""
 
 
 def train_model(
-    random_seed: int, model_type: str, num_classes: int, existing_weights: Optional[str]
+    random_seed: int,
+    model_type: str,
+    num_classes: int,
+    existing_weights: Optional[str],
+    train_webdataset: str,
+    val_webdataset: str,
+    test_webdataset: str,
+    image_input_size: int,
+    batch_size: int,
+    preprocess_mode: str,
 ) -> None:
     """Main training function"""
 
@@ -40,4 +42,17 @@ def train_model(
     print(model)
 
     # Setup dataloaders
-    # train_data = webdataset_pipeline()
+    training_dataloader = build_webdataset_pipeline(
+        train_webdataset,
+        image_input_size,
+        batch_size,
+        preprocess_mode,
+        is_training=True,
+    )
+    validation_dataloader = build_webdataset_pipeline(
+        val_webdataset, image_input_size, batch_size, preprocess_mode
+    )
+    test_dataloader = build_webdataset_pipeline(
+        test_webdataset, image_input_size, batch_size, preprocess_mode
+    )
+    print(training_dataloader, validation_dataloader, test_dataloader)

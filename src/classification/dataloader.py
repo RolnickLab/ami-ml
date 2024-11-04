@@ -43,6 +43,8 @@ def _normalization(preprocess_mode: str) -> tuple[list[float], list[float]]:
 
 
 def _random_resize(image: PIL.Image.Image, full_size: int) -> PIL.Image.Image:
+    """Mixed resolution transformation"""
+
     random_num = np.random.uniform()
     if random_num <= 0.25:
         transform = transforms.Resize((int(0.5 * full_size), int(0.5 * full_size)))
@@ -62,7 +64,7 @@ def _get_transforms(input_size: int, is_training: bool, preprocess_mode: str = "
     final_transforms = [transforms.Lambda(_pad_to_square)]
 
     if is_training:
-        f_random_resize = partial(_random_resize, input_size)
+        f_random_resize = partial(_random_resize, full_size=input_size)
         final_transforms += [
             transforms.Lambda(f_random_resize),  # mixed resolution
             transforms.RandomResizedCrop(input_size, scale=(0.3, 1)),
