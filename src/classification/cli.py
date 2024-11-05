@@ -26,7 +26,9 @@ from typing import Optional
 
 import click
 
-from src.classification.utils import SupportedModels
+from src.classification.constants import AVAILABLE_MODELS
+
+SupportedModels = tp.Literal[*AVAILABLE_MODELS]
 
 # Command key constants
 # Make sure to add them to COMMAND_KEYS frozenset
