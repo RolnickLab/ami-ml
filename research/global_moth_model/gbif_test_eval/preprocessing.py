@@ -13,25 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import partial
+# *** BORROWED AS-IS WITH SOME CHANGES. *** #
 
-import numpy as np
-from absl import flags
+
 from torchvision import transforms
-
-FLAGS = flags.FLAGS
-
-
-def random_resize(image, full_size=300):
-    random_num = np.random.uniform()
-    if random_num <= 0.25:
-        transform = transforms.Resize((int(0.5 * full_size), int(0.5 * full_size)))
-        image = transform(image)
-    elif random_num <= 0.5:
-        transform = transforms.Resize((int(0.25 * full_size), int(0.25 * full_size)))
-        image = transform(image)
-
-    return image
 
 
 def pad_to_square(image):  # CHANGE
@@ -64,23 +49,7 @@ def get_image_transforms(input_size=224, is_training=True, preprocess_mode="torc
     ops += [transforms.Lambda(pad_to_square)]
 
     if is_training:
-        if FLAGS.use_mixres:
-            print("Mix res is implemented.")
-            f_random_resize = partial(random_resize, full_size=input_size)
-            ops += [transforms.Lambda(f_random_resize)]
-
-        if FLAGS.dataaug == "randaug":
-            print("Rand augmentation is implemented.")
-            ops += [
-                transforms.RandomResizedCrop(input_size, scale=(0.3, 1)),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandAugment(num_ops=2, magnitude=9),
-            ]
-        elif FLAGS.dataaug == "simple":
-            ops += [
-                transforms.Resize((input_size, input_size)),
-                transforms.RandomHorizontalFlip(),
-            ]
+        print("Only meant for testing.")
     else:
         ops += [transforms.Resize((input_size, input_size))]
 
