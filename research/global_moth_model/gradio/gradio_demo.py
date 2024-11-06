@@ -8,9 +8,9 @@ from model_inference import ModelInference
 
 # Load secrets and config from optional .env file
 load_dotenv()
-GLOBAL_MODEL = os.getenv("GLOBAL_MODEL")
-CATEGORY_MAP = os.getenv("CATEGORY_MAP_JSON")
-CATEG_TO_NAME_MAP = os.getenv("CATEG_TO_NAME_MAP")
+GLOBAL_MODEL = os.getenv("GLOBAL_MODEL", default="global_model.pt")
+CATEGORY_MAP = os.getenv("CATEGORY_MAP_JSON", default="category_map.json")
+CATEG_TO_NAME_MAP = os.getenv("CATEG_TO_NAME_MAP", default="categ_to_name_map.json")
 
 
 # Model prediction function
