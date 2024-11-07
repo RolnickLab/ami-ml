@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 import torch
+from constants import RESNET50
 from dataloader import build_webdataset_pipeline
 from dotenv import load_dotenv
 from model_inference import ModelInference
@@ -38,9 +39,7 @@ def evaluate(wbd_url: str, model_f: str, category_map_f: str, batch_size: int = 
     # Load the model
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(device)
-    model_class = ModelInference(
-        model_f, "timm_resnet50", category_map_f, device, topk=1
-    )
+    model_class = ModelInference(model_f, RESNET50, category_map_f, device, topk=1)
     model = model_class.model
 
     # Load test data loader

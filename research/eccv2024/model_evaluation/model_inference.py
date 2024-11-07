@@ -3,8 +3,9 @@ import json
 import PIL
 import timm
 import torch
-from constants import AVAILABLE_MODELS, VIT_B16_128
 from torchvision import transforms
+
+from .constants import AVAILABLE_MODELS, VIT_B16_128
 
 
 class ModelInference:

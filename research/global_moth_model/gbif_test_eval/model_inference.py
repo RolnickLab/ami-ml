@@ -3,6 +3,7 @@ import json
 import PIL
 import timm
 import torch
+from constants import AVAILABLE_MODELS, VIT_B16_128
 from torchvision import transforms
 
 
@@ -56,46 +57,20 @@ class ModelInference:
         )
 
     def _load_model(self, model_path: str, num_classes: int, pretrained: bool = True):
-        if self.model_type == "resnet50":
-            model = timm.create_model(
-                "resnet50", pretrained=pretrained, num_classes=num_classes
-            )
+        """Build and load the model"""
 
-        elif self.model_type == "timm_resnet50":
-            model = timm.create_model(
-                "resnet50", pretrained=pretrained, num_classes=num_classes
-            )
-
-        elif self.model_type == "timm_convnext-t":
-            model = timm.create_model(
-                "convnext_tiny_in22k", pretrained=pretrained, num_classes=num_classes
-            )
-
-        elif self.model_type == "timm_convnext-b":
-            model = timm.create_model(
-                "convnext_base_in22k", pretrained=pretrained, num_classes=num_classes
-            )
-
-        elif self.model_type == "efficientnetv2-b3":
-            model = timm.create_model(
-                "tf_efficientnetv2_b3", pretrained=pretrained, num_classes=num_classes
-            )
-
-        elif self.model_type == "timm_mobilenetv3large":
-            model = timm.create_model(
-                "mobilenetv3_large_100", pretrained=pretrained, num_classes=num_classes
-            )
-
-        elif self.model_type == "timm_vit-b16-128":
-            model = timm.create_model(
-                "vit_base_patch16_224_in21k",
-                pretrained=pretrained,
-                img_size=128,
-                num_classes=num_classes,
-            )
-
-        else:
+        if self.model_type not in AVAILABLE_MODELS:
             raise RuntimeError(f"Model {self.model_type} not implemented")
+
+        model_arguments = {"pretrained": pretrained, "num_classes": num_classes}
+
+        if self.model_type == VIT_B16_128:
+            # There is no off-the-shelf ViT model for 128x128 image size,
+            # so we use 224x224 model with a custom input image size
+            self.model_type = "vit_base_patch16_224_in21k"
+            model_arguments["img_size"] = 128
+
+        model = timm.create_model(self.model_type, **model_arguments)
 
         # Load model weights
         model.load_state_dict(
