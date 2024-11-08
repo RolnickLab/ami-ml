@@ -6,7 +6,7 @@ import time
 
 import fastapi
 
-from .pipeline import DummyPipeline
+from .pipeline import GlobalMothPipeline
 from .schemas import (
     PipelineConfig,
     PipelineRequest,
@@ -76,7 +76,7 @@ async def process(data: PipelineRequest) -> PipelineResponse:
 
     start_time = time.time()
 
-    pipeline = DummyPipeline(source_images=source_images)
+    pipeline = GlobalMothPipeline(source_images=source_images)
     try:
         results = pipeline.run()
     except Exception as e:

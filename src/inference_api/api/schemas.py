@@ -104,7 +104,7 @@ class SourceImageResponse(pydantic.BaseModel):
     url: str
 
 
-PipelineChoice = typing.Literal["dummy"]
+PipelineChoice = typing.Literal["global_moth_model"]
 
 
 class PipelineRequest(pydantic.BaseModel):

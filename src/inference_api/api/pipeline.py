@@ -2,7 +2,14 @@ import datetime
 import math
 import random
 
+import PIL
+import torch
+
+from src.classification.constants import RESNET50
+from src.classification.model_inference import ModelInference
+
 from .schemas import BoundingBox, Classification, Detection, SourceImage
+from .utils import get_or_download_file
 
 
 def make_random_bbox(source_image_width: int, source_image_height: int):
@@ -96,3 +103,57 @@ class DummyPipeline:
         ]
         # Flatten the list of lists
         return [item for sublist in results for item in sublist]
+
+
+class GlobalMothPipeline:
+    source_images: list[SourceImage]
+
+    def __init__(self, source_images: list[SourceImage]):
+        self.source_images = source_images
+
+    def run(self) -> list[Detection]:
+        results = [
+            self._predict_species(source_image.open())
+            for source_image in self.source_images
+        ]
+        # Flatten the list of lists
+        return [item for sublist in results for item in sublist]
+
+    def _predict_species(self, image: PIL.Image.Image) -> list[Detection]:
+        """Predict a list of moth species from an image"""
+
+        # Build the model class
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model_weights = str(
+            get_or_download_file(
+                "https://object-arbutus.cloud.computecanada.ca/ami-models/moths/classification/global_resnet50_20240828_b06d3b3a.pth"
+            )
+        )
+        category_map = str(
+            get_or_download_file(
+                "https://object-arbutus.cloud.computecanada.ca/ami-models/moths/classification/global_category_map_with_names_20240828.json"
+            )
+        )
+        fgrained_classifier = ModelInference(
+            model_weights, RESNET50, category_map, device, topk=5
+        )
+
+        # Predict on image
+        predicted_names, predicted_scores = fgrained_classifier.predict(image)
+        single_detection = Detection(
+            source_image_id="",
+            bbox=BoundingBox(x1=0, y1=0, x2=0, y2=0),
+            timestamp=datetime.datetime.now(),
+            algorithm="Global Moth Classifier",
+            classifications=[
+                Classification(
+                    classification=predicted_names[0],
+                    labels=predicted_names,
+                    scores=predicted_scores,
+                    timestamp=datetime.datetime.now(),
+                    algorithm="Global Moth Classifier",
+                )
+            ],
+        )
+
+        return [single_detection]
