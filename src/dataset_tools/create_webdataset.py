@@ -7,6 +7,7 @@ Create webdataset
 
 import json
 import os
+import time
 
 import pandas as pd
 import PIL
@@ -15,6 +16,7 @@ import webdataset as wds
 from PIL import Image
 from torchvision import transforms
 
+import wandb
 from src.dataset_tools.utils import set_random_seeds, square_crop
 
 
@@ -76,7 +78,7 @@ def _dataset_preprocessing(
     megadetector_results_json: str,
     save_category_map_json: str,
     shuffle_images: bool,
-) -> (dict, pd.DataFrame, dict):
+) -> tuple[dict, pd.DataFrame, dict]:
     md_results = None
 
     if megadetector_results_json is not None:
@@ -178,7 +180,15 @@ def create_webdataset(
     columns_to_json: str,
     megadetector_results_json: str,
     random_seed: int,
+    wandb_entity: str,
+    wandb_project: str,
+    wandb_run: str,
 ):
+    # Weights and Biases logging
+    if wandb_entity:
+        wandb.init(entity=wandb_entity, project=wandb_project, name=wandb_run)
+        start_time = time.time()
+
     set_random_seeds(random_seed)
     with wds.ShardWriter(webdataset_pattern, maxsize=max_shard_size) as sink:
         (
@@ -203,5 +213,32 @@ def create_webdataset(
             columns_to_json=columns_to_json,
             resize_min_size=resize_min_size,
         )
+        count = 0
         for sample in dataset:
             sink.write(sample)
+
+            # Log to W&B
+            if wandb_entity:
+                if count % 1000 == 0:
+                    current_time = time.time()
+                    wandb.log(
+                        {
+                            "time_mins": (current_time - start_time) / 60,
+                            "time_hrs": (current_time - start_time) / 3600,
+                            "images_processed": count,
+                        }
+                    )
+            count += 1
+
+        # Log to W&B
+        if wandb_entity:
+            current_time = time.time()
+            wandb.log(
+                {
+                    "time_mins": (current_time - start_time) / 60,
+                    "time_hrs": (current_time - start_time) / 3600,
+                    "images_processed": count,
+                }
+            )
+
+    print("Finished webdataset creation.", flush=True)

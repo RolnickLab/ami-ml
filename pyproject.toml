@@ -32,6 +32,14 @@ typer = "^0.12.3"
 python-dotenv = "^1.0.1"
 wandb = "^0.17.5"
 
+[tool.poetry.group.research]
+optional = true
+
+[tool.poetry.group.research.dependencies]
+awscli = "^1.33.44"
+awscli-plugin-endpoint = "^0.4"
+absl-py = "^2.1.0"
+
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.3.3"
 black = "^23.7.0"

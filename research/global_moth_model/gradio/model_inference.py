@@ -5,8 +5,6 @@ import timm
 import torch
 from torchvision import transforms
 
-from .constants import AVAILABLE_MODELS, VIT_B16_128
-
 
 class ModelInference:
     """Model inference class definition"""
@@ -16,6 +14,7 @@ class ModelInference:
         model_path: str,
         model_type: str,
         category_map_json: str,
+        categ_to_name_map_json: str,
         device: str,
         input_size: int = 128,
         topk: int = 10,
@@ -26,8 +25,15 @@ class ModelInference:
         self.model_type = model_type
         self.image = None
         self.id2categ = self._load_category_map(category_map_json)
+        self.categ2name = self._load_categ_to_name_map(categ_to_name_map_json)
         self.model = self._load_model(model_path, num_classes=len(self.id2categ))
         self.model.eval()
+
+    def _load_categ_to_name_map(self, categ_to_name_map_json: str):
+        with open(categ_to_name_map_json, "r") as f:
+            categ_to_name_map = json.load(f)
+
+        return categ_to_name_map
 
     def _load_category_map(self, category_map_json: str):
         with open(category_map_json, "r") as f:
@@ -38,7 +44,7 @@ class ModelInference:
 
     def _pad_to_square(self):
         """Padding transformation to make the image square"""
-        height, width = self.image.shape[1], self.image.shape[2]
+        width, height = self.image.size
         if height < width:
             return transforms.Pad(padding=[0, 0, 0, width - height])
         elif height > width:
@@ -51,26 +57,53 @@ class ModelInference:
         return transforms.Compose(
             [
                 self._pad_to_square(),
+                transforms.ToTensor(),
                 transforms.Resize((self.input_size, self.input_size), antialias=True),
                 transforms.Normalize(mean, std),
             ]
         )
 
     def _load_model(self, model_path: str, num_classes: int, pretrained: bool = True):
-        """Build and load the model"""
+        if self.model_type == "resnet50":
+            model = timm.create_model(
+                "resnet50", pretrained=pretrained, num_classes=num_classes
+            )
 
-        if self.model_type not in AVAILABLE_MODELS:
+        elif self.model_type == "timm_resnet50":
+            model = timm.create_model(
+                "resnet50", pretrained=pretrained, num_classes=num_classes
+            )
+
+        elif self.model_type == "timm_convnext-t":
+            model = timm.create_model(
+                "convnext_tiny_in22k", pretrained=pretrained, num_classes=num_classes
+            )
+
+        elif self.model_type == "timm_convnext-b":
+            model = timm.create_model(
+                "convnext_base_in22k", pretrained=pretrained, num_classes=num_classes
+            )
+
+        elif self.model_type == "efficientnetv2-b3":
+            model = timm.create_model(
+                "tf_efficientnetv2_b3", pretrained=pretrained, num_classes=num_classes
+            )
+
+        elif self.model_type == "timm_mobilenetv3large":
+            model = timm.create_model(
+                "mobilenetv3_large_100", pretrained=pretrained, num_classes=num_classes
+            )
+
+        elif self.model_type == "timm_vit-b16-128":
+            model = timm.create_model(
+                "vit_base_patch16_224_in21k",
+                pretrained=pretrained,
+                img_size=128,
+                num_classes=num_classes,
+            )
+
+        else:
             raise RuntimeError(f"Model {self.model_type} not implemented")
-
-        model_arguments = {"pretrained": pretrained, "num_classes": num_classes}
-
-        if self.model_type == VIT_B16_128:
-            # There is no off-the-shelf ViT model for 128x128 image size,
-            # so we use 224x224 model with a custom input image size
-            self.model_type = "vit_base_patch16_224_in21k"
-            model_arguments["img_size"] = 128
-
-        model = timm.create_model(self.model_type, **model_arguments)
 
         # Load model weights
         model.load_state_dict(
@@ -108,11 +141,13 @@ class ModelInference:
                 predictions.values.numpy()[0],
                 predictions.indices.numpy()[0],
             )
-            pred_results = []
+            pred_results = {}
 
             for i in range(len(indices)):
                 idx, value = indices[i], values[i]
                 categ = self.id2categ[idx]
-                pred_results.append([categ, value])
+                sp_name = self.categ2name[categ]
+                pred_results[sp_name] = value
+                # pred_results.append([sp_name, round(value*100, 2)])
 
             return pred_results

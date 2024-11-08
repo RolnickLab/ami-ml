@@ -14,12 +14,7 @@ import torch
 import typer
 from model_inference import ModelInference
 from PIL import Image
-
-from .helper_functions import (
-    apply_transform_to_image,
-    change_model_name,
-    download_model,
-)
+from utils import apply_transform_to_image, change_model_name, download_model
 
 
 def _check_prediction(gt_label: str, pred_label: list[list[str, float]]):

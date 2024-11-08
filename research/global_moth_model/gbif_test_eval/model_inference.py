@@ -3,9 +3,8 @@ import json
 import PIL
 import timm
 import torch
+from constants import AVAILABLE_MODELS, VIT_B16_128
 from torchvision import transforms
-
-from .constants import AVAILABLE_MODELS, VIT_B16_128
 
 
 class ModelInference:
@@ -38,7 +37,7 @@ class ModelInference:
 
     def _pad_to_square(self):
         """Padding transformation to make the image square"""
-        height, width = self.image.shape[1], self.image.shape[2]
+        width, height = self.image.size
         if height < width:
             return transforms.Pad(padding=[0, 0, 0, width - height])
         elif height > width:
@@ -51,6 +50,7 @@ class ModelInference:
         return transforms.Compose(
             [
                 self._pad_to_square(),
+                transforms.ToTensor(),
                 transforms.Resize((self.input_size, self.input_size), antialias=True),
                 transforms.Normalize(mean, std),
             ]
@@ -82,6 +82,16 @@ class ModelInference:
 
         model = model.to(self.device)
         return model
+
+    def get_category(self, pred: list[int]):
+        """Return categ from indices"""
+        pred_results = []
+
+        for idx in pred:
+            categ = self.id2categ[idx]
+            pred_results.append(categ)
+
+        return pred_results
 
     def predict(self, image: PIL.Image.Image):
         with torch.no_grad():

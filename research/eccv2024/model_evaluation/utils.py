@@ -6,8 +6,9 @@ import os
 import pathlib
 
 import PIL
-import wandb
 from torchvision import transforms
+
+import wandb
 
 
 def download_model(artifact: str, model_dir: str):
