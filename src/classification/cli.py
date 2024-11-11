@@ -26,9 +26,20 @@ from typing import Optional
 
 import click
 
-from src.classification.constants import AVAILABLE_MODELS
+from src.classification.constants import (
+    ADAMW,
+    AVAILABLE_LOSS_FUNCIONS,
+    AVAILABLE_LR_SCHEDULERS,
+    AVAILABLE_MODELS,
+    AVAILABLE_OPTIMIZERS,
+    COSINE_LR_SCHEDULER,
+    CROSS_ENTROPY_LOSS,
+)
 
 SupportedModels = tp.Literal[*AVAILABLE_MODELS]
+SupportedLossFunctions = tp.Literal[*AVAILABLE_LOSS_FUNCIONS]
+SupportedOptimizers = tp.Literal[*AVAILABLE_OPTIMIZERS]
+SupportedLearningRateSchedulers = tp.Literal[*AVAILABLE_LR_SCHEDULERS]
 
 # Command key constants
 # Make sure to add them to COMMAND_KEYS frozenset
@@ -83,8 +94,16 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
 @click.option(
     "--existing_weights",
     type=str,
+    default=None,
     help="Existing weights to be loaded, if available",
 )
+@click.option(
+    "--total_epochs",
+    type=int,
+    default=30,
+    help="Total number of training epochs",
+)
+@click.option("--warmup_epochs", type=int, default=2, help="Number of warmup epochs")
 @click.option(
     "--train_webdataset",
     type=str,
@@ -112,7 +131,7 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
 @click.option(
     "--batch_size",
     type=int,
-    default=32,
+    default=64,
     help="Batch size for training",
 )
 @click.option(
@@ -122,9 +141,9 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     help="Preprocessing mode for normalization",
 )
 @click.option(
-    "--optimizer",
-    type=click.Choice(["adamw", "sgd"]),
-    default="adamw",
+    "--optimizer_type",
+    type=click.Choice(tp.get_args(SupportedOptimizers)),
+    default=ADAMW,
     help="Optimizer type",
 )
 @click.option(
@@ -134,16 +153,36 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     help="Initial learning rate",
 )
 @click.option(
+    "--learning_rate_scheduler_type",
+    type=click.Choice(tp.get_args(SupportedLearningRateSchedulers)),
+    default=COSINE_LR_SCHEDULER,
+    help="Learning rate scheduler",
+)
+@click.option(
     "--weight_decay",
     type=float,
     default=1e-5,
     help="Weight decay for regularization",
+)
+@click.option(
+    "--loss_function_type",
+    type=click.Choice(tp.get_args(SupportedLossFunctions)),
+    default=CROSS_ENTROPY_LOSS,
+    help="Loss function",
+)
+@click.option(
+    "--label_smoothing",
+    type=float,
+    default=0.1,
+    help="Label smoothing for model regularization. No smoothing if 0.0",
 )
 def train_model_command(
     random_seed: int,
     model_type: str,
     num_classes: int,
     existing_weights: Optional[str],
+    total_epochs: int,
+    warmup_epochs: int,
     train_webdataset: str,
     val_webdataset: str,
     test_webdataset: str,
@@ -152,7 +191,10 @@ def train_model_command(
     preprocess_mode: str,
     optimizer_type: str,
     learning_rate: float,
+    learning_rate_scheduler_type: str,
     weight_decay: float,
+    loss_function_type: str,
+    label_smoothing: float,
 ):
     from src.classification.train import train_model
 
@@ -161,6 +203,8 @@ def train_model_command(
         model_type=model_type,
         num_classes=num_classes,
         existing_weights=existing_weights,
+        total_epochs=total_epochs,
+        warmup_epochs=warmup_epochs,
         train_webdataset=train_webdataset,
         val_webdataset=val_webdataset,
         test_webdataset=test_webdataset,
@@ -169,7 +213,10 @@ def train_model_command(
         preprocess_mode=preprocess_mode,
         optimizer_type=optimizer_type,
         learning_rate=learning_rate,
+        learning_rate_scheduler_type=learning_rate_scheduler_type,
         weight_decay=weight_decay,
+        loss_function_type=loss_function_type,
+        label_smoothing=label_smoothing,
     )
 
 

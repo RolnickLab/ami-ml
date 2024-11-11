@@ -57,7 +57,9 @@ def _random_resize(image: PIL.Image.Image, full_size: int) -> PIL.Image.Image:
 
 
 # TODO: Add return type of this function
-def _get_transforms(input_size: int, is_training: bool, preprocess_mode: str = "torch"):
+def _get_transforms(
+    input_size: int, is_training: bool, preprocess_mode: str = "torch"
+) -> transforms.Compose:
     """Transformation applied to each image"""
 
     # Add square padding

@@ -10,8 +10,14 @@ import typing as tp
 import numpy as np
 import timm
 import torch
+from timm.scheduler import CosineLRScheduler
 
-from src.classification.constants import AVAILABLE_MODELS, VIT_B16_128
+from src.classification.constants import (
+    AVAILABLE_MODELS,
+    COSINE_LR_SCHEDULER,
+    CROSS_ENTROPY_LOSS,
+    VIT_B16_128,
+)
 
 
 def set_random_seeds(random_seed: int) -> None:
@@ -48,9 +54,40 @@ def get_optimizer(
         raise RuntimeError(f"{optimizer_type} optimizer is not implemented.")
 
 
-def get_learning_rate_scheduler() -> None:
-    """Scheduler definitions"""
-    pass
+def get_learning_rate_scheduler(
+    optimizer: torch.optim.Optimizer,
+    lr_scheduler_type: str,
+    total_epochs: int,
+    steps_per_epoch: int,
+    warmup_epochs: int,
+) -> tp.Any:
+    """Learning rate scheduler definitions"""
+
+    total_steps = int(total_epochs * steps_per_epoch)
+    warmup_steps = int(warmup_epochs * steps_per_epoch)
+
+    if lr_scheduler_type == COSINE_LR_SCHEDULER:
+        return CosineLRScheduler(
+            optimizer,
+            t_initial=(total_steps - warmup_steps),
+            warmup_t=warmup_steps,
+            warmup_prefix=True,
+            cycle_limit=1,
+            t_in_epochs=False,
+        )
+    else:
+        raise RuntimeError(
+            f"{lr_scheduler_type} learning rate scheduler is not implemented."
+        )
+
+
+def get_loss_function(loss_function_name: str, label_smoothing: float = 0.0) -> tp.Any:
+    """Loss function definitions"""
+
+    if loss_function_name == CROSS_ENTROPY_LOSS:
+        return torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+    else:
+        raise RuntimeError(f"{loss_function_name} loss is not implemented.")
 
 
 def build_model(

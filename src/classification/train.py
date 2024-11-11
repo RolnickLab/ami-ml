@@ -10,7 +10,13 @@ from typing import Optional
 import torch
 
 from src.classification.dataloader import build_webdataset_pipeline
-from src.classification.utils import build_model, get_optimizer, set_random_seeds
+from src.classification.utils import (
+    build_model,
+    get_learning_rate_scheduler,
+    get_loss_function,
+    get_optimizer,
+    set_random_seeds,
+)
 
 
 def _train_model_for_one_epoch() -> None:
@@ -22,6 +28,8 @@ def train_model(
     model_type: str,
     num_classes: int,
     existing_weights: Optional[str],
+    total_epochs: int,
+    warmup_epochs: int,
     train_webdataset: str,
     val_webdataset: str,
     test_webdataset: str,
@@ -30,7 +38,10 @@ def train_model(
     preprocess_mode: str,
     optimizer_type: str,
     learning_rate: float,
+    learning_rate_scheduler_type: str,
     weight_decay: float,
+    loss_function_type: str,
+    label_smoothing: float,
 ) -> None:
     """Main training function"""
 
@@ -60,27 +71,25 @@ def train_model(
 
     # Other training ingredients
     optimizer = get_optimizer(optimizer_type, model, learning_rate, weight_decay)
-    # learning_rate_scheduler = get_learning_rate_scheduler()
-    # loss = ...
-    print(optimizer, training_dataloader, validation_dataloader, test_dataloader)
+    steps_per_epoch = ...
+    learning_rate_scheduler = get_learning_rate_scheduler(
+        optimizer,
+        learning_rate_scheduler_type,
+        total_epochs,
+        steps_per_epoch,
+        warmup_epochs,
+    )
+    loss_function = get_loss_function(
+        loss_function_type, label_smoothing=label_smoothing
+    )
+    print(
+        loss_function,
+        learning_rate_scheduler,
+        optimizer,
+        training_dataloader,
+        validation_dataloader,
+        test_dataloader,
+    )
 
     # Model training
     _train_model_for_one_epoch()
-
-
-if __name__ == "__main__":
-    train_model(
-        random_seed=42,
-        model_type="vit_base_patch16_128_in21k",
-        num_classes=29176,
-        existing_weights=None,
-        train_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/train/train450-000000.tar",
-        val_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/val/val450-000000.tar",
-        test_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/test/test450-000000.tar",
-        image_input_size=128,
-        batch_size=1,
-        preprocess_mode="torch",
-        optimizer_type="adamw",
-        learning_rate=0.001,
-        weight_decay=1e-5,
-    )
