@@ -32,7 +32,6 @@ from src.classification.constants import (
     AVAILABLE_LR_SCHEDULERS,
     AVAILABLE_MODELS,
     AVAILABLE_OPTIMIZERS,
-    COSINE_LR_SCHEDULER,
     CROSS_ENTROPY_LOSS,
 )
 
@@ -103,7 +102,12 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     default=30,
     help="Total number of training epochs",
 )
-@click.option("--warmup_epochs", type=int, default=2, help="Number of warmup epochs")
+@click.option(
+    "--warmup_epochs",
+    type=int,
+    default=0,
+    help="Number of warmup epochs, if using a learning rate scehduler",
+)
 @click.option(
     "--train_webdataset",
     type=str,
@@ -155,7 +159,7 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
 @click.option(
     "--learning_rate_scheduler_type",
     type=click.Choice(tp.get_args(SupportedLearningRateSchedulers)),
-    default=COSINE_LR_SCHEDULER,
+    default=None,
     help="Learning rate scheduler",
 )
 @click.option(

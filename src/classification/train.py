@@ -15,6 +15,7 @@ from src.classification.utils import (
     get_learning_rate_scheduler,
     get_loss_function,
     get_optimizer,
+    get_webdataset_length,
     set_random_seeds,
 )
 
@@ -38,7 +39,7 @@ def train_model(
     preprocess_mode: str,
     optimizer_type: str,
     learning_rate: float,
-    learning_rate_scheduler_type: str,
+    learning_rate_scheduler_type: Optional[str],
     weight_decay: float,
     loss_function_type: str,
     label_smoothing: float,
@@ -71,14 +72,16 @@ def train_model(
 
     # Other training ingredients
     optimizer = get_optimizer(optimizer_type, model, learning_rate, weight_decay)
-    steps_per_epoch = ...
-    learning_rate_scheduler = get_learning_rate_scheduler(
-        optimizer,
-        learning_rate_scheduler_type,
-        total_epochs,
-        steps_per_epoch,
-        warmup_epochs,
-    )
+    if learning_rate_scheduler_type:
+        train_data_length = get_webdataset_length(train_webdataset)
+        steps_per_epoch = int((train_data_length - 1) / batch_size) + 1
+        learning_rate_scheduler = get_learning_rate_scheduler(
+            optimizer,
+            learning_rate_scheduler_type,
+            total_epochs,
+            steps_per_epoch,
+            warmup_epochs,
+        )
     loss_function = get_loss_function(
         loss_function_type, label_smoothing=label_smoothing
     )

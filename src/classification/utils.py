@@ -5,8 +5,10 @@
 """
 
 import random
+import tarfile
 import typing as tp
 
+import braceexpand
 import numpy as np
 import timm
 import torch
@@ -88,6 +90,24 @@ def get_loss_function(loss_function_name: str, label_smoothing: float = 0.0) -> 
         return torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing)
     else:
         raise RuntimeError(f"{loss_function_name} loss is not implemented.")
+
+
+def _count_files_from_tar(tar_filename: str, ext="jpg") -> int:
+    """Count the number of images in a single tar archive"""
+
+    tar = tarfile.open(tar_filename)
+    files = [f for f in tar.getmembers() if f.name.endswith(ext)]
+    count_files = len(files)
+    tar.close()
+    return count_files
+
+
+def get_webdataset_length(sharedurl: str) -> int:
+    """Get the total number of images in all webdataset files for a given dataset"""
+
+    tar_filenames = list(braceexpand.braceexpand(sharedurl))
+    counts = [_count_files_from_tar(tar_f) for tar_f in tar_filenames]
+    return int(sum(counts))
 
 
 def build_model(
