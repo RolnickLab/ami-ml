@@ -56,7 +56,6 @@ def _random_resize(image: PIL.Image.Image, full_size: int) -> PIL.Image.Image:
     return image
 
 
-# TODO: Add return type of this function
 def _get_transforms(
     input_size: int, is_training: bool, preprocess_mode: str = "torch"
 ) -> transforms.Compose:

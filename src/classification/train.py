@@ -9,6 +9,7 @@ import typing as tp
 from typing import Optional
 
 import torch
+from timm.utils import AverageMeter
 
 from src.classification.dataloader import build_webdataset_pipeline
 from src.classification.utils import (
@@ -20,12 +21,9 @@ from src.classification.utils import (
     set_random_seeds,
 )
 
-total_train_steps = 0
-
 
 def _save_model_checkpoint(model: torch.nn.Module, model_path: str) -> None:
     """Save model to disk"""
-    pass
 
 
 def _train_model_for_one_epoch(
@@ -35,9 +33,12 @@ def _train_model_for_one_epoch(
     loss_function: torch.nn.Module,
     train_dataloader: torch.utils.data.DataLoader,
     learning_rate_scheduler: Optional[tp.Any],
-) -> None:
+    total_train_steps: int,
+) -> tuple[float, int]:  # TODO: First element will eventually turn into a dict
     """Training model for one epoch"""
-    global total_train_steps
+
+    total_train_steps_current = total_train_steps
+    running_loss = AverageMeter()
 
     model.train()
     for batch_data in train_dataloader:
@@ -46,21 +47,25 @@ def _train_model_for_one_epoch(
             device, non_blocking=True
         )
 
+        # Forward pass, loss calculation, backward pass, and optimizer step
         optimizer.zero_grad()
         outputs = model(images)
         loss = loss_function(outputs, labels)
         loss.backward()
         optimizer.step()
 
+        # Calculate the average loss per sample
+        running_loss.update(loss.item())
+
         # Learning rate scheduler step
         if learning_rate_scheduler:
-            total_train_steps += 1
-            learning_rate_scheduler.step_update(num_updates=total_train_steps)
+            total_train_steps_current += 1
+            learning_rate_scheduler.step_update(num_updates=total_train_steps_current)
 
         # TODO: Calculate accuracy metrics
         # TODO: Take loss average before returning
 
-    return loss
+    return running_loss.avg, total_train_steps_current
 
 
 def _validate_model(
@@ -68,8 +73,10 @@ def _validate_model(
     device: str,
     loss_function: torch.nn.Module,
     val_dataloader: torch.utils.data.DataLoader,
-) -> None:
+) -> float:
     """Validate model after one epoch"""
+
+    running_loss = AverageMeter()
 
     model.eval()
     for batch_data in val_dataloader:
@@ -82,9 +89,9 @@ def _validate_model(
             outputs = model(images)
             loss = loss_function(outputs, labels)
 
-        # TODO: Take loss average before returning
+        running_loss.update(loss.item())
 
-    return loss
+    return running_loss.avg
 
 
 def train_model(
@@ -150,18 +157,25 @@ def train_model(
     )
 
     # Model training
+    total_train_steps = 0  # total training batches processed
+    current_maximum_val_loss = 1e8
     for epoch in range(1, total_epochs + 1):
-        _train_model_for_one_epoch(
+        current_train_loss, total_train_steps_current = _train_model_for_one_epoch(
             model,
             device,
             optimizer,
             loss_function,
             train_dataloader,
             learning_rate_scheduler,
+            total_train_steps,
         )
-        _validate_model(model, device, loss_function, val_dataloader)
+        total_train_steps = total_train_steps_current
+        current_val_loss = _validate_model(model, device, loss_function, val_dataloader)
 
-        # TODO: Save model checkpoint
+        if current_val_loss < current_maximum_val_loss:
+            # _save_model_checkpoint(model, ...)  # TODO: Save model checkpoint
+            current_maximum_val_loss = current_val_loss
+
         # TODO: Calculate accuracy metrics
         # TODO: Receive epoch-level metrics and upload to W&B
 
@@ -178,7 +192,7 @@ if __name__ == "__main__":
         val_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/val/val450-000000.tar",
         test_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/test/test450-000000.tar",
         image_input_size=128,
-        batch_size=16,
+        batch_size=64,
         preprocess_mode="torch",
         optimizer_type="adamw",
         learning_rate=0.001,
