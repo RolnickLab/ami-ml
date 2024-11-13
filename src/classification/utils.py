@@ -83,7 +83,9 @@ def get_learning_rate_scheduler(
         )
 
 
-def get_loss_function(loss_function_name: str, label_smoothing: float = 0.0) -> tp.Any:
+def get_loss_function(
+    loss_function_name: str, label_smoothing: float = 0.0
+) -> torch.nn.Module:
     """Loss function definitions"""
 
     if loss_function_name == CROSS_ENTROPY_LOSS:
@@ -116,7 +118,7 @@ def build_model(
     num_classes: int,
     existing_weights: tp.Optional[str],
     pretrained: bool = True,
-):
+) -> torch.nn.Module:
     """Model builder"""
 
     if model_type not in AVAILABLE_MODELS:
