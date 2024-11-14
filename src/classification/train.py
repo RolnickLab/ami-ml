@@ -5,7 +5,10 @@
 """ Main script for training classification models
 """
 
+import pathlib
 import typing as tp
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import torch
@@ -22,8 +25,32 @@ from src.classification.utils import (
 )
 
 
-def _save_model_checkpoint(model: torch.nn.Module, model_path: str) -> None:
+def _save_model_checkpoint(
+    model: torch.nn.Module,
+    model_save_path: pathlib.Path,
+    optimizer: torch.optim.Optimizer,
+    learning_rate_scheduler: tp.Any,
+    epoch: int,
+    train_loss: float,
+    val_loss: float,
+) -> None:
     """Save model to disk"""
+
+    if torch.cuda.device_count() > 1:
+        model_state_dict = model.module.state_dict()
+    else:
+        model_state_dict = model.state_dict()
+    model_checkpoint = {
+        "epoch": epoch,
+        "model_state_dict": model_state_dict,
+        "optimizer_state_dict": optimizer.state_dict(),
+        "lr_scheduler": learning_rate_scheduler.state_dict()
+        if learning_rate_scheduler is not None
+        else None,
+        "train_loss": train_loss,
+        "val_loss": val_loss,
+    }
+    torch.save(model_checkpoint, f"{model_save_path}_checkpoint.pt")
 
 
 def _train_model_for_one_epoch(
@@ -113,6 +140,7 @@ def train_model(
     weight_decay: float,
     loss_function_type: str,
     label_smoothing: float,
+    model_save_directory: str,
 ) -> None:
     """Main training function"""
 
@@ -155,10 +183,12 @@ def train_model(
     loss_function = get_loss_function(
         loss_function_type, label_smoothing=label_smoothing
     )
+    current_date = datetime.now().date().strftime("%Y%m%d")
+    model_save_path = Path(model_save_directory) / f"{model_type}_{current_date}"
 
     # Model training
     total_train_steps = 0  # total training batches processed
-    current_maximum_val_loss = 1e8
+    lowest_val_loss = 1e8
     for epoch in range(1, total_epochs + 1):
         current_train_loss, total_train_steps_current = _train_model_for_one_epoch(
             model,
@@ -172,9 +202,17 @@ def train_model(
         total_train_steps = total_train_steps_current
         current_val_loss = _validate_model(model, device, loss_function, val_dataloader)
 
-        if current_val_loss < current_maximum_val_loss:
-            # _save_model_checkpoint(model, ...)  # TODO: Save model checkpoint
-            current_maximum_val_loss = current_val_loss
+        if current_val_loss < lowest_val_loss:
+            _save_model_checkpoint(
+                model,
+                model_save_path,
+                optimizer,
+                learning_rate_scheduler,
+                epoch,
+                current_train_loss,
+                current_val_loss,
+            )
+            lowest_val_loss = current_val_loss
 
         # TODO: Calculate accuracy metrics
         # TODO: Receive epoch-level metrics and upload to W&B
@@ -186,8 +224,8 @@ if __name__ == "__main__":
         model_type="resnet50",
         num_classes=29176,
         existing_weights=None,
-        total_epochs=10,
-        warmup_epochs=1,
+        total_epochs=1,
+        warmup_epochs=0,
         train_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/train/train450-{000000..000001}.tar",
         val_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/val/val450-000000.tar",
         test_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/test/test450-000000.tar",
@@ -200,4 +238,5 @@ if __name__ == "__main__":
         weight_decay=1e-5,
         loss_function_type="cross_entropy",
         label_smoothing=0.1,
+        model_save_directory="/home/mila/a/aditya.jain/scratch",
     )

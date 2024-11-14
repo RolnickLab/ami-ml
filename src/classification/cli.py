@@ -180,6 +180,12 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     default=0.1,
     help="Label smoothing for model regularization. No smoothing if 0.0",
 )
+@click.option(
+    "--model_save_directory",
+    type=str,
+    required=True,
+    help="Directory to save the trained model",
+)
 def train_model_command(
     random_seed: int,
     model_type: str,
@@ -199,6 +205,7 @@ def train_model_command(
     weight_decay: float,
     loss_function_type: str,
     label_smoothing: float,
+    model_save_directory: str,
 ):
     from src.classification.train import train_model
 
@@ -221,6 +228,7 @@ def train_model_command(
         weight_decay=weight_decay,
         loss_function_type=loss_function_type,
         label_smoothing=label_smoothing,
+        model_save_directory=model_save_directory,
     )
 
 
