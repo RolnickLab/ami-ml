@@ -5,10 +5,10 @@
 """
 
 import os
+import random
 from functools import partial
 from typing import Any
 
-import numpy as np
 import PIL
 import torch
 import webdataset as wds
@@ -32,12 +32,13 @@ def _pad_to_square(image: PIL.Image.Image) -> PIL.Image.Image:
 def _normalization(preprocess_mode: str) -> tuple[list[float], list[float]]:
     """Get the mean and std for normalization"""
 
-    if preprocess_mode == "torch":
-        mean, std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-    elif preprocess_mode == "tf":
-        mean, std = [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]
-    else:
-        mean, std = [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]
+    preprocess_params = {
+        "torch": ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        "tf": ([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+        "default": ([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]),
+    }
+
+    mean, std = preprocess_params.get(preprocess_mode, preprocess_params["default"])
 
     return mean, std
 
@@ -45,12 +46,13 @@ def _normalization(preprocess_mode: str) -> tuple[list[float], list[float]]:
 def _random_resize(image: PIL.Image.Image, full_size: int) -> PIL.Image.Image:
     """Mixed resolution transformation"""
 
-    random_num = np.random.uniform()
-    if random_num <= 0.25:
-        transform = transforms.Resize((int(0.5 * full_size), int(0.5 * full_size)))
-        image = transform(image)
-    elif random_num <= 0.5:
-        transform = transforms.Resize((int(0.25 * full_size), int(0.25 * full_size)))
+    values = [0.25, 0.5, None, None]
+    random_value = random.choice(values)
+
+    if random_value:
+        transform = transforms.Resize(
+            (int(random_value * full_size), int(random_value * full_size))
+        )
         image = transform(image)
 
     return image
@@ -92,11 +94,9 @@ def build_webdataset_pipeline(
     """Main dataset builder and loader function"""
 
     # Load the webdataset
+    dataset = wds.WebDataset(sharedurl, shardshuffle=is_training)
     if is_training:
-        dataset = wds.WebDataset(sharedurl, shardshuffle=True)
         dataset = dataset.shuffle(10000)
-    else:
-        dataset = wds.WebDataset(sharedurl, shardshuffle=False)
 
     # Get image transforms
     image_transform = _get_transforms(input_size, is_training, preprocess_mode)
