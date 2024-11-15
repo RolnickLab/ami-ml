@@ -14,14 +14,6 @@ CONVNEXT_B = "convnext_base_in22k"
 VIT_B16_128 = "vit_base_patch16_128_in21k"
 VIT_B16_224 = "vit_base_patch16_224_in21k"
 VIT_B16_384 = "vit_base_patch16_384"
-
-ADAMW = "adamw"
-SGD = "sgd"
-
-CROSS_ENTROPY_LOSS = "cross_entropy"
-
-COSINE_LR_SCHEDULER = "cosine"
-
 AVAILABLE_MODELS = frozenset(
     [
         EFFICIENTNETV2_B3,
@@ -37,9 +29,12 @@ AVAILABLE_MODELS = frozenset(
     ]
 )
 
-
-AVAILABLE_LOSS_FUNCIONS = frozenset([CROSS_ENTROPY_LOSS])
-
+ADAMW = "adamw"
+SGD = "sgd"
 AVAILABLE_OPTIMIZERS = frozenset([ADAMW, SGD])
 
+CROSS_ENTROPY_LOSS = "cross_entropy"
+AVAILABLE_LOSS_FUNCIONS = frozenset([CROSS_ENTROPY_LOSS])
+
+COSINE_LR_SCHEDULER = "cosine"
 AVAILABLE_LR_SCHEDULERS = frozenset([COSINE_LR_SCHEDULER])
