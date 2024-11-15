@@ -33,6 +33,7 @@ from src.classification.constants import (
     AVAILABLE_MODELS,
     AVAILABLE_OPTIMIZERS,
     CROSS_ENTROPY_LOSS,
+    RESNET50,
 )
 
 SupportedModels = tp.Literal[*AVAILABLE_MODELS]
@@ -81,7 +82,7 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
 @click.option(
     "--model_type",
     type=click.Choice(tp.get_args(SupportedModels)),
-    required=True,
+    default=RESNET50,
     help="Model architecture",
 )
 @click.option(
