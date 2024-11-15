@@ -61,11 +61,12 @@ def _train_model_for_one_epoch(
     train_dataloader: torch.utils.data.DataLoader,
     learning_rate_scheduler: Optional[tp.Any],
     total_train_steps: int,
-) -> tuple[float, int]:  # TODO: First element will eventually turn into a dict
+) -> tuple[dict, int]:  # TODO: First element will eventually turn into a dict
     """Training model for one epoch"""
 
     total_train_steps_current = total_train_steps
     running_loss = AverageMeter()
+    running_accuracy = AverageMeter()
 
     model.train()
     for batch_data in train_dataloader:
@@ -84,6 +85,10 @@ def _train_model_for_one_epoch(
         # Calculate the average loss per sample
         running_loss.update(loss.item())
 
+        # Calculate the batch accuracy and update to global accuracy
+        _, predicted = torch.max(outputs, 1)
+        running_accuracy.update((predicted == labels).sum().item() / labels.size(0))
+
         # Learning rate scheduler step
         if learning_rate_scheduler:
             total_train_steps_current += 1
@@ -92,7 +97,9 @@ def _train_model_for_one_epoch(
         # TODO: Calculate accuracy metrics
         # TODO: Take loss average before returning
 
-    return running_loss.avg, total_train_steps_current
+    metrics = {"train_loss": running_loss.avg, "train_accuracy": running_accuracy.avg}
+
+    return metrics, total_train_steps_current
 
 
 def _validate_model(
@@ -100,10 +107,11 @@ def _validate_model(
     device: str,
     loss_function: torch.nn.Module,
     val_dataloader: torch.utils.data.DataLoader,
-) -> float:
+) -> dict:
     """Validate model after one epoch"""
 
     running_loss = AverageMeter()
+    running_accuracy = AverageMeter()
 
     model.eval()
     for batch_data in val_dataloader:
@@ -116,9 +124,16 @@ def _validate_model(
             outputs = model(images)
             loss = loss_function(outputs, labels)
 
+        # Calculate the average loss per sample
         running_loss.update(loss.item())
 
-    return running_loss.avg
+        # Calculate the batch accuracy and update to global accuracy
+        _, predicted = torch.max(outputs, 1)
+        running_accuracy.update((predicted == labels).sum().item() / labels.size(0))
+
+    metrics = {"val_loss": running_loss.avg, "val_accuracy": running_accuracy.avg}
+
+    return metrics
 
 
 def train_model(
@@ -190,7 +205,7 @@ def train_model(
     total_train_steps = 0  # total training batches processed
     lowest_val_loss = 1e8
     for epoch in range(1, total_epochs + 1):
-        current_train_loss, total_train_steps_current = _train_model_for_one_epoch(
+        train_metrics, total_train_steps_current = _train_model_for_one_epoch(
             model,
             device,
             optimizer,
@@ -200,43 +215,29 @@ def train_model(
             total_train_steps,
         )
         total_train_steps = total_train_steps_current
-        current_val_loss = _validate_model(model, device, loss_function, val_dataloader)
+        val_metrics = _validate_model(model, device, loss_function, val_dataloader)
 
-        if current_val_loss < lowest_val_loss:
+        if val_metrics["val_loss"] < lowest_val_loss:
             _save_model_checkpoint(
                 model,
                 model_save_path,
                 optimizer,
                 learning_rate_scheduler,
                 epoch,
-                current_train_loss,
-                current_val_loss,
+                train_metrics["train_loss"],
+                val_metrics["val_loss"],
             )
-            lowest_val_loss = current_val_loss
+            lowest_val_loss = val_metrics["val_loss"]
+
+        print(
+            f"Epoch [{epoch:02d}/{total_epochs}]: "
+            f"Train Loss: {train_metrics['train_loss']:.4f}, "
+            f"Val Loss: {val_metrics['val_loss']:.4f}, "
+            f"Train Accuracy: {train_metrics['train_accuracy']*100:.2f}, "
+            f"Val Accuracy: {val_metrics['val_accuracy']*100:.2f}, "
+            f"Learning rate: {optimizer.param_groups[0]['lr']:.6f}",
+            flush=True,
+        )
 
         # TODO: Calculate accuracy metrics
         # TODO: Receive epoch-level metrics and upload to W&B
-
-
-if __name__ == "__main__":
-    train_model(
-        random_seed=42,
-        model_type="resnet50",
-        num_classes=29176,
-        existing_weights=None,
-        total_epochs=1,
-        warmup_epochs=0,
-        train_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/train/train450-{000000..000001}.tar",
-        val_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/val/val450-000000.tar",
-        test_webdataset="/home/mila/a/aditya.jain/scratch/global_model/webdataset/test/test450-000000.tar",
-        image_input_size=128,
-        batch_size=64,
-        preprocess_mode="torch",
-        optimizer_type="adamw",
-        learning_rate=0.001,
-        learning_rate_scheduler_type="cosine",
-        weight_decay=1e-5,
-        loss_function_type="cross_entropy",
-        label_smoothing=0.1,
-        model_save_directory="/home/mila/a/aditya.jain/scratch",
-    )
