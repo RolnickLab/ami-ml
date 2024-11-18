@@ -102,13 +102,14 @@ def _train_model_for_one_epoch(
     return metrics, total_train_steps_current
 
 
-def _validate_model(
+def _evaluate_model(
     model: torch.nn.Module,
     device: str,
     loss_function: torch.nn.Module,
     val_dataloader: torch.utils.data.DataLoader,
+    set_type: str,
 ) -> dict:
-    """Validate model after one epoch"""
+    """Evaluate model either for validation or test set"""
 
     running_loss = AverageMeter()
     running_accuracy = AverageMeter()
@@ -131,7 +132,10 @@ def _validate_model(
         _, predicted = torch.max(outputs, 1)
         running_accuracy.update((predicted == labels).sum().item() / labels.size(0))
 
-    metrics = {"val_loss": running_loss.avg, "val_accuracy": running_accuracy.avg}
+    metrics = {
+        f"{set_type}_loss": running_loss.avg,
+        f"{set_type}_accuracy": running_accuracy.avg,
+    }
 
     return metrics
 
@@ -215,7 +219,9 @@ def train_model(
             total_train_steps,
         )
         total_train_steps = total_train_steps_current
-        val_metrics = _validate_model(model, device, loss_function, val_dataloader)
+        val_metrics = _evaluate_model(
+            model, device, loss_function, val_dataloader, "val"
+        )
 
         if val_metrics["val_loss"] < lowest_val_loss:
             _save_model_checkpoint(
@@ -239,5 +245,8 @@ def train_model(
             flush=True,
         )
 
-        # TODO: Calculate accuracy metrics
-        # TODO: Receive epoch-level metrics and upload to W&B
+    # Evaluate the model on test data
+    test_metrics = _evaluate_model(
+        model, device, loss_function, test_webdataset, "test"
+    )
+    print(f"The test accuracy is {test_metrics['test_accuracy']*100:.2f}.", flush=True)
