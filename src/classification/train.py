@@ -147,6 +147,7 @@ def train_model(
     existing_weights: Optional[str],
     total_epochs: int,
     warmup_epochs: int,
+    early_stopping: int,
     train_webdataset: str,
     val_webdataset: str,
     test_webdataset: str,
@@ -207,6 +208,7 @@ def train_model(
 
     # Model training
     total_train_steps = 0  # total training batches processed
+    early_stopping_count = 0
     lowest_val_loss = 1e8
     for epoch in range(1, total_epochs + 1):
         train_metrics, total_train_steps_current = _train_model_for_one_epoch(
@@ -219,6 +221,7 @@ def train_model(
             total_train_steps,
         )
         total_train_steps = total_train_steps_current
+        early_stopping_count += 1
         val_metrics = _evaluate_model(
             model, device, loss_function, val_dataloader, "val"
         )
@@ -234,6 +237,7 @@ def train_model(
                 val_metrics["val_loss"],
             )
             lowest_val_loss = val_metrics["val_loss"]
+            early_stopping_count = 0
 
         print(
             f"Epoch [{epoch:02d}/{total_epochs}]: "
@@ -244,6 +248,13 @@ def train_model(
             f"Learning rate: {optimizer.param_groups[0]['lr']:.6f}",
             flush=True,
         )
+
+        if early_stopping_count >= early_stopping:
+            print(
+                f"Early stopping at epoch {epoch} with lowest validation loss: {lowest_val_loss:.4f}.",
+                flush=True,
+            )
+            break
 
     # Evaluate the model on test data
     test_metrics = _evaluate_model(

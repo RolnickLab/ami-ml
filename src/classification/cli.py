@@ -110,6 +110,12 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     help="Number of warmup epochs, if using a learning rate scehduler",
 )
 @click.option(
+    "--early_stopping",
+    type=int,
+    default=3,
+    help="Stop training if validation loss does not decrease after this many epochs",
+)
+@click.option(
     "--train_webdataset",
     type=str,
     required=True,
@@ -194,6 +200,7 @@ def train_model_command(
     existing_weights: Optional[str],
     total_epochs: int,
     warmup_epochs: int,
+    early_stopping: int,
     train_webdataset: str,
     val_webdataset: str,
     test_webdataset: str,
@@ -217,6 +224,7 @@ def train_model_command(
         existing_weights=existing_weights,
         total_epochs=total_epochs,
         warmup_epochs=warmup_epochs,
+        early_stopping=early_stopping,
         train_webdataset=train_webdataset,
         val_webdataset=val_webdataset,
         test_webdataset=test_webdataset,
