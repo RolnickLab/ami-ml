@@ -6,6 +6,7 @@
 """
 
 import pathlib
+import time
 import typing as tp
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ from typing import Optional
 import torch
 from timm.utils import AverageMeter
 
+import wandb
 from src.classification.dataloader import build_webdataset_pipeline
 from src.classification.utils import (
     build_model,
@@ -94,9 +96,6 @@ def _train_model_for_one_epoch(
             total_train_steps_current += 1
             learning_rate_scheduler.step_update(num_updates=total_train_steps_current)
 
-        # TODO: Calculate accuracy metrics
-        # TODO: Take loss average before returning
-
     metrics = {"train_loss": running_loss.avg, "train_accuracy": running_accuracy.avg}
 
     return metrics, total_train_steps_current
@@ -156,11 +155,14 @@ def train_model(
     preprocess_mode: str,
     optimizer_type: str,
     learning_rate: float,
-    learning_rate_scheduler_type: Optional[str],
+    learning_rate_scheduler: Optional[str],
     weight_decay: float,
     loss_function_type: str,
     label_smoothing: float,
     model_save_directory: str,
+    wandb_entity: Optional[str],
+    wandb_project: Optional[str],
+    wandb_run_name: Optional[str],
 ) -> None:
     """Main training function"""
 
@@ -183,19 +185,19 @@ def train_model(
     val_dataloader = build_webdataset_pipeline(
         val_webdataset, image_input_size, batch_size, preprocess_mode
     )
-    # test_dataloader = build_webdataset_pipeline(
-    #     test_webdataset, image_input_size, batch_size, preprocess_mode
-    # )
+    test_dataloader = build_webdataset_pipeline(
+        test_webdataset, image_input_size, batch_size, preprocess_mode
+    )
 
     # Other training ingredients
     optimizer = get_optimizer(optimizer_type, model, learning_rate, weight_decay)
     learning_rate_scheduler = None
-    if learning_rate_scheduler_type:
+    if learning_rate_scheduler:
         train_data_length = get_webdataset_length(train_webdataset)
         steps_per_epoch = int((train_data_length - 1) / batch_size) + 1
         learning_rate_scheduler = get_learning_rate_scheduler(
             optimizer,
-            learning_rate_scheduler_type,
+            learning_rate_scheduler,
             total_epochs,
             steps_per_epoch,
             warmup_epochs,
@@ -206,11 +208,43 @@ def train_model(
     current_date = datetime.now().date().strftime("%Y%m%d")
     model_save_path = Path(model_save_directory) / f"{model_type}_{current_date}"
 
+    # Start W&B logging
+    if wandb_entity or wandb_project:
+        training_configuration = {
+            "random_seed": random_seed,
+            "model_type": model_type,
+            "num_classes": num_classes,
+            "existing_weights": existing_weights,
+            "total_epochs": total_epochs,
+            "warmup_epochs": warmup_epochs,
+            "early_stopping": early_stopping,
+            "train_webdataset": train_webdataset,
+            "val_webdataset": val_webdataset,
+            "test_webdataset": test_webdataset,
+            "image_input_size": image_input_size,
+            "batch_size": batch_size,
+            "preprocess_mode": preprocess_mode,
+            "optimizer_type": optimizer_type,
+            "learning_rate": learning_rate,
+            "learning_rate_scheduler": learning_rate_scheduler,
+            "weight_decay": weight_decay,
+            "loss_function_type": loss_function_type,
+            "label_smoothing": label_smoothing,
+            "model_save_directory": model_save_directory,
+        }
+        wandb.init(
+            entity=wandb_entity,
+            project=wandb_project,
+            name=wandb_run_name,
+            config=training_configuration,
+        )
+
     # Model training
     total_train_steps = 0  # total training batches processed
     early_stopping_count = 0
     lowest_val_loss = 1e8
     for epoch in range(1, total_epochs + 1):
+        epoch_start_time = time.time()
         train_metrics, total_train_steps_current = _train_model_for_one_epoch(
             model,
             device,
@@ -249,6 +283,18 @@ def train_model(
             flush=True,
         )
 
+        if wandb_entity or wandb_project:
+            wandb.log(
+                {
+                    "epoch": epoch,
+                    "time_per_epoch_mins": (time.time() - epoch_start_time) / 60,
+                    "train_loss": train_metrics["train_loss"],
+                    "val_loss": val_metrics["val_loss"],
+                    "train_accuracy": train_metrics["train_accuracy"],
+                    "val_accuracy": val_metrics["val_accuracy"],
+                }
+            )
+
         if early_stopping_count >= early_stopping:
             print(
                 f"Early stopping at epoch {epoch} with lowest validation loss: {lowest_val_loss:.4f}.",
@@ -258,6 +304,12 @@ def train_model(
 
     # Evaluate the model on test data
     test_metrics = _evaluate_model(
-        model, device, loss_function, test_webdataset, "test"
+        model, device, loss_function, test_dataloader, "test"
     )
     print(f"The test accuracy is {test_metrics['test_accuracy']*100:.2f}.", flush=True)
+
+    if wandb_entity or wandb_project:
+        wandb.log({"test_accuracy": test_metrics["test_accuracy"]})
+        wandb.log_artifact(model_save_path, type="model", name=wandb_run_name)
+        wandb.log_code()
+        wandb.finish()

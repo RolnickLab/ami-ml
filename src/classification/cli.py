@@ -164,7 +164,7 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     help="Initial learning rate",
 )
 @click.option(
-    "--learning_rate_scheduler_type",
+    "--learning_rate_scheduler",
     type=click.Choice(tp.get_args(SupportedLearningRateSchedulers)),
     default=None,
     help="Learning rate scheduler",
@@ -193,6 +193,24 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     required=True,
     help="Directory to save the trained model",
 )
+@click.option(
+    "--wandb_entity",
+    type=str,
+    default=None,
+    help="Weights and Biases entity",
+)
+@click.option(
+    "--wandb_project",
+    type=str,
+    default=None,
+    help="Weights and Biases project",
+)
+@click.option(
+    "--wandb_run_name",
+    type=str,
+    default=None,
+    help="User-defined training run name",
+)
 def train_model_command(
     random_seed: int,
     model_type: str,
@@ -209,11 +227,14 @@ def train_model_command(
     preprocess_mode: str,
     optimizer_type: str,
     learning_rate: float,
-    learning_rate_scheduler_type: str,
+    learning_rate_scheduler: Optional[str],
     weight_decay: float,
     loss_function_type: str,
     label_smoothing: float,
     model_save_directory: str,
+    wandb_entity: Optional[str],
+    wandb_project: Optional[str],
+    wandb_run_name: Optional[str],
 ):
     from src.classification.train import train_model
 
@@ -233,11 +254,14 @@ def train_model_command(
         preprocess_mode=preprocess_mode,
         optimizer_type=optimizer_type,
         learning_rate=learning_rate,
-        learning_rate_scheduler_type=learning_rate_scheduler_type,
+        learning_rate_scheduler=learning_rate_scheduler,
         weight_decay=weight_decay,
         loss_function_type=loss_function_type,
         label_smoothing=label_smoothing,
         model_save_directory=model_save_directory,
+        wandb_entity=wandb_entity,
+        wandb_project=wandb_project,
+        wandb_run_name=wandb_run_name,
     )
 
 
