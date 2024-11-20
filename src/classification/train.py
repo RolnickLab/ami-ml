@@ -240,7 +240,7 @@ def train_model(
             "label_smoothing": label_smoothing,
             "model_save_directory": model_save_directory,
         }
-        run = wandb.init(
+        wandb.init(
             entity=wandb_entity,
             project=wandb_project,
             name=wandb_run_name,
@@ -285,8 +285,8 @@ def train_model(
             f"Epoch [{epoch:02d}/{total_epochs}]: "
             f"Train Loss: {train_metrics['train_loss']:.4f}, "
             f"Val Loss: {val_metrics['val_loss']:.4f}, "
-            f"Train Accuracy: {train_metrics['train_accuracy']*100:.2f}, "
-            f"Val Accuracy: {val_metrics['val_accuracy']*100:.2f}, "
+            f"Train Accuracy: {train_metrics['train_accuracy']*100:.2f}%, "
+            f"Val Accuracy: {val_metrics['val_accuracy']*100:.2f}%, "
             f"Learning rate: {optimizer.param_groups[0]['lr']:.6f}",
             flush=True,
         )
@@ -314,12 +314,40 @@ def train_model(
     test_metrics = _evaluate_model(
         model, device, loss_function, test_dataloader, "test"
     )
-    print(f"The test accuracy is {test_metrics['test_accuracy']*100:.2f}.", flush=True)
+    print(f"The test accuracy is {test_metrics['test_accuracy']*100:.2f}%.", flush=True)
 
     if wandb_entity or wandb_project:
         wandb.log({"test_accuracy": test_metrics["test_accuracy"]})
         wandb.log_artifact(
             f"{model_save_path}_checkpoint.pt", type="model", name=wandb_run_name
         )
-        run.log_code()
         wandb.finish()
+
+
+if __name__ == "__main__":
+    train_model(
+        random_seed=42,
+        model_type="resnet50",
+        num_classes=29176,
+        existing_weights=None,
+        total_epochs=10,
+        warmup_epochs=2,
+        early_stopping=5,
+        train_webdataset="/home/mila/a/aditya.jain/scratch/sample_global_model_webdataset/train/train450-{000000..000002}.tar",
+        val_webdataset="/home/mila/a/aditya.jain/scratch/sample_global_model_webdataset/val/val450-000000.tar",
+        test_webdataset="/home/mila/a/aditya.jain/scratch/sample_global_model_webdataset/test/test450-000000.tar",
+        image_input_size=128,
+        batch_size=64,
+        preprocess_mode="torch",
+        optimizer_type="adamw",
+        learning_rate=0.001,
+        learning_rate_scheduler="cosine",
+        weight_decay=1e-5,
+        loss_function_type="cross_entropy",
+        label_smoothing=0.1,
+        mixed_resolution_data_aug=True,
+        model_save_directory="/home/mila/a/aditya.jain/scratch",
+        wandb_entity=None,
+        wandb_project=None,
+        wandb_run_name=None,
+    )
