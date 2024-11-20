@@ -159,6 +159,7 @@ def train_model(
     weight_decay: float,
     loss_function_type: str,
     label_smoothing: float,
+    mixed_resolution_data_aug: bool,
     model_save_directory: str,
     wandb_entity: Optional[str],
     wandb_project: Optional[str],
@@ -180,13 +181,20 @@ def train_model(
         image_input_size,
         batch_size,
         preprocess_mode,
+        mixed_resolution_data_aug=mixed_resolution_data_aug,
         is_training=True,
     )
     val_dataloader = build_webdataset_pipeline(
-        val_webdataset, image_input_size, batch_size, preprocess_mode
+        val_webdataset,
+        image_input_size,
+        batch_size,
+        preprocess_mode,
     )
     test_dataloader = build_webdataset_pipeline(
-        test_webdataset, image_input_size, batch_size, preprocess_mode
+        test_webdataset,
+        image_input_size,
+        batch_size,
+        preprocess_mode,
     )
 
     # Other training ingredients
@@ -232,7 +240,7 @@ def train_model(
             "label_smoothing": label_smoothing,
             "model_save_directory": model_save_directory,
         }
-        wandb.init(
+        run = wandb.init(
             entity=wandb_entity,
             project=wandb_project,
             name=wandb_run_name,
@@ -310,6 +318,8 @@ def train_model(
 
     if wandb_entity or wandb_project:
         wandb.log({"test_accuracy": test_metrics["test_accuracy"]})
-        wandb.log_artifact(model_save_path, type="model", name=wandb_run_name)
-        wandb.log_code()
+        wandb.log_artifact(
+            f"{model_save_path}_checkpoint.pt", type="model", name=wandb_run_name
+        )
+        run.log_code()
         wandb.finish()

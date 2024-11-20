@@ -43,8 +43,8 @@ def _normalization(preprocess_mode: str) -> tuple[list[float], list[float]]:
     return mean, std
 
 
-def _random_resize(image: PIL.Image.Image, full_size: int) -> PIL.Image.Image:
-    """Mixed resolution transformation"""
+def _mixed_resolution(image: PIL.Image.Image, full_size: int) -> PIL.Image.Image:
+    """Mixed resolution data augmentation technique"""
 
     values = [0.25, 0.5, None, None]
     random_value = random.choice(values)
@@ -59,17 +59,24 @@ def _random_resize(image: PIL.Image.Image, full_size: int) -> PIL.Image.Image:
 
 
 def _get_transforms(
-    input_size: int, is_training: bool, preprocess_mode: str = "torch"
+    input_size: int,
+    is_training: bool,
+    mixed_resolution_data_aug: bool,
+    preprocess_mode: str = "torch",
 ) -> transforms.Compose:
     """Transformation applied to each image"""
 
     # Add square padding
     final_transforms = [transforms.Lambda(_pad_to_square)]
 
+    # Mixed resolution data augmentation
+    if mixed_resolution_data_aug:
+        f_random_resize = partial(_mixed_resolution, full_size=input_size)
+        final_transforms += [transforms.Lambda(f_random_resize)]
+
+    # Standard training augmentations
     if is_training:
-        f_random_resize = partial(_random_resize, full_size=input_size)
         final_transforms += [
-            transforms.Lambda(f_random_resize),  # mixed resolution
             transforms.RandomResizedCrop(input_size, scale=(0.3, 1)),
             transforms.RandomHorizontalFlip(),
             transforms.RandAugment(num_ops=2, magnitude=9),
@@ -89,6 +96,7 @@ def build_webdataset_pipeline(
     input_size: int,
     batch_size: int,
     preprocess_mode: str,
+    mixed_resolution_data_aug: bool = False,
     is_training: bool = False,
 ) -> torch.utils.data.DataLoader:
     """Main dataset builder and loader function"""
@@ -99,7 +107,9 @@ def build_webdataset_pipeline(
         dataset = dataset.shuffle(10000)
 
     # Get image transforms
-    image_transform = _get_transforms(input_size, is_training, preprocess_mode)
+    image_transform = _get_transforms(
+        input_size, is_training, mixed_resolution_data_aug, preprocess_mode
+    )
 
     # Decode dataset
     dataset_decoded = (

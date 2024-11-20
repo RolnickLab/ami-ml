@@ -188,6 +188,13 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     help="Label smoothing for model regularization. No smoothing if 0.0",
 )
 @click.option(
+    "--mixed_resolution_data_aug",
+    type=bool,
+    default=True,
+    help="A custom mixed resolution data augmentation technique. "
+    "See The AMI Dataset ECCV 2024 paper for more details.",
+)
+@click.option(
     "--model_save_directory",
     type=str,
     required=True,
@@ -231,6 +238,7 @@ def train_model_command(
     weight_decay: float,
     loss_function_type: str,
     label_smoothing: float,
+    mixed_resolution_data_aug: bool,
     model_save_directory: str,
     wandb_entity: Optional[str],
     wandb_project: Optional[str],
@@ -258,6 +266,7 @@ def train_model_command(
         weight_decay=weight_decay,
         loss_function_type=loss_function_type,
         label_smoothing=label_smoothing,
+        mixed_resolution_data_aug=mixed_resolution_data_aug,
         model_save_directory=model_save_directory,
         wandb_entity=wandb_entity,
         wandb_project=wandb_project,
