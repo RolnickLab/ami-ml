@@ -158,6 +158,48 @@ def with_random_seed(func):
     return wrapper
 
 
+def with_wandb_entity(func):
+    @click.option(
+        "--wandb-entity",
+        type=str,
+        default=None,
+        help="Weights & Biases entity",
+    )
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def with_wandb_project(func):
+    @click.option(
+        "--wandb-project",
+        type=str,
+        default=None,
+        help="Weights & Biases project",
+    )
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def with_wandb_run(func):
+    @click.option(
+        "--wandb-run",
+        type=str,
+        default=None,
+        help="Weights & Biases run name",
+    )
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 # # # # # # #
 # Commands  #
 # # # # # # #
@@ -394,6 +436,9 @@ def delete_images_command(error_images_csv: str, base_path: str):
         " float32 uses image on scale 0-1"
     ),
 )
+@with_wandb_entity
+@with_wandb_project
+@with_wandb_run
 def predict_lifestage_command(
     verified_data_csv: str,
     dataset_path: str,
@@ -407,6 +452,9 @@ def predict_lifestage_command(
     log_frequence: int,
     category_map_json: str,
     results_csv: str,
+    wandb_entity: str,
+    wandb_project: str,
+    wandb_run: str,
 ):
     from src.dataset_tools.predict_lifestage import predict_lifestage
 
@@ -423,6 +471,9 @@ def predict_lifestage_command(
         log_frequence=log_frequence,
         category_map_json=category_map_json,
         results_csv=results_csv,
+        wandb_entity=wandb_entity,
+        wandb_project=wandb_project,
+        wandb_run=wandb_run,
     )
 
 
@@ -651,7 +702,7 @@ def split_dataset_command(
     "--max-shard-size",
     type=int,
     default=100 * 1024 * 1024,
-    help="Maximun size of each shard",
+    help="Maximun size of each shard in bytes",
 )
 @click.option(
     "--megadetector-results-json",
@@ -682,6 +733,9 @@ def split_dataset_command(
     default=True,
     help="Shufle images before to write to tar files",
 )
+@with_wandb_entity
+@with_wandb_project
+@with_wandb_run
 def create_webdataset_command(
     annotations_csv: str,
     dataset_path: str,
@@ -696,6 +750,9 @@ def create_webdataset_command(
     columns_to_json: str,
     megadetector_results_json: str,
     random_seed: int,
+    wandb_entity: str,
+    wandb_project: str,
+    wandb_run: str,
 ):
     from src.dataset_tools.create_webdataset import create_webdataset
 
@@ -713,6 +770,9 @@ def create_webdataset_command(
         columns_to_json=columns_to_json,
         megadetector_results_json=megadetector_results_json,
         random_seed=random_seed,
+        wandb_entity=wandb_entity,
+        wandb_project=wandb_project,
+        wandb_run=wandb_run,
     )
 
 

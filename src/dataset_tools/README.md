@@ -22,7 +22,7 @@ not local to your machine:
 | `ami-dataset fetch-images`      | Download images from URLs in observation metadata from a Darwin Core Archive (DwC-A) file | Yes       | Yes            |
 | `ami-dataset verify-images`     | Check images for errors                                                                   | No        | Yes            |
 | `ami-dataset delete-images`     | Delete a list of images                                                                   | No        | No             |
-| `ami-dataset predict-lifestage` | Predict life stage for moths                                                              | No        | Yes            |
+| `ami-dataset predict-lifestage` | Predict life stage for moths                                                              | No        | No            |
 | `ami-dataset clean-dataset`     | Filter out images to ensure the quality of the training data                              | No        | No             |
 | `ami-dataset split-dataset`     | Split dataset into training/validation/test sets                                          | No        | No             |
 | `ami-dataset create-webdataset` | Assemble final training set in webdataset format                                          | No        | No             |
