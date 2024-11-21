@@ -31,13 +31,12 @@ echo "Time taken to copy the data: $((SECONDS/60)) minutes"
 ami-classification train-model \
 --num_classes 2497 \
 --train_webdataset "$SLURM_TMPDIR/ne-america_train450-{000000..000010}.tar" \
---val_webdataset "$SLURM_TMPDIR/ne-america_val450-{000000..000005}.tar" \
---test_webdataset "$SLURM_TMPDIR/ne-america_test450-{000000..000004}.tar" \
+--val_webdataset "$SLURM_TMPDIR/ne-america_val450-{000000..000015}.tar" \
+--test_webdataset "$SLURM_TMPDIR/ne-america_test450-{000000..000005}.tar" \
 --model_save_directory $TEST_PATH \
---total_epochs 50 \
+--total_epochs 20 \
 --wandb_entity moth-ai \
---wandb_project ... \
---wandb_run_name
+--wandb_project test 
 
 # Print time taken to execute the script
 echo "Time taken to train the model: $((SECONDS/60)) minutes"
