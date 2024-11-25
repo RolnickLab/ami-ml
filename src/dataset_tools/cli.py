@@ -689,7 +689,8 @@ def split_dataset_command(
     type=str,
     help=(
         "JSON containing the categories id map. If not provided, the"
-        " category map will be infered from annotations csv."
+        " category map will be infered from annotations csv. "
+        "MUST PROVIDE IT for validation and test sets from the training set."
     ),
 )
 @click.option(
@@ -723,7 +724,7 @@ def split_dataset_command(
 @click.option(
     "--save-category-map-json",
     type=str,
-    help=("Save the category map inferred from the annotations file."),
+    help=("Path to save the category map json, if inferred from the annotations csv."),
 )
 @with_random_seed
 @click.option(
