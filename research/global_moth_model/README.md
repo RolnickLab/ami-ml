@@ -1,9 +1,3 @@
----
-title: Mila_Global_Moth_Classifier
-app_file: gradio_demo.py
-sdk: gradio
-sdk_version: 4.42.0
----
 # Global Moth Model
 Research related to the development of a global moth species classification model for automated moth monitoring.
 
@@ -26,3 +20,4 @@ The next steps to download and curate data are followed from [here](https://gith
 6. **Dataset splits:** Create dataset splits for model training (`job_split_dataset.sh`).
 
 ### Model training
+A non-public code was used to train this model but a refurbished version is now available [here](https://github.com/RolnickLab/ami-ml/tree/main/src/classification).
