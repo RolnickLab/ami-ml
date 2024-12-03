@@ -22,7 +22,7 @@ class WeightedOrderAndBinaryCrossEntropyLoss(nn.Module):
     def _modify_multiclass_output_to_binary(
         self, prediction: torch.Tensor
     ) -> torch.Tensor:
-        """Modify a multi-class output to a binary one"""
+        """Modify a multi-class output to a binary output"""
 
         # Apply softmax to get probabilities from logits
         softmax_probs = nn.functional.softmax(prediction, dim=1)
@@ -37,17 +37,13 @@ class WeightedOrderAndBinaryCrossEntropyLoss(nn.Module):
             dim=1,
         )
 
-        # **** TODO: Requires work ****** #
-        # Recover logits from probabilities
-        log_probs = torch.log(binary_probs)  # Apply log to the probabilities
+        # Recover logits from probabilities for cross-entropy loss
+        # NOTE: The log of softmax does not recover logits exactly. The logits will
+        # again be converted to softmax in cross-entropy loss, so the lack of
+        # normalization constant doesn't make a difference here.
+        binary_logits = torch.log(binary_probs)
 
-        # Normalize the logits (handling stability)
-        # Subtract the max logit for numerical stability
-        max_logit = torch.max(log_probs, dim=1, keepdim=True)[0]
-        logits_batch = log_probs - max_logit
-        # ******************************* #
-
-        return logits_batch
+        return binary_logits
 
     def forward(self, prediction: torch.Tensor, target: torch.Tensor):
         """Override the forward function to compute the weighted cross entropy loss.
@@ -76,8 +72,8 @@ class WeightedOrderAndBinaryCrossEntropyLoss(nn.Module):
 
 if __name__ == "__main__":
     # Create sample input tensors and target tensors
-    inputs = torch.randn(5, 3)  # Batch size of 3, 5 classes
-    targets = torch.tensor([1, 0, 1, 2, 2])  # Target labels for first input
+    inputs = torch.randn(3, 3)  # Batch size of 3, 5 classes
+    targets = torch.tensor([1, 0, 1])  # Target labels for first input
 
     # Initialize the custom loss function with weights
     criterion = WeightedOrderAndBinaryCrossEntropyLoss()
