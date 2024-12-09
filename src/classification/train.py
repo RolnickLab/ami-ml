@@ -158,6 +158,7 @@ def train_model(
     learning_rate_scheduler: Optional[str],
     weight_decay: float,
     loss_function_type: str,
+    weight_on_order_loss: float,
     label_smoothing: float,
     mixed_resolution_data_aug: bool,
     model_save_directory: str,
