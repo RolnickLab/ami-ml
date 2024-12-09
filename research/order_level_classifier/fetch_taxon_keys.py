@@ -11,26 +11,19 @@ from pygbif import species as species_api
 
 dotenv.load_dotenv()
 
-ORDER_CLASSIFIER_ACCEPTED_KEYS = os.environ.get("ORDER_CLASSIFIER_ACCEPTED_KEYS")
+ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2 = os.environ.get(
+    "ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2"
+)
 
 taxon_names = [
-    "Diptera",
-    "Hemiptera",
-    "Odonata",
-    "Coleoptera",
-    "Araneae",
-    "Orthoptera",
-    "Ichneumonoidea",
-    "Formicidae",
-    "Apoidea",
-    "Trichoptera",
-    "Neuroptera",
-    "Opiliones",
-    "Ephemeroptera",
-    "Plecoptera",
-    "Blattodea",
-    "Dermaptera",
-    "Mantodea",
+    "Braconidae",
+    "Andrenidae",
+    "Apidae",
+    "Colletidae",
+    "Halictidae",
+    "Megachilidae",
+    "Melittidae",
+    "Stenotritidae",
 ]
 taxon_keys = []
 # Data for Lepidoptera exists, hence excluded in this download
@@ -40,10 +33,15 @@ for taxon in taxon_names:
     taxon_information = species_api.name_backbone(
         name=taxon, strict=True, clazz="Insecta"
     )
-    taxon_key = ...
+    try:
+        taxon_key = taxon_information["usageKey"]
+    except TypeError:
+        taxon_key = None
+
+    print(f"Taxon key for {taxon} is {taxon_key}")
     taxon_keys.append(taxon_key)
 
 # Save the list on disk
-filename = ORDER_CLASSIFIER_ACCEPTED_KEYS
+filename = ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2
 with open(filename, "w") as json_file:
-    json.dump(filename, taxon_keys, indent=2)
+    json.dump(taxon_keys, json_file, indent=2)
