@@ -15,16 +15,8 @@ ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2 = os.environ.get(
     "ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2"
 )
 
-taxon_names = [
-    "Braconidae",
-    "Andrenidae",
-    "Apidae",
-    "Colletidae",
-    "Halictidae",
-    "Megachilidae",
-    "Melittidae",
-    "Stenotritidae",
-]
+taxon_names = ["Mantodea"]
+
 taxon_keys = []
 # Data for Lepidoptera exists, hence excluded in this download
 
@@ -34,7 +26,7 @@ for taxon in taxon_names:
         name=taxon, strict=True, clazz="Insecta"
     )
     try:
-        taxon_key = taxon_information["usageKey"]
+        taxon_key = str(taxon_information["usageKey"])
     except TypeError:
         taxon_key = None
 
