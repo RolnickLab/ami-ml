@@ -1,0 +1,34 @@
+{
+	"note": "This config file is for training the non-moth classifier",
+	
+	"model":{
+		"num_classes":2,
+		"type": "resnet50"
+	},
+	
+	"dataset":{
+		"root_dir": "/home/mila/a/aditya.jain/scratch/GBIF_Data/",
+		"train_set": "/home/mila/a/aditya.jain/mothAI/classification_nonmoths/data/01-train_split.csv",
+		"val_set": "/home/mila/a/aditya.jain/mothAI/classification_nonmoths/data/01-val_split.csv",
+		"test_set": "/home/mila/a/aditya.jain/mothAI/classification_nonmoths/data/01-test_split.csv"
+	},
+	
+	"training":{
+		"batch_size": 64,
+		"image_resize": 224,
+		"epochs": 1,
+		"early_stopping": 4,
+		"start_val_loss": 100000000,
+		"loss":{
+				"name": "crossentropy"
+				},
+		"optimizer":{
+				"name": "sgd",
+				"learning_rate": 0.001,
+				"momentum": 0.9
+				},
+		"model_save_path": "/home/mila/a/aditya.jain/logs/",
+		"model_name": "nonmothmodel",
+		"version": "v01"
+	}
+}
