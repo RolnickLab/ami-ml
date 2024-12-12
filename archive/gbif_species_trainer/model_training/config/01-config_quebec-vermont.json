@@ -1,0 +1,40 @@
+{
+	"note": "Quebec and Vermont",
+	"model": {
+		"type": "resnet50",
+		"preprocess_mode": "torch"
+	},
+	"dataset": {
+		"label_info": "/home/mila/l/leonard.pasi/scratch/data/classification/random/random_numeric_labels.json",
+		"taxon_hierarchy": "/home/mila/l/leonard.pasi/scratch/data/classification/random/random_taxon_hierarchy.json",
+		"species_checklist": "/home/mila/l/leonard.pasi/mothAI/species_lists/Quebec-Vermont_Moth-List_26July2023.csv"
+	},
+	"training": {
+		"batch_size": 128,
+		"image_resize": 300,
+		"epochs": 120,
+		"early_stopping": 10,
+		"start_val_loss": 100000000,
+		"loss": {
+			"name": "crossentropy"
+		},
+		"optimizer": {
+			"name": "sgd",
+			"learning_rate": 0.001,
+			"momentum": 0.9
+		},
+		"lr_scheduler": {
+			"name": "cosine_annealing",
+			"lr_min": 0.0005
+		},
+		"wandb": {
+			"entity": "moth-ai",
+			"project": "Active Learning"
+		},
+		"model_save_path": "/home/mila/l/leonard.pasi/scratch/models/classification/1st_iter/",
+		"model_name": "random",
+		"version": "v1",
+		"author": "Leonard",
+		"save_ckpt_on_epochs": null
+	}
+}

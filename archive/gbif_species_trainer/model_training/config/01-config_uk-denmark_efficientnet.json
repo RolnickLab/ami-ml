@@ -1,0 +1,43 @@
+{
+    "note": "UK and Denmark; EfficientNetV2B3",
+    
+    "model":{
+        "type": "efficientnetv2-b3",  
+        "preprocess_mode": "tf"
+    },
+    
+    "dataset":{
+        "label_info": "/home/mila/a/aditya.jain/mothAI/gbif_species_trainer/model_training/data/uk-denmark_numeric_labels_25Apr2023.json",
+        "taxon_hierarchy": "/home/mila/a/aditya.jain/mothAI/gbif_species_trainer/model_training/data/uk-denmark_taxon_hierarchy_25Apr2023.json",
+        "species_checklist": "/home/mila/a/aditya.jain/mothAI/species_lists/UK-Denmark_Moth-List_25Apr2023.csv"
+    },
+    
+    "training":{
+        "batch_size": 64,
+        "image_resize": 300,
+        "epochs": 40,
+        "early_stopping": 4,
+        "start_val_loss": 100000000,
+        "loss":{
+                "name": "crossentropy"
+                },
+        "optimizer":{
+                "name": "sgd",
+                "learning_rate": 0.001,
+                "momentum": 0.9
+                },
+        "lr_scheduler":{
+            "name": "cosine_annealing",
+            "lr_min": 0.0005 
+                },
+        "wandb":{
+                "entity": "moth-ai",
+                "project": "UK-Denmark-Moth-Classifier"
+                },
+        "model_save_path": "/home/mila/a/aditya.jain/logs/",
+        "model_name": "uk-denmark-moth-model",
+        "version": "v1",
+        "author": "Aditya",
+        "save_ckpt_on_epochs": null
+    }
+}

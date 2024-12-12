@@ -1,0 +1,21 @@
+This file contains description of the trained models:
+
+1. quebec-vermont-moth-model_v03_resnet50_2022-11-05-14-03.pt
+- resnet50 model
+- trained on original resolution images resized to 300x300
+
+2. quebec-vermont-moth-model_v04_resnet50_2022-12-21-05-31.pt
+- resnet50 model
+- trained on 50% original resolution (300x300) and 50% 2x smaller (150x150) training images
+
+3. quebec-vermont-moth-model_v05_resnet50_2022-12-21-06-38.pt.pt
+- resnet50 model
+- trained on 50% original resolution (300x300) and 50% 4x smaller (75x75) training images
+
+4. quebec-vermont-moth-model_v06_resnet50_2022-12-21-05-42.pt
+- resnet50 model
+- trained on 100% original resolution (300x300) training images
+
+5. quebec-vermont-moth-model_v07_resnet50_2022-12-22-07-54.pt
+- resnet50 model
+- trained on 50% original resolution (300x300), 25% 2x smaller (150x150) and 25% 4x smaller (75x75) training images
