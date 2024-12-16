@@ -23,9 +23,9 @@ SECONDS=0
 ami-dataset fetch-images \
 --dataset-path $ORDER_CLASSIFIER_RAW_DATA \
 --dwca-file $ORDER_CLASSIFIER_DWCA \
---num-images-per-category 2100 \
+--num-images-per-category 6000 \
 --num-workers 16 \
---subset-list $ORDER_CLASSIFIER_ACCEPTED_KEYS_PART1 \
+--subset-list $ORDER_CLASSIFIER_KEYS_HYMENOPTERA_FAMILIES \
 --subset-key "familyKey"
 
 

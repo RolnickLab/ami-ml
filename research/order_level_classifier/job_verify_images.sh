@@ -24,10 +24,11 @@ SECONDS=0
 # 4. Launch your script
 ami-dataset verify-images \
 --dataset-path $ORDER_CLASSIFIER_RAW_DATA \
---dwca-file $ORDER_CLASSIFIER_DWCA \
+--dwca-file $ORDER_CLASSIFIER_LEPS_DWCA \
 --num-workers 16 \
 --results-csv $VERIFICATION_RESULTS_ORDER \
---subset-list $ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2 \
+--resume-from-ckpt $VERIFICATION_RESULTS_ORDER \
+--subset-list $ORDER_CLASSIFIER_ACCEPTED_KEYS_LEPS \
 --subset-key "orderKey"
 
 # Print time taken to execute the script
