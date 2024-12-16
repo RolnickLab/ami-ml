@@ -4,6 +4,7 @@
 """ Split dataset into train/val/test partitions
 """
 import math
+from pathlib import Path
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -156,4 +157,4 @@ def split_dataset(
 
     data = {"train": train_set, "val": val_set, "test": test_set}
     for set_name in data:
-        data[set_name].to_csv(split_prefix + set_name + ".csv", index=False)
+        data[set_name].to_csv(Path(split_prefix) / f"{set_name}.csv", index=False)
