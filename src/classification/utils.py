@@ -19,6 +19,10 @@ from src.classification.constants import (
     COSINE_LR_SCHEDULER,
     CROSS_ENTROPY_LOSS,
     VIT_B16_128,
+    WEIGHTED_ORDER_AND_BINARY_LOSS,
+)
+from src.classification.custom_loss_functions import (
+    WeightedOrderAndBinaryCrossEntropyLoss,
 )
 
 
@@ -90,6 +94,8 @@ def get_loss_function(
 
     if loss_function_name == CROSS_ENTROPY_LOSS:
         return torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+    elif loss_function_name == WEIGHTED_ORDER_AND_BINARY_LOSS:
+        return WeightedOrderAndBinaryCrossEntropyLoss()
     else:
         raise RuntimeError(f"{loss_function_name} loss is not implemented.")
 
