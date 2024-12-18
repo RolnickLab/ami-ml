@@ -19,8 +19,12 @@ def get_image_path(image_data):
 
 def load_dwca_data(dwca_file: str):
     with DwCAReader(dwca_file) as dwca:
-        media_df = dwca.pd_read("multimedia.txt", parse_dates=True, on_bad_lines="skip")
-        occ_df = dwca.pd_read("occurrence.txt", parse_dates=True, on_bad_lines="skip")
+        media_df = dwca.pd_read(
+            "multimedia.txt", parse_dates=True, on_bad_lines="skip", low_memory=False
+        )
+        occ_df = dwca.pd_read(
+            "occurrence.txt", parse_dates=True, on_bad_lines="skip", low_memory=False
+        )
 
     media_df = media_df[["coreid", "identifier"]].copy()
     occ_df = occ_df[
@@ -28,6 +32,8 @@ def load_dwca_data(dwca_file: str):
             "id",
             "datasetKey",
             "speciesKey",
+            "familyKey",
+            "orderKey",
             "acceptedTaxonKey",
             "lifeStage",
             "decimalLatitude",

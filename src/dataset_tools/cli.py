@@ -592,7 +592,8 @@ def clean_dataset_command(
     "--max-instances",
     type=int,
     default=1000,
-    help="Maximum number of instances on training set (and on val/test proportionally)",
+    help="Maximum number of instances on training set (and on val/test proportionally)"
+    ". Enter a negative number for no capping.",
 )
 @click.option(
     "--min-instances",

@@ -182,6 +182,13 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     help="Loss function",
 )
 @click.option(
+    "--weight_on_order_loss",
+    type=float,
+    default=0.5,
+    help="Weight on order-level classification for the custom loss function. The weight"
+    " on binary is 1-order.",
+)
+@click.option(
     "--label_smoothing",
     type=float,
     default=0.1,
@@ -237,6 +244,7 @@ def train_model_command(
     learning_rate_scheduler: Optional[str],
     weight_decay: float,
     loss_function_type: str,
+    weight_on_order_loss: float,
     label_smoothing: float,
     mixed_resolution_data_aug: bool,
     model_save_directory: str,
@@ -265,6 +273,7 @@ def train_model_command(
         learning_rate_scheduler=learning_rate_scheduler,
         weight_decay=weight_decay,
         loss_function_type=loss_function_type,
+        weight_on_order_loss=weight_on_order_loss,
         label_smoothing=label_smoothing,
         mixed_resolution_data_aug=mixed_resolution_data_aug,
         model_save_directory=model_save_directory,
