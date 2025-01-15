@@ -1,0 +1,332 @@
+PyTorch_ID,Name_ID,Accuracy
+65,sea snake,78.0
+970,alp,64.0
+334,porcupine,84.0
+286,cougar,88.0
+595,harvester,86.0
+147,grey whale,92.0
+108,sea anemone,62.0
+134,crane,77.0
+270,white wolf,86.0
+150,sea lion,78.0
+129,spoonbill,96.0
+717,pickup,76.0
+29,axolotl,88.0
+107,jellyfish,88.0
+390,eel,64.0
+101,tusker,58.0
+870,tricycle,86.0
+149,dugong,86.0
+476,carousel,96.0
+80,black grouse,92.0
+424,barbershop,64.0
+461,breastplate,42.0
+369,siamang,68.0
+50,American alligator,86.0
+383,Madagascar cat,74.0
+366,gorilla,84.0
+349,bighorn,72.0
+473,can opener,72.0
+906,Windsor tie,38.0
+646,maze,86.0
+645,maypole,96.0
+718,pier,58.0
+483,castle,74.0
+311,grasshopper,58.0
+457,bow tie,76.0
+276,hyena,90.0
+751,racer,68.0
+343,warthog,94.0
+558,flute,42.0
+771,safe,80.0
+977,sandbar,66.0
+975,lakeside,52.0
+115,sea slug,84.0
+789,shoji,82.0
+781,scoreboard,88.0
+666,mortar,82.0
+583,guillotine,94.0
+659,mixing bowl,82.0
+361,skunk,96.0
+627,limousine,80.0
+289,snow leopard,92.0
+703,park bench,76.0
+449,boathouse,82.0
+704,parking meter,90.0
+827,stove,46.0
+146,albatross,92.0
+922,menu,78.0
+475,car mirror,94.0
+978,seashore,44.0
+463,bucket,56.0
+787,shield,60.0
+973,coral reef,78.0
+532,dining table,80.0
+678,neck brace,62.0
+438,beaker,58.0
+983,scuba diver,82.0
+750,quilt,62.0
+865,toyshop,64.0
+821,steel arch bridge,90.0
+421,bannister,82.0
+899,water jug,28.0
+826,stopwatch,70.0
+869,trench coat,54.0
+730,plow,74.0
+580,greenhouse,84.0
+469,caldron,44.0
+292,tiger,94.0
+346,water buffalo,80.0
+572,goblet,64.0
+979,valley,82.0
+654,minibus,76.0
+525,dam,76.0
+760,refrigerator,80.0
+380,titi,62.0
+818,spotlight,28.0
+472,canoe,94.0
+293,cheetah,94.0
+904,window screen,70.0
+130,flamingo,94.0
+460,breakwater,72.0
+696,paintbrush,76.0
+300,tiger beetle,92.0
+895,warplane,70.0
+786,sewing machine,74.0
+834,suit,46.0
+879,umbrella,62.0
+649,megalith,80.0
+598,home theater,66.0
+974,geyser,94.0
+484,catamaran,70.0
+510,container ship,86.0
+177,Scottish deerhound,90.0
+310,ant,72.0
+14,indigo bunting,90.0
+765,rocking chair,70.0
+619,lampshade,52.0
+722,ping-pong ball,86.0
+912,worm fence,76.0
+775,sarong,64.0
+350,ibex,90.0
+557,flagpole,80.0
+861,toilet seat,70.0
+767,rubber eraser,56.0
+153,Maltese dog,72.0
+739,potter's wheel,88.0
+712,Petri dish,72.0
+758,reel,72.0
+894,wardrobe,76.0
+372,baboon,90.0
+713,photocopier,96.0
+529,diaper,68.0
+416,balance beam,86.0
+335,fox squirrel,82.0
+801,snorkel,86.0
+298,mongoose,74.0
+651,microwave,66.0
+377,marmoset,64.0
+794,shower curtain,68.0
+269,timber wolf,80.0
+680,nipple,84.0
+148,killer whale,100.0
+691,oxygen mask,58.0
+796,ski mask,72.0
+812,space shuttle,88.0
+860,tobacco shop,50.0
+466,bullet train,98.0
+499,cleaver,40.0
+795,ski,76.0
+480,cash machine,80.0
+905,window shade,60.0
+762,restaurant,50.0
+295,American black bear,86.0
+385,Indian elephant,58.0
+288,leopard,78.0
+450,bobsled,92.0
+611,jigsaw puzzle,94.0
+643,mask,42.0
+290,jaguar,78.0
+716,picket fence,92.0
+790,shopping basket,60.0
+404,airliner,92.0
+455,bottlecap,74.0
+331,hare,82.0
+605,iPod,86.0
+104,wallaby,84.0
+261,keeshond,88.0
+609,jeep,82.0
+579,grand piano,76.0
+126,isopod,70.0
+512,corkscrew,90.0
+668,mosque,88.0
+427,barrel,54.0
+971,bubble,82.0
+397,puffer,86.0
+840,swab,80.0
+285,Egyptian cat,54.0
+882,vacuum,78.0
+829,streetcar,90.0
+624,library,54.0
+268,Mexican hairless,86.0
+418,ballpoint,60.0
+728,plastic bag,48.0
+362,badger,88.0
+924,guacamole,70.0
+859,toaster,64.0
+556,fire screen,58.0
+898,water bottle,50.0
+501,cloak,38.0
+278,kit fox,62.0
+634,lumbermill,74.0
+451,bolo tie,86.0
+753,radiator,66.0
+411,apron,70.0
+315,mantis,74.0
+526,desk,44.0
+839,suspension bridge,68.0
+299,meerkat,84.0
+34,leatherback turtle,62.0
+673,mouse,48.0
+205,flat-coated retriever,80.0
+916,web site,98.0
+822,steel drum,86.0
+679,necklace,88.0
+903,wig,78.0
+800,slot,94.0
+669,mosquito net,92.0
+294,brown bear,94.0
+876,tub,32.0
+454,bookshop,62.0
+587,hammer,52.0
+883,vase,50.0
+807,solar dish,78.0
+287,lynx,72.0
+919,street sign,72.0
+452,bonnet,72.0
+576,gondola,96.0
+5,electric ray,74.0
+667,mortarboard,70.0
+96,toucan,92.0
+444,bicycle-built-for-two,74.0
+724,pirate,82.0
+613,joystick,80.0
+105,koala,90.0
+917,comic book,62.0
+723,pinwheel,84.0
+408,amphibian,70.0
+633,loupe,48.0
+884,vault,78.0
+71,scorpion,92.0
+409,analog clock,68.0
+433,bathing cap,74.0
+688,oscilloscope,94.0
+562,fountain,90.0
+44,alligator lizard,66.0
+384,indri,88.0
+9,ostrich,100.0
+477,carpenter's kit,64.0
+145,king penguin,92.0
+824,stole,54.0
+344,hippopotamus,88.0
+132,American egret,92.0
+999,toilet tissue,40.0
+843,swing,76.0
+489,chainlink fence,72.0
+375,colobus,88.0
+442,bell cote,64.0
+84,peacock,92.0
+327,starfish,82.0
+653,milk can,66.0
+393,anemone fish,88.0
+386,African elephant,68.0
+817,sports car,64.0
+745,projector,62.0
+374,langur,64.0
+552,feather boa,86.0
+345,ox,46.0
+399,abaya,78.0
+791,shopping cart,82.0
+648,medicine chest,64.0
+909,wok,46.0
+279,Arctic fox,96.0
+523,crutch,58.0
+749,quill,74.0
+291,lion,94.0
+47,African chameleon,78.0
+819,stage,72.0
+797,sleeping bag,68.0
+360,otter,86.0
+246,Great Dane,46.0
+519,crate,54.0
+697,pajama,66.0
+500,cliff dwelling,94.0
+364,three-toed sloth,98.0
+972,cliff,68.0
+296,ice bear,94.0
+365,orangutan,88.0
+307,weevil,86.0
+690,oxcart,80.0
+494,chime,68.0
+405,airship,88.0
+541,drum,48.0
+559,folding chair,72.0
+169,borzoi,94.0
+671,mountain bike,80.0
+706,patio,58.0
+4,hammerhead,90.0
+297,sloth bear,74.0
+877,turnstile,88.0
+711,perfume,72.0
+170,Irish wolfhound,56.0
+785,seat belt,86.0
+831,studio couch,78.0
+602,horizontal bar,74.0
+700,paper towel,68.0
+729,plate rack,54.0
+312,cricket,68.0
+515,cowboy hat,72.0
+886,vending machine,96.0
+539,doormat,60.0
+908,wing,70.0
+738,pot,88.0
+106,wombat,80.0
+342,wild boar,80.0
+51,triceratops,92.0
+692,packet,50.0
+340,zebra,94.0
+135,limpkin,98.0
+845,syringe,66.0
+708,pedestal,62.0
+537,dogsled,96.0
+354,Arabian camel,94.0
+682,obelisk,86.0
+799,sliding door,40.0
+570,gasmask,84.0
+574,golf ball,82.0
+808,sombrero,60.0
+805,soccer ball,92.0
+918,crossword puzzle,86.0
+616,knot,80.0
+736,pool table,86.0
+793,shower cap,76.0
+347,bison,94.0
+363,armadillo,88.0
+976,promontory,70.0
+743,prison,70.0
+470,candle,66.0
+880,unicycle,88.0
+617,lab coat,80.0
+36,terrapin,52.0
+564,four-poster,80.0
+94,hummingbird,98.0
+742,printer,54.0
+110,flatworm,86.0
+353,gazelle,64.0
+337,beaver,82.0
+453,bookcase,66.0
+626,lighter,70.0
+804,soap dispenser,68.0
+735,poncho,68.0
+892,wall clock,62.0
+710,pencil sharpener,58.0

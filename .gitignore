@@ -82,7 +82,8 @@ docs/_build/
 target/
 
 # Jupyter Notebook
-.ipynb_checkpoints
+.ipynb_*
+.azureml*
 
 # IPython
 profile_default/
@@ -166,7 +167,7 @@ cython_debug/
 #.idea/
 
 # Training related files
-**/*.out
+*.out
 
 # Weights and Biases files
 wandb/

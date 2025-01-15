@@ -1,0 +1,45 @@
+{
+	"note": "This config file is for training on a miniature subset of macromoth data",
+	
+	"model":{
+		"species_num_classes":768,
+		"genus_num_classes": 323, 
+		"family_num_classes": 15,
+		"type": "resnet50"
+	},
+	
+	"dataset":{
+		"root_dir": "/miniscratch/adityajain/",
+		"train_set": "/home/mila/a/aditya.jain/mothAI/deeplearning/data/02-train_split.csv",
+		"val_set": "/home/mila/a/aditya.jain/mothAI/deeplearning/data/02-val_split.csv",
+		"test_set": "/home/mila/a/aditya.jain/mothAI/deeplearning/data/02-test_split.csv",
+		"label_info": "/home/mila/a/aditya.jain/mothAI/deeplearning/data/numeric_labels.json",
+		"taxon_hierarchy": "/home/mila/a/aditya.jain/mothAI/deeplearning/data/taxon_hierarchy.json"
+	},
+	
+	"training":{
+		"batch_size": 128,
+		"image_resize": 224,
+		"epochs": 5,
+		"early_stopping": 1,
+		"start_val_loss": 100000000,
+		"loss":{
+				"name": "crossentropy"
+				},
+		"optimizer":{
+				"name": "sgd",
+				"learning_rate": 0.001,
+				"momentum": 0.9
+				},
+		"model_save_path": "/home/mila/a/aditya.jain/logs/",
+		"model_name": "mothmodel",
+		"version": "v01"
+	},
+	
+	"exp_management":{
+		"api_key": "epeaAhyRcHSkn92H4kusmbX8k",
+		"project_name": "mothai",
+		"workspace": "adityajain07",
+		"tag": "slurm_test_job"
+	}
+}

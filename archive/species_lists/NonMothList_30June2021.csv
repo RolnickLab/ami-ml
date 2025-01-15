@@ -1,0 +1,10 @@
+Taxon Key,Confidence,Search Name,GBIF Taxa Name,Rank,Status,Match Type,Count Download
+1003,99,Trichoptera,Trichoptera,ORDER,ACCEPTED,EXACT,30000
+4342,94,Formicidae,Formicidae,FAMILY,ACCEPTED,EXACT,30000
+3512,95,Ichneumonidae,Ichneumonidae,FAMILY,ACCEPTED,EXACT,30000
+811,93,Diptera,Diptera,ORDER,ACCEPTED,EXACT,30000
+1458,95,Orthoptera,Orthoptera,ORDER,ACCEPTED,EXACT,30000
+809,95,Hemiptera,Hemiptera,ORDER,ACCEPTED,EXACT,30000
+5638,95,Pholcidae,Pholcidae,FAMILY,ACCEPTED,EXACT,30000
+1496,95,Araneae,Araneae,ORDER,ACCEPTED,EXACT,15000
+907,95,Opiliones,Opiliones,ORDER,ACCEPTED,EXACT,15000
