@@ -212,7 +212,9 @@ def train_model(
             warmup_epochs,
         )
     loss_function = get_loss_function(
-        loss_function_type, label_smoothing=label_smoothing
+        loss_function_type,
+        label_smoothing=label_smoothing,
+        weight_on_order=weight_on_order_loss,
     )
     current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
     model_save_path = Path(model_save_directory) / f"{model_type}_{current_date}"
