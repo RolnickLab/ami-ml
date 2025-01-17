@@ -214,7 +214,7 @@ def train_model(
     loss_function = get_loss_function(
         loss_function_type, label_smoothing=label_smoothing
     )
-    current_date = datetime.now().date().strftime("%Y%m%d")
+    current_date = datetime.now().strftime("%Y%m%d%H%M%S")
     model_save_path = Path(model_save_directory) / f"{model_type}_{current_date}"
 
     # Start W&B logging
