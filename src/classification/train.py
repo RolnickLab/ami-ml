@@ -200,7 +200,6 @@ def train_model(
 
     # Other training ingredients
     optimizer = get_optimizer(optimizer_type, model, learning_rate, weight_decay)
-    learning_rate_scheduler = None
     if learning_rate_scheduler:
         train_data_length = get_webdataset_length(train_webdataset)
         steps_per_epoch = int((train_data_length - 1) / batch_size) + 1
