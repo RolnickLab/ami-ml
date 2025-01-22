@@ -32,6 +32,7 @@ typer = "^0.12.3"
 python-dotenv = "^1.0.1"
 wandb = "^0.17.5"
 pygbif = "^0.6.5"
+opencv-python = "^4.11.0.86"
 
 [tool.poetry.group.research]
 optional = true
