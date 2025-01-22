@@ -23,4 +23,4 @@ source .env
 set +o allexport
 
 # 4. Run python file
-python order_level_classifier/model_evaluation/binary_model_evaluation.py
+python order_level_classifier/model_evaluation/binary_model_evaluation_ami_traps.py
