@@ -105,7 +105,7 @@ def _evaluate_model(
     model: torch.nn.Module,
     device: str,
     loss_function: torch.nn.Module,
-    val_dataloader: torch.utils.data.DataLoader,
+    dataloader: torch.utils.data.DataLoader,
     set_type: str,
 ) -> dict:
     """Evaluate model either for validation or test set"""
@@ -114,7 +114,7 @@ def _evaluate_model(
     running_accuracy = AverageMeter()
 
     model.eval()
-    for batch_data in val_dataloader:
+    for batch_data in dataloader:
         images, labels = batch_data
         images, labels = images.to(device, non_blocking=True), labels.to(
             device, non_blocking=True
