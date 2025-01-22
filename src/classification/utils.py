@@ -88,14 +88,14 @@ def get_learning_rate_scheduler(
 
 
 def get_loss_function(
-    loss_function_name: str, label_smoothing: float = 0.0
+    loss_function_name: str, label_smoothing: float = 0.0, weight_on_order: float = 0.5
 ) -> torch.nn.Module:
     """Loss function definitions"""
 
     if loss_function_name == CROSS_ENTROPY_LOSS:
         return torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing)
     elif loss_function_name == WEIGHTED_ORDER_AND_BINARY_LOSS:
-        return WeightedOrderAndBinaryCrossEntropyLoss()
+        return WeightedOrderAndBinaryCrossEntropyLoss(weight_on_order=weight_on_order)
     else:
         raise RuntimeError(f"{loss_function_name} loss is not implemented.")
 
