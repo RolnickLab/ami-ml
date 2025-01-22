@@ -25,7 +25,7 @@ set +o allexport
 SECONDS=0
 
 # 4. Download data
-aws s3 sync $BINARY_DATA_ON_OBJECT_STORE $ORDER_CLASSIFIER_DATA_ON_SCRATCH --exclude="*" --include "*.zip"
+aws s3 sync $FINAL_AMITRAPS_DATA_OBJECT_STORE $PERSONAL_SCRATCH
 
 # Print time taken to execute the script
 echo "Time taken to download the data: $SECONDS seconds"

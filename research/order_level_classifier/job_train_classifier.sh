@@ -31,8 +31,9 @@ echo "Time taken to copy the data: $((SECONDS/60)) minutes"
 ami-classification train-model \
 --model_type "convnext_tiny_in22k" \
 --num_classes 16 \
---total_epochs 30 \
---warmup_epochs 2 \
+--total_epochs 35 \
+--early_stopping 35 \
+--warmup_epochs 3 \
 --train_webdataset "$SLURM_TMPDIR/train450-{000000..000364}.tar" \
 --val_webdataset "$SLURM_TMPDIR/val450-{000000..000052}.tar" \
 --test_webdataset "$SLURM_TMPDIR/test450-{000000..000105}.tar" \
@@ -42,7 +43,7 @@ ami-classification train-model \
 --model_save_directory $ORDER_CLASSIFIER_DATA_ON_SCRATCH \
 --wandb_entity "moth-ai" \
 --wandb_project "order-classifier" \
---wandb_run_name "worder0_wbinary1_run1"
+--wandb_run_name "worder0_wbinary1_run2"
 
 # Print time taken to execute the script
 echo "Time taken to train the model: $((SECONDS/60)) minutes"
