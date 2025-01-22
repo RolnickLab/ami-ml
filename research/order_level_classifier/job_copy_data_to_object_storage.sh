@@ -22,7 +22,7 @@ set +o allexport
 SECONDS=0
 
 # 4. Launch your script
-aws s3 sync $ORDER_CLASSIFIER_DATA_ON_SCRATCH $ORDER_CLASSIFIER_DATA_ON_OBJECT_STORE --delete
+aws s3 sync $ORDER_CLASSIFIER_DATA_ON_SCRATCH $ORDER_CLASSIFIER_DATA_ON_OBJECT_STORE
 
 # Print time taken to execute the script
 echo "Time taken to upload the dataset: $SECONDS seconds"
