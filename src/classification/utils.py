@@ -124,6 +124,7 @@ def build_model(
     num_classes: int,
     existing_weights: tp.Optional[str],
     pretrained: bool = True,
+    checkpoint: bool = False,
 ) -> torch.nn.Module:
     """Model builder"""
 
@@ -143,7 +144,10 @@ def build_model(
     if existing_weights:
         print("Loading existing model weights.")
         state_dict = torch.load(existing_weights, map_location=torch.device(device))
-        model.load_state_dict(state_dict, strict=False)
+        if checkpoint:
+            model.load_state_dict(state_dict["model_state_dict"])
+        else:
+            model.load_state_dict(state_dict, strict=False)
 
     # Make use of multiple GPUs, if available
     if torch.cuda.device_count() > 1:
