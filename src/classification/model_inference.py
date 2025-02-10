@@ -35,9 +35,11 @@ class ModelInference:
         preprocess_mode: str = "torch",
         input_size: int = 128,
         topk: int = 5,
+        checkpoint: bool = False,
     ):
         self.device = device
         self.topk = topk
+        self.checkpoint = checkpoint
         self.input_size = input_size
         self.model_type = model_type
         self.preprocess_mode = preprocess_mode
@@ -116,9 +118,12 @@ class ModelInference:
         model = timm.create_model(self.model_type, **model_arguments)
 
         # Load model weights
-        model.load_state_dict(
-            torch.load(model_path, map_location=torch.device(self.device))
-        )
+        model_weights = torch.load(model_path, map_location=torch.device(self.device))
+        if self.checkpoint:
+            model.load_state_dict(model_weights["model_state_dict"])
+        else:
+            model.load_state_dict(model_weights)
+
         # Parallelize inference if multiple GPUs available
         if torch.cuda.device_count() > 1:
             model = torch.nn.DataParallel(model)

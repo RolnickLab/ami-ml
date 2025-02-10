@@ -19,6 +19,10 @@ from src.classification.constants import (
     COSINE_LR_SCHEDULER,
     CROSS_ENTROPY_LOSS,
     VIT_B16_128,
+    WEIGHTED_ORDER_AND_BINARY_LOSS,
+)
+from src.classification.custom_loss_functions import (
+    WeightedOrderAndBinaryCrossEntropyLoss,
 )
 
 
@@ -84,12 +88,14 @@ def get_learning_rate_scheduler(
 
 
 def get_loss_function(
-    loss_function_name: str, label_smoothing: float = 0.0
+    loss_function_name: str, label_smoothing: float = 0.0, weight_on_order: float = 0.5
 ) -> torch.nn.Module:
     """Loss function definitions"""
 
     if loss_function_name == CROSS_ENTROPY_LOSS:
         return torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+    elif loss_function_name == WEIGHTED_ORDER_AND_BINARY_LOSS:
+        return WeightedOrderAndBinaryCrossEntropyLoss(weight_on_order=weight_on_order)
     else:
         raise RuntimeError(f"{loss_function_name} loss is not implemented.")
 
@@ -118,6 +124,7 @@ def build_model(
     num_classes: int,
     existing_weights: tp.Optional[str],
     pretrained: bool = True,
+    checkpoint: bool = False,
 ) -> torch.nn.Module:
     """Model builder"""
 
@@ -137,7 +144,10 @@ def build_model(
     if existing_weights:
         print("Loading existing model weights.")
         state_dict = torch.load(existing_weights, map_location=torch.device(device))
-        model.load_state_dict(state_dict, strict=False)
+        if checkpoint:
+            model.load_state_dict(state_dict["model_state_dict"])
+        else:
+            model.load_state_dict(state_dict, strict=False)
 
     # Make use of multiple GPUs, if available
     if torch.cuda.device_count() > 1:

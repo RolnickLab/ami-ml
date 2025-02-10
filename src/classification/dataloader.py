@@ -102,7 +102,7 @@ def build_webdataset_pipeline(
     """Main dataset builder and loader function"""
 
     # Load the webdataset
-    dataset = wds.WebDataset(sharedurl, shardshuffle=is_training)
+    dataset = wds.WebDataset(sharedurl, shardshuffle=is_training, empty_check=False)
     if is_training:
         dataset = dataset.shuffle(10000)
 

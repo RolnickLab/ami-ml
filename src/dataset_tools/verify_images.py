@@ -17,6 +17,7 @@ from PIL import Image
 from src.dataset_tools.utils import get_image_path, load_dwca_data
 
 ERROR_CSV = ".error.csv"
+Image.MAX_IMAGE_PIXELS = None  # Remove the limit
 
 
 def _get_image_info(image_path):
