@@ -1,0 +1,38 @@
+{
+	"note": "This config file is for training on the complete macromoths dataset",
+	
+	"model":{
+		"species_num_classes":992,
+		"genus_num_classes": 495, 
+		"family_num_classes": 18,
+		"type": "resnet50"
+	},
+	
+	"dataset":{
+		"root_dir": "/home/mila/a/aditya.jain/scratch/GBIF_Data/moths_uk/",
+		"train_set": "/home/mila/a/aditya.jain/mothAI/classification_moths/data/01-uk-train-split.csv",
+		"val_set": "/home/mila/a/aditya.jain/mothAI/classification_moths/data/01-uk-val-split.csv",
+		"test_set": "/home/mila/a/aditya.jain/mothAI/classification_moths/data/01-uk-test-split.csv",
+		"label_info": "/home/mila/a/aditya.jain/mothAI/classification_moths/data/uk_numeric_labels.json",
+		"taxon_hierarchy": "/home/mila/a/aditya.jain/mothAI/classification_moths/data/uk_taxon_hierarchy.json"
+	},
+	
+	"training":{
+		"batch_size": 64,
+		"image_resize": 300,
+		"epochs": 24,
+		"early_stopping": 4,
+		"start_val_loss": 100000000,
+		"loss":{
+				"name": "crossentropy"
+				},
+		"optimizer":{
+				"name": "sgd",
+				"learning_rate": 0.001,
+				"momentum": 0.9
+				},
+		"model_save_path": "/home/mila/a/aditya.jain/logs/",
+		"model_name": "uk-moth-model",
+		"version": "v01"
+	}
+}
