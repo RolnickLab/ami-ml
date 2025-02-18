@@ -9,12 +9,13 @@ import dotenv
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import typer
 
-from src.classification.constants import RESNET50
 from src.classification.dataloader import build_webdataset_pipeline
 from src.classification.utils import build_model
 
 dotenv.load_dotenv()
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:21"
 
 
 class TemperatureScaling(nn.Module):
@@ -58,14 +59,14 @@ def tune_temperature(
     for images, labels in val_dataloader:
         images, labels = images.to(device), labels.to(device)
         logits = model(images)
-        logits_list.append(logits)
-        labels_list.append(labels)
+        logits_list.append(logits.cpu())  # change
+        labels_list.append(labels.cpu())  # change
 
     # Concatenate all the logits and labels
     logits = torch.cat(logits_list)
     labels = torch.cat(labels_list)
 
-    temp_scaling = TemperatureScaling().to(device)
+    temp_scaling = TemperatureScaling().to("cpu")  # change
     optimizer = optim.LBFGS([temp_scaling.temperature], lr=0.01, max_iter=50)
 
     def closure():
@@ -81,15 +82,15 @@ def tune_temperature(
 
 
 def main(
-    model_weights: str,
-    model_type: str,
-    num_classes: int,
-    val_webdataset: str,
-    image_input_size: int,
-    batch_size: int,
-    preprocess_mode: str,
+    model_weights: str = typer.Option(),
+    model_type: str = typer.Option(),
+    num_classes: int = typer.Option(),
+    val_webdataset: str = typer.Option(),
+    image_input_size: int = typer.Option(),
+    batch_size: int = typer.Option(),
+    preprocess_mode: str = typer.Option(),
 ):
-    """ "Main function for confidence calibration"""
+    """Main function for confidence calibration"""
 
     # Model initialization
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -107,17 +108,26 @@ def main(
     # Tune temperature parameter
     _ = tune_temperature(model, val_dataloader, device)
 
+    # TODO Calculate ECE on test set before temperature scaling
+
+    # TODO Plot reliability diagram on test set before temperature scaling
+
+    # TODO Calculate ECE on test set after temperature scaling
+
+    # TODO Plot reliability diagram on test set after temperature scaling
+
 
 if __name__ == "__main__":
-    MODEL_WEIGHTS = os.getenv("QUEBEC_VERMONT_WEIGHTS")
-    CONF_CALIB_VAL_WBDS = os.getenv("CONF_CALIB_VAL_WBDS")
+    # MODEL_WEIGHTS = os.getenv("QUEBEC_VERMONT_WEIGHTS")
+    # CONF_CALIB_VAL_WBDS = os.getenv("CONF_CALIB_VAL_WBDS")
 
-    main(
-        model_weights=MODEL_WEIGHTS,
-        model_type=RESNET50,
-        num_classes=2497,
-        val_webdataset=CONF_CALIB_VAL_WBDS,
-        image_input_size=128,
-        batch_size=64,
-        preprocess_mode="torch",
-    )
+    # main(
+    #     model_weights=MODEL_WEIGHTS,
+    #     model_type=RESNET50,
+    #     num_classes=2497,
+    #     val_webdataset=CONF_CALIB_VAL_WBDS,
+    #     image_input_size=128,
+    #     batch_size=64,
+    #     preprocess_mode="torch",
+    # )
+    typer.run(main)
