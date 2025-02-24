@@ -3,7 +3,7 @@
 
 """Temperature scaling for confidence calibration"""
 
-import os
+import gc
 
 import dotenv
 import torch
@@ -15,7 +15,6 @@ from src.classification.dataloader import build_webdataset_pipeline
 from src.classification.utils import build_model
 
 dotenv.load_dotenv()
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:21"
 
 
 class TemperatureScaling(nn.Module):
@@ -56,18 +55,25 @@ def tune_temperature(
     model.eval()
     logits_list = []
     labels_list = []
-    for images, labels in val_dataloader:
-        images, labels = images.to(device), labels.to(device)
-        logits = model(images)
-        logits_list.append(logits.cpu())  # change
-        labels_list.append(labels.cpu())  # change
+    loop_num = 0
+    with torch.no_grad():
+        for images, labels in val_dataloader:
+            loop_num += 1
+            images, labels = images.to(device), labels.to(device)
+            logits = model(images)
+            logits_list.append(logits)
+            labels_list.append(labels)
 
     # Concatenate all the logits and labels
-    logits = torch.cat(logits_list)
-    labels = torch.cat(labels_list)
+    logits = torch.cat(logits_list).cpu()
+    labels = torch.cat(labels_list).cpu()
+    del logits_list
+    del labels_list
+    gc.collect()
 
-    temp_scaling = TemperatureScaling().to("cpu")  # change
+    temp_scaling = TemperatureScaling()
     optimizer = optim.LBFGS([temp_scaling.temperature], lr=0.01, max_iter=50)
+    print("create optimizer", flush=True)
 
     def closure():
         optimizer.zero_grad()
@@ -123,7 +129,7 @@ if __name__ == "__main__":
 
     # main(
     #     model_weights=MODEL_WEIGHTS,
-    #     model_type=RESNET50,
+    #     model_type="resnet50",
     #     num_classes=2497,
     #     val_webdataset=CONF_CALIB_VAL_WBDS,
     #     image_input_size=128,

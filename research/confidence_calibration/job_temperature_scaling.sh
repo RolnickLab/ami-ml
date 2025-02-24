@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=tune_temperature_parameter
 #SBATCH --ntasks=1
-#SBATCH --time=3:00:00
+#SBATCH --time=1:00:00
 #SBATCH --mem=64G
 #SBATCH --partition=long
 #SBATCH --cpus-per-task=2
@@ -34,7 +34,7 @@ python confidence_calibration/temperature_scaling.py \
 --num-classes 2497 \
 --val-webdataset "$SLURM_TMPDIR/ne-america_val450-{000000..000186}.tar" \
 --image-input-size 128 \
---batch-size 1 \
+--batch-size 8 \
 --preprocess-mode torch
 
 # Print time taken to execute the script
