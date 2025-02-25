@@ -6,6 +6,7 @@
 import gc
 
 import dotenv
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -15,8 +16,6 @@ from src.classification.dataloader import build_webdataset_pipeline
 from src.classification.utils import build_model
 
 # import os
-
-
 dotenv.load_dotenv()
 
 
@@ -32,7 +31,13 @@ class TemperatureScaling(nn.Module):
         return logits / self.temperature
 
 
-def expected_calibration_error(logits, labels, n_bins=10):
+def expected_calibration_error(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    n_bins: int = 10,
+    plot_reliability_diagram: bool = False,
+    reliability_diagram_title: str = "Reliability Diagram",
+):
     """
     Computes the Expected Calibration Error (ECE).
 
@@ -58,6 +63,11 @@ def expected_calibration_error(logits, labels, n_bins=10):
 
     ece = torch.tensor(0.0, device=logits.device)
 
+    # Plotting related variables
+    avg_confidences = []
+    avg_accuracies = []
+    bin_counts = []
+
     for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
         in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
         prop_in_bin = in_bin.float().mean()  # Fraction of samples in the bin
@@ -67,12 +77,81 @@ def expected_calibration_error(logits, labels, n_bins=10):
             avg_conf_in_bin = confidences[in_bin].mean()  # Avg confidence in bin
             ece += prop_in_bin * torch.abs(avg_conf_in_bin - acc_in_bin)  # Weighted sum
 
+            # Update plotting variables
+            avg_confidences.append(avg_conf_in_bin.item())
+            avg_accuracies.append(acc_in_bin.item())
+            bin_counts.append(prop_in_bin.item())
+        else:
+            avg_confidences.append(0)
+            avg_accuracies.append(0)
+            bin_counts.append(0)
+
+    if plot_reliability_diagram:
+        plt.figure(figsize=(6, 6))
+        plt.plot([0, 1], [0, 1], "k--", label="Perfect Calibration")  # Diagonal line
+        plt.bar(
+            avg_confidences,
+            avg_accuracies,
+            width=0.07,
+            color="blue",
+            alpha=0.7,
+            label="Model Reliability",
+        )
+
+        # Formatting
+        plt.xlabel("Confidence")
+        plt.ylabel("Accuracy")
+        plt.title(reliability_diagram_title)
+        plt.legend(loc="upper left")
+        plt.xlim([0, 1])
+        plt.ylim([0, 1])
+        plt.grid(True)
+        plt.savefig(reliability_diagram_title + ".png")
+
     return ece.item()  # Return scalar ECE value
 
 
-def calibration_error_on_gbif_test():
-    """Calculate ECE on GBIF test set before and after temperature scaling"""
-    pass
+def calibration_error_on_gbif_test(
+    model: torch.nn.Module,
+    test_dataloader: torch.utils.data.DataLoader,
+    device: str,
+    optimal_t: float,
+    plot_reliability_diagram: bool = True,
+) -> tuple[float, float]:
+    """Calculate ECE on GBIF test set before and after calibration"""
+
+    model.eval()
+    logits_list = []
+    labels_list = []
+    with torch.no_grad():
+        for images, labels in test_dataloader:
+            images, labels = images.to(device), labels.to(device)
+            logits = model(images)
+            logits_list.append(logits)
+            labels_list.append(labels)
+
+    # Concatenate all the logits and labels
+    logits = torch.cat(logits_list).cpu()
+    labels = torch.cat(labels_list).cpu()
+    del logits_list
+    del labels_list
+    gc.collect()
+
+    # Calculate ECE before and after calibration
+    ece_before_calibration = expected_calibration_error(
+        logits,
+        labels,
+        plot_reliability_diagram=True,
+        reliability_diagram_title="before_calibration",
+    )
+    ece_after_calibration = expected_calibration_error(
+        logits / optimal_t,
+        labels,
+        plot_reliability_diagram=True,
+        reliability_diagram_title="after_calibration",
+    )
+
+    return ece_before_calibration, ece_after_calibration
 
 
 def calibration_error_on_ami_traps():
@@ -133,7 +212,8 @@ def tune_temperature(
         logits / optimal_temperature, labels
     )
     print(
-        f"ECE before and after calibration is {val_ece_before_calibration} and {val_ece_after_calibration} respectively."
+        f"Validation ECE before and after calibration is {val_ece_before_calibration} and {val_ece_after_calibration} respectively.",
+        flush=True,
     )
 
     return optimal_temperature
@@ -144,6 +224,7 @@ def main(
     model_type: str = typer.Option(),
     num_classes: int = typer.Option(),
     val_webdataset: str = typer.Option(),
+    test_webdataset: str = typer.Option(),
     image_input_size: int = typer.Option(),
     batch_size: int = typer.Option(),
     preprocess_mode: str = typer.Option(),
@@ -162,28 +243,38 @@ def main(
         batch_size,
         preprocess_mode,
     )
+    test_dataloader = build_webdataset_pipeline(
+        test_webdataset,
+        image_input_size,
+        batch_size,
+        preprocess_mode,
+    )
 
     # Tune temperature parameter
-    _ = tune_temperature(model, val_dataloader, device)
+    optimal_temperature = tune_temperature(model, val_dataloader, device, initial_t=1.0)
+    # optimal_temperature = 0.92076
 
-    # TODO Calculate ECE on test set before temperature scaling
-
-    # TODO Plot reliability diagram on test set before temperature scaling
-
-    # TODO Calculate ECE on test set after temperature scaling
-
-    # TODO Plot reliability diagram on test set after temperature scaling
+    # Calculate ECE on test set before and after temperature scaling
+    error_before_calibration, error_after_calibration = calibration_error_on_gbif_test(
+        model, test_dataloader, device, optimal_temperature
+    )
+    print(
+        f"GBIF Test ECE before and after calibration is {error_before_calibration} and {error_after_calibration} respectively.",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
     # MODEL_WEIGHTS = os.getenv("QUEBEC_VERMONT_WEIGHTS")
-    # CONF_CALIB_VAL_WBDS = os.getenv("CONF_CALIB_VAL_WBDS")
+    # CONF_CALIB_VAL_WBDS = os.getenv("TEST_CONF_CALIB_VAL_WBDS")
+    # CONF_CALIB_TEST_WBDS = os.getenv("TEST_CONF_CALIB_TEST_WBDS")
 
     # main(
     #     model_weights=MODEL_WEIGHTS,
     #     model_type="resnet50",
     #     num_classes=2497,
     #     val_webdataset=CONF_CALIB_VAL_WBDS,
+    #     test_webdataset=CONF_CALIB_TEST_WBDS,
     #     image_input_size=128,
     #     batch_size=64,
     #     preprocess_mode="torch",

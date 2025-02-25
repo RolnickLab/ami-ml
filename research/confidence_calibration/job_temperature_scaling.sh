@@ -23,7 +23,7 @@ set +o allexport
 SECONDS=0
 
 # 4. Copy your dataset to the compute node
-cp $CONF_CALIB_VAL_WBDS $SLURM_TMPDIR
+cp $CONF_CALIB_VAL_WBDS $CONF_CALIB_TEST_WBDS $SLURM_TMPDIR
 
 echo "Time taken to copy the data: $((SECONDS)) seconds"
 
@@ -33,8 +33,9 @@ python confidence_calibration/temperature_scaling.py \
 --model-type resnet50 \
 --num-classes 2497 \
 --val-webdataset "$SLURM_TMPDIR/ne-america_val450-{000000..000186}.tar" \
+--test-webdataset "$SLURM_TMPDIR/ne-america_test450-{000000..000374}.tar" \
 --image-input-size 128 \
---batch-size 8 \
+--batch-size 32 \
 --preprocess-mode torch
 
 # Print time taken to execute the script
