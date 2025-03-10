@@ -5,30 +5,28 @@
 
 import gc
 
+# import os
+from pathlib import Path
+from typing import Union
+
 import dotenv
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import typer
+from PIL import Image
+from utils import (
+    TemperatureScaling,
+    apply_transform_to_image,
+    get_category_map,
+    get_insect_crops_and_labels,
+)
 
 from src.classification.dataloader import build_webdataset_pipeline
 from src.classification.utils import build_model
 
-# import os
 dotenv.load_dotenv()
-
-
-class TemperatureScaling(nn.Module):
-    """Temperature scaling class"""
-
-    def __init__(self, initial_t: float = 1.0):
-        super().__init__()
-        print(f"The initial value of temp scaling is {initial_t}.")
-        self.temperature = nn.Parameter(torch.ones(1) * initial_t)  # Initialize T = 1
-
-    def forward(self, logits):
-        return logits / self.temperature
 
 
 def expected_calibration_error(
@@ -154,13 +152,79 @@ def calibration_error_on_gbif_test(
     return ece_before_calibration, ece_after_calibration
 
 
-def calibration_error_on_ami_traps():
+def calibration_error_on_ami_traps(
+    model: torch.nn.Module,
+    device: str,
+    optimal_t: float,
+    trap_dataset_dir: str,
+    region: Union[str, None],
+    category_map_file: str,
+) -> tuple[float, float]:
     """Calculate ECE on AMI-Traps dataset before and after temperature scaling"""
-    pass
 
+    # Collect predictions and labels
+    model.eval()
+    trap_dataset_dir = Path(trap_dataset_dir)
+    insect_crops, insect_labels = get_insect_crops_and_labels(trap_dataset_dir)
+    category_map = get_category_map(category_map_file)
+    logits_list = []
+    labels_list = []
 
-def reliability_diagram():
-    """Plot reliability diagram"""
+    with torch.no_grad():
+        for image_path in insect_crops:
+            filename = Path(image_path).name
+            if filename in insect_labels.keys():
+                label_rank = insect_labels[filename]["taxon_rank"]
+                label_region = insect_labels[filename]["region"]
+                label_key = insect_labels[filename]["speciesKey"]
+
+                # Consider only species level labels
+                if (
+                    label_key
+                    and label_rank == "SPECIES"
+                    and label_region == region
+                    and label_key != -1
+                    and str(label_key) in category_map.keys()
+                ):
+                    with Image.open(image_path) as img:
+                        # Transform the image
+                        image = apply_transform_to_image(img)
+
+                        # Model inference
+                        logits = model(image.unsqueeze(0).to(device))
+
+                        # Save label in numerical format
+                        label = category_map[str(label_key)]
+
+                        # Append items
+                        labels_list.append(label)
+                        logits_list.append(logits)
+
+    # Concatenate all the logits and labels
+    labels = torch.Tensor(labels_list).cpu()
+    logits = torch.cat(logits_list).cpu()
+    # labels = torch.Tensor(labels_list)
+    # logits = torch.cat(logits_list)
+
+    del logits_list
+    del labels_list
+    gc.collect()
+
+    # Calculate ECE before and after calibration
+    ece_before_calibration = expected_calibration_error(
+        logits,
+        labels,
+        plot_reliability_diagram=True,
+        reliability_diagram_title="ami_traps_before_calibration",
+    )
+    ece_after_calibration = expected_calibration_error(
+        logits / optimal_t,
+        labels,
+        plot_reliability_diagram=True,
+        reliability_diagram_title="ami_traps_after_calibration",
+    )
+
+    return ece_before_calibration, ece_after_calibration
 
 
 def tune_temperature(
@@ -228,7 +292,10 @@ def main(
     image_input_size: int = typer.Option(),
     batch_size: int = typer.Option(),
     preprocess_mode: str = typer.Option(),
-):
+    trap_dataset_dir: Union[str, None] = typer.Option(),
+    region: Union[str, None] = typer.Option(),
+    category_map: Union[str, None] = typer.Option(),
+) -> None:
     """Main function for confidence calibration"""
 
     # Model initialization
@@ -252,7 +319,7 @@ def main(
 
     # Tune temperature parameter
     optimal_temperature = tune_temperature(model, val_dataloader, device, initial_t=1.0)
-    # optimal_temperature = 0.92076
+    optimal_temperature = 0.92076
 
     # Calculate ECE on test set before and after temperature scaling
     error_before_calibration, error_after_calibration = calibration_error_on_gbif_test(
@@ -263,11 +330,22 @@ def main(
         flush=True,
     )
 
+    # Calculate ECE on AMI-Trapns with and without temperature scaling
+    trap_error_before_calib, trap_error_after_calib = calibration_error_on_ami_traps(
+        model, device, optimal_temperature, trap_dataset_dir, region, category_map
+    )
+    print(
+        f"AMI-Traps ECE before and after calibration for {region} is {trap_error_before_calib} and {trap_error_after_calib} respectively.",
+        flush=True,
+    )
+
 
 if __name__ == "__main__":
     # MODEL_WEIGHTS = os.getenv("QUEBEC_VERMONT_WEIGHTS")
     # CONF_CALIB_VAL_WBDS = os.getenv("TEST_CONF_CALIB_VAL_WBDS")
     # CONF_CALIB_TEST_WBDS = os.getenv("TEST_CONF_CALIB_TEST_WBDS")
+    # CONF_CALIB_INSECT_CROPS_DIR = os.getenv("CONF_CALIB_INSECT_CROPS_DIR")
+    # CATEGORY_MAP = os.getenv("NEA_CATEGORY_MAP")
 
     # main(
     #     model_weights=MODEL_WEIGHTS,
@@ -278,5 +356,8 @@ if __name__ == "__main__":
     #     image_input_size=128,
     #     batch_size=64,
     #     preprocess_mode="torch",
+    #     trap_dataset_dir=CONF_CALIB_INSECT_CROPS_DIR,
+    #     region="NorthEasternAmerica",
+    #     category_map=CATEGORY_MAP,
     # )
     typer.run(main)

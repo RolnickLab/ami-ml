@@ -5,7 +5,7 @@
 #SBATCH --mem=64G
 #SBATCH --partition=long
 #SBATCH --cpus-per-task=2
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:rtx8000:1
 #SBATCH --output=tune_temperature_parameter_%j.out
 
 # 1. Load the required modules
@@ -23,7 +23,7 @@ set +o allexport
 SECONDS=0
 
 # 4. Copy your dataset to the compute node
-cp $CONF_CALIB_VAL_WBDS $CONF_CALIB_TEST_WBDS $SLURM_TMPDIR
+# cp $CONF_CALIB_VAL_WBDS $CONF_CALIB_TEST_WBDS $SLURM_TMPDIR
 
 echo "Time taken to copy the data: $((SECONDS)) seconds"
 
@@ -36,7 +36,10 @@ python confidence_calibration/temperature_scaling.py \
 --test-webdataset "$SLURM_TMPDIR/ne-america_test450-{000000..000374}.tar" \
 --image-input-size 128 \
 --batch-size 32 \
---preprocess-mode torch
+--preprocess-mode torch \
+--trap-dataset-dir $CONF_CALIB_INSECT_CROPS_DIR \
+--region NorthEasternAmerica \
+--category-map $NEA_CATEGORY_MAP
 
 # Print time taken to execute the script
 echo "Time taken to tune the temperature parameter: $((SECONDS/60)) minutes"
