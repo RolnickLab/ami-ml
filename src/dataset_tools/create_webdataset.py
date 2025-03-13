@@ -19,6 +19,8 @@ from torchvision import transforms
 import wandb
 from src.dataset_tools.utils import set_random_seeds, square_crop
 
+Image.MAX_IMAGE_PIXELS = None  # Remove the limit
+
 
 def _prepare_json_data(sample_metadata, columns_to_json):
     metadata = {}

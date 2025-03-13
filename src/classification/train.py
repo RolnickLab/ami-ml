@@ -105,7 +105,7 @@ def _evaluate_model(
     model: torch.nn.Module,
     device: str,
     loss_function: torch.nn.Module,
-    val_dataloader: torch.utils.data.DataLoader,
+    dataloader: torch.utils.data.DataLoader,
     set_type: str,
 ) -> dict:
     """Evaluate model either for validation or test set"""
@@ -114,7 +114,7 @@ def _evaluate_model(
     running_accuracy = AverageMeter()
 
     model.eval()
-    for batch_data in val_dataloader:
+    for batch_data in dataloader:
         images, labels = batch_data
         images, labels = images.to(device, non_blocking=True), labels.to(
             device, non_blocking=True
@@ -158,6 +158,7 @@ def train_model(
     learning_rate_scheduler: Optional[str],
     weight_decay: float,
     loss_function_type: str,
+    weight_on_order_loss: float,
     label_smoothing: float,
     mixed_resolution_data_aug: bool,
     model_save_directory: str,
@@ -199,7 +200,6 @@ def train_model(
 
     # Other training ingredients
     optimizer = get_optimizer(optimizer_type, model, learning_rate, weight_decay)
-    learning_rate_scheduler = None
     if learning_rate_scheduler:
         train_data_length = get_webdataset_length(train_webdataset)
         steps_per_epoch = int((train_data_length - 1) / batch_size) + 1
@@ -211,9 +211,11 @@ def train_model(
             warmup_epochs,
         )
     loss_function = get_loss_function(
-        loss_function_type, label_smoothing=label_smoothing
+        loss_function_type,
+        label_smoothing=label_smoothing,
+        weight_on_order=weight_on_order_loss,
     )
-    current_date = datetime.now().date().strftime("%Y%m%d")
+    current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
     model_save_path = Path(model_save_directory) / f"{model_type}_{current_date}"
 
     # Start W&B logging

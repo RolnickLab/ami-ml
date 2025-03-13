@@ -18,3 +18,7 @@ The next steps to download and curate data are followed from [here](https://gith
 4. **Lifestage prediction:** Run the lifestage prediction model on images without the lifestage tag. The purpose is to remove non-adult moth images from the dataset (`job_predict_lifestage.sh`).
 5. **Final clean dataset:** Create the final list of images cleaned after image verification and lifestage prediction (`job_clean_dataset.sh`).
 6. **Dataset splits:** Create dataset splits for model training (`job_split_dataset.sh`).
+
+### Model training
+A non-public code was used to train this model but a refurbished version is now available [here](https://github.com/RolnickLab/ami-ml/tree/main/src/classification).
+
