@@ -7,6 +7,9 @@
 #SBATCH --mem=300G                          # Ask for 300 GB of RAM
 #SBATCH --output=clean_dataset_%j.out
 
+# NOTE: The current workflow loads the entire DwC-A file as is, hence the big memory requirement (300G).
+# This can definitely be improved.
+
 # 1. Load the required modules
 module load miniconda/3
 
