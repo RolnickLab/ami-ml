@@ -119,38 +119,40 @@ def binary_model_evaluation(
     # Get all insect crops and label information
     insect_crops, insect_labels = _get_insect_crops_and_labels(insect_crops_dir)
 
+    # Create generator over images
+    images = (image for image in insect_crops)
+
     # Evaluation metrics variables
     tp, tn, fp, fn = 0, 0, 0, 0
     gt_moths, gt_nonmoths = 0, 0
 
     # Iterate over the files in webdataset
-    for image_path in insect_crops:
+    for image_path in images:
         # Read the image
-        image = Image.open(image_path)
+        with Image.open(image_path) as image:
+            # If skipping small crops, check size
+            if skip_small_crops:
+                width, height = image.width, image.height
+                if width < min_crop_dim and height < min_crop_dim:
+                    continue
 
-        # If skipping small crops, check size
-        if skip_small_crops:
-            width, height = image.width, image.height
-            if width < min_crop_dim and height < min_crop_dim:
-                continue
+            # Get ground truth label
+            img_name = os.path.split(image_path)[1]
+            gt_label = insect_labels[img_name]["label"]
 
-        # Get ground truth label
-        img_name = os.path.split(image_path)[1]
-        gt_label = insect_labels[img_name]["label"]
+            # Binary model prediction
+            # image = _apply_transform_to_image(image)
+            prediction = order_classifier.predict(image)
+            predicted_label = prediction[0][0]
+            if predicted_label == "Lepidoptera":
+                binary_prediction = "Moth"
+            else:
+                binary_prediction = "Non-Moth"
 
-        # Binary model prediction
-        # image = _apply_transform_to_image(image)
-        prediction = order_classifier.predict(image)
-        predicted_label = prediction[0][0]
-        if predicted_label == "Lepidoptera":
-            binary_prediction = "Moth"
-        else:
-            binary_prediction = "Non-Moth"
-
-        # Fill up evluation metrics
-        tp, tn, fp, fn, gt_moths, gt_nonmoths = _update_evaluation_metrics(
-            gt_label, binary_prediction, tp, tn, fp, fn, gt_moths, gt_nonmoths
-        )
+            # Fill up evluation metrics
+            tp, tn, fp, fn, gt_moths, gt_nonmoths = _update_evaluation_metrics(
+                gt_label, binary_prediction, tp, tn, fp, fn, gt_moths, gt_nonmoths
+            )
 
     # Aggregated metrics
     total_crops, accuracy, precision, recall, fscore = _get_aggregated_metrics(
