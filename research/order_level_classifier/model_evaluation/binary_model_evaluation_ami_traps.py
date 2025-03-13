@@ -166,8 +166,8 @@ def binary_model_evaluation(
 
 
 if __name__ == "__main__":
-    ORDER_MODEL_DIR = os.environ.get("ORDER_MODEL_DIR")
-    ORDER_INSECT_CROPS_DIR = os.environ.get("ORDER_INSECT_CROPS_DIR")
+    ORDER_MODEL_DIR = os.getenv("ORDER_MODEL_DIR")
+    ORDER_INSECT_CROPS_DIR = os.getenv("ORDER_INSECT_CROPS_DIR")
 
     binary_model_evaluation(
         run_name="worder0.2_wbinary0.8_run2",

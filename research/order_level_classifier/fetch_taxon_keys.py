@@ -11,8 +11,8 @@ from pygbif import species as species_api
 
 dotenv.load_dotenv()
 
-ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2 = os.environ.get(
-    "ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2"
+ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2 = os.getenv(
+    "ORDER_CLASSIFIER_ACCEPTED_KEYS_PART2",
 )
 
 taxon_names = ["Mantodea"]
