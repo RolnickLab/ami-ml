@@ -22,7 +22,7 @@ set +o allexport
 SECONDS=0
 
 # 4. Download data
-aws s3 sync $OBJECT_STORE_CONF_WBDS $SCRATCH_CONF_TEST_WBDS --exclude "*" --include "ne-america_test450*.tar"
+aws s3 sync $OBJECT_STORE_GLOBAL_MODEL_TEST_WBDS $SCRATCH_GLOBAL_MODEL_TEST_WBDS 
 
 # Print time taken to execute the script
 echo "Time taken to download the data: $SECONDS seconds"

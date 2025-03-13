@@ -139,13 +139,13 @@ def calibration_error_on_gbif_test(
     ece_before_calibration = expected_calibration_error(
         logits,
         labels,
-        plot_reliability_diagram=True,
+        plot_reliability_diagram=plot_reliability_diagram,
         reliability_diagram_title="before_calibration",
     )
     ece_after_calibration = expected_calibration_error(
         logits / optimal_t,
         labels,
-        plot_reliability_diagram=True,
+        plot_reliability_diagram=plot_reliability_diagram,
         reliability_diagram_title="after_calibration",
     )
 
@@ -319,7 +319,7 @@ def main(
 
     # Tune temperature parameter
     optimal_temperature = tune_temperature(model, val_dataloader, device, initial_t=1.0)
-    optimal_temperature = 0.92076
+    # optimal_temperature = 0.92076
 
     # Calculate ECE on test set before and after temperature scaling
     error_before_calibration, error_after_calibration = calibration_error_on_gbif_test(
