@@ -44,20 +44,27 @@ def _update_evaluation_metrics(
 ):
     """Update evaluation metrics"""
 
-    if gt_label == "Moth":
-        if pred == "Moth":
+    if gt_label not in ["Moth", "Non-Moth"]:
+        raise Exception("Unknown binary label for an insect crop!")
+
+    # Update the ground truth
+    is_label_moth = gt_label == "Moth"
+    if is_label_moth:
+        gt_moths += 1
+    else:
+        gt_nonmoths += 1
+
+    # Update the confusion matrix
+    if gt_label == pred:
+        if is_label_moth:
             tp += 1
         else:
-            fn += 1
-        gt_moths += 1
-    elif gt_label == "Non-Moth":
-        if pred == "Non-Moth":
             tn += 1
+    else:
+        if is_label_moth:
+            fn += 1
         else:
             fp += 1
-        gt_nonmoths += 1
-    else:
-        raise Exception("Unknown binary label for an insect crop!")
 
     return tp, tn, fp, fn, gt_moths, gt_nonmoths
 
