@@ -25,7 +25,7 @@ load_dotenv()
 def _get_insect_crops_and_labels(insect_crops_dir: pathlib.PosixPath):
     """Get all insect crops and label information"""
 
-    insect_crops = glob.glob(str(insect_crops_dir / "*.png"))
+    insect_crops = glob.iglob(str(insect_crops_dir / "*.png"))
     with open(insect_crops_dir / "binary_labels.json") as f:
         insect_labels = json.load(f)
 
@@ -119,15 +119,12 @@ def binary_model_evaluation(
     # Get all insect crops and label information
     insect_crops, insect_labels = _get_insect_crops_and_labels(insect_crops_dir)
 
-    # Create generator over images
-    images = (image for image in insect_crops)
-
     # Evaluation metrics variables
     tp, tn, fp, fn = 0, 0, 0, 0
     gt_moths, gt_nonmoths = 0, 0
 
     # Iterate over the files in webdataset
-    for image_path in images:
+    for image_path in insect_crops:
         # Read the image
         with Image.open(image_path) as image:
             # If skipping small crops, check size
