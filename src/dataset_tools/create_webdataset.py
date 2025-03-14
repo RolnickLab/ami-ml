@@ -8,6 +8,7 @@ Create webdataset
 import json
 import os
 import time
+from typing import Union
 
 import pandas as pd
 import PIL
@@ -180,9 +181,9 @@ def create_webdataset(
     columns_to_json: str,
     megadetector_results_json: str,
     random_seed: int,
-    wandb_entity: str,
-    wandb_project: str,
-    wandb_run: str,
+    wandb_entity: Union[str, None],
+    wandb_project: Union[str, None],
+    wandb_run: Union[str, None],
 ):
     # Weights and Biases logging
     if wandb_entity:

@@ -22,6 +22,7 @@ To add a new command, create a new function below following these instructions:
 """
 
 import functools
+from typing import Union
 
 import click
 
@@ -452,9 +453,9 @@ def predict_lifestage_command(
     log_frequence: int,
     category_map_json: str,
     results_csv: str,
-    wandb_entity: str,
-    wandb_project: str,
-    wandb_run: str,
+    wandb_entity: Union[str, None] = None,
+    wandb_project: Union[str, None] = None,
+    wandb_run: Union[str, None] = None,
 ):
     from src.dataset_tools.predict_lifestage import predict_lifestage
 
@@ -750,9 +751,9 @@ def create_webdataset_command(
     columns_to_json: str,
     megadetector_results_json: str,
     random_seed: int,
-    wandb_entity: str,
-    wandb_project: str,
-    wandb_run: str,
+    wandb_entity: Union[str, None] = None,
+    wandb_project: Union[str, None] = None,
+    wandb_run: Union[str, None] = None,
 ):
     from src.dataset_tools.create_webdataset import create_webdataset
 
