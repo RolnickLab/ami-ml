@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=fetch_data_from_object_store
 #SBATCH --ntasks=1
-#SBATCH --time=8:00:00
-#SBATCH --partition=long-cpu      # Ask for long-cpu job
+#SBATCH --time=18:00:00
+#SBATCH --partition=main-cpu      # Ask for long-cpu job
 #SBATCH --cpus-per-task=1         # Ask for 1 CPUs
 #SBATCH --mem=4G                  # Ask for 4 GB of RAM
 #SBATCH --output=fetch_data_from_object_store_%j.out
@@ -22,7 +22,7 @@ set +o allexport
 SECONDS=0
 
 # 4. Download data
-aws s3 sync $OBJECT_STORE_GLOBAL_MODEL_TEST_WBDS $SCRATCH_GLOBAL_MODEL_TEST_WBDS 
+aws s3 sync $OBJECT_STORE_GLOBAL_MODEL_RAW_DATA $CONF_CALIB_GLOBAL_MODEL_DATASET_PATH 
 
 # Print time taken to execute the script
 echo "Time taken to download the data: $SECONDS seconds"

@@ -83,3 +83,7 @@ def apply_transform_to_image(
     image = image_transform(image)
 
     return image
+
+
+def binary_search():
+    """Binary search on the temperature value T"""

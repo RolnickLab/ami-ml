@@ -106,7 +106,7 @@ def expected_calibration_error(
         plt.grid(True)
         plt.savefig(reliability_diagram_title + ".png")
 
-    return ece.item()  # Return scalar ECE value
+    return round(ece.item(), 3)  # Return scalar ECE value
 
 
 def calibration_error_on_gbif_test(
@@ -115,6 +115,7 @@ def calibration_error_on_gbif_test(
     device: str,
     optimal_t: float,
     plot_reliability_diagram: bool = True,
+    reliability_diagram_title: str = "Reliability diagram",
 ) -> tuple[float, float]:
     """Calculate ECE on GBIF test set before and after calibration"""
 
@@ -140,13 +141,13 @@ def calibration_error_on_gbif_test(
         logits,
         labels,
         plot_reliability_diagram=plot_reliability_diagram,
-        reliability_diagram_title="before_calibration",
+        reliability_diagram_title=reliability_diagram_title + "_before_calib_gbif_test",
     )
     ece_after_calibration = expected_calibration_error(
         logits / optimal_t,
         labels,
         plot_reliability_diagram=plot_reliability_diagram,
-        reliability_diagram_title="after_calibration",
+        reliability_diagram_title=reliability_diagram_title + "_after_calib_gbif_test",
     )
 
     return ece_before_calibration, ece_after_calibration
@@ -159,6 +160,8 @@ def calibration_error_on_ami_traps(
     trap_dataset_dir: str,
     region: Union[str, None],
     category_map_file: str,
+    plot_reliability_diagram: bool = True,
+    reliability_diagram_title: str = "Reliability diagram",
 ) -> tuple[float, float]:
     """Calculate ECE on AMI-Traps dataset before and after temperature scaling"""
 
@@ -214,14 +217,14 @@ def calibration_error_on_ami_traps(
     ece_before_calibration = expected_calibration_error(
         logits,
         labels,
-        plot_reliability_diagram=True,
-        reliability_diagram_title="ami_traps_before_calibration",
+        plot_reliability_diagram=plot_reliability_diagram,
+        reliability_diagram_title=reliability_diagram_title + "_before_calib_ami_traps",
     )
     ece_after_calibration = expected_calibration_error(
         logits / optimal_t,
         labels,
-        plot_reliability_diagram=True,
-        reliability_diagram_title="ami_traps_after_calibration",
+        plot_reliability_diagram=plot_reliability_diagram,
+        reliability_diagram_title=reliability_diagram_title + "_after_calib_ami_traps",
     )
 
     return ece_before_calibration, ece_after_calibration
@@ -267,8 +270,10 @@ def tune_temperature(
         return loss
 
     optimizer.step(closure)
-    optimal_temperature = temp_scaling.temperature.item()
-    print(f"Optimal Temperature: {optimal_temperature}")
+    optimal_temperature = round(temp_scaling.temperature.item(), 4)
+    print(
+        f"Optimal Temperature: {optimal_temperature}. Initial t is {initial_t} and maximum iterations is {max_optim_iterations}."
+    )
 
     # Calculate ECE before and after calibration
     val_ece_before_calibration = expected_calibration_error(logits, labels)
@@ -292,9 +297,9 @@ def main(
     image_input_size: int = typer.Option(),
     batch_size: int = typer.Option(),
     preprocess_mode: str = typer.Option(),
-    trap_dataset_dir: Union[str, None] = typer.Option(),
-    region: Union[str, None] = typer.Option(),
-    category_map: Union[str, None] = typer.Option(),
+    trap_dataset_dir: str = typer.Option(),
+    region: str = typer.Option(),
+    category_map: str = typer.Option(),
 ) -> None:
     """Main function for confidence calibration"""
 
@@ -318,12 +323,17 @@ def main(
     )
 
     # Tune temperature parameter
-    optimal_temperature = tune_temperature(model, val_dataloader, device, initial_t=1.0)
-    # optimal_temperature = 0.92076
+    optimal_temperature = tune_temperature(
+        model, val_dataloader, device, initial_t=1.0, max_optim_iterations=150
+    )
 
     # Calculate ECE on test set before and after temperature scaling
     error_before_calibration, error_after_calibration = calibration_error_on_gbif_test(
-        model, test_dataloader, device, optimal_temperature
+        model,
+        test_dataloader,
+        device,
+        optimal_temperature,
+        reliability_diagram_title=region,
     )
     print(
         f"GBIF Test ECE before and after calibration is {error_before_calibration} and {error_after_calibration} respectively.",
@@ -332,7 +342,13 @@ def main(
 
     # Calculate ECE on AMI-Trapns with and without temperature scaling
     trap_error_before_calib, trap_error_after_calib = calibration_error_on_ami_traps(
-        model, device, optimal_temperature, trap_dataset_dir, region, category_map
+        model,
+        device,
+        optimal_temperature,
+        trap_dataset_dir,
+        region,
+        category_map,
+        reliability_diagram_title=region,
     )
     print(
         f"AMI-Traps ECE before and after calibration for {region} is {trap_error_before_calib} and {trap_error_after_calib} respectively.",

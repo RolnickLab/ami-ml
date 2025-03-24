@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --time=3:00:00
 #SBATCH --mem=48G
-#SBATCH --partition=main
+#SBATCH --partition=long
 #SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:rtx8000:1
 #SBATCH --output=tune_temperature_parameter_%j.out
