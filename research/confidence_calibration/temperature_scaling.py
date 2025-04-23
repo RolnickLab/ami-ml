@@ -6,6 +6,7 @@
 import gc
 
 # import os
+import time
 from pathlib import Path
 from typing import Union
 
@@ -230,45 +231,77 @@ def calibration_error_on_ami_traps(
     return ece_before_calibration, ece_after_calibration
 
 
+def model_inference(
+    model: torch.nn.Module,
+    dataloader: torch.utils.data.DataLoader,
+    device: str,
+):
+    """Perform model inference on the dataloader"""
+
+    model.eval()
+    with torch.no_grad():
+        for images, labels in dataloader:
+            # start_time = time.time()
+
+            images, labels = images.to(device), labels.to(device)
+            logits = model(images)
+            logits, labels = logits.cpu(), labels.cpu()
+
+            # end_time = time.time()
+            # print(f"Batch processed length is {len(images)} and time taken is {end_time - start_time:.2f} seconds.", flush=True)
+
+            yield logits, labels
+
+
 def tune_temperature(
     model: torch.nn.Module,
     val_dataloader: torch.utils.data.DataLoader,
     device: str,
     initial_t: float = 1.5,
-    max_optim_iterations=50,
-    learning_rate=0.01,
+    max_optim_iterations: int = 50,
+    learning_rate: float = 0.01,
+    variables_device: str = "cpu",
 ) -> float:
     """Main temperature tuning function"""
 
-    model.eval()
-    logits_list = []
-    labels_list = []
-    with torch.no_grad():
-        for images, labels in val_dataloader:
-            images, labels = images.to(device), labels.to(device)
-            logits = model(images)
-            logits_list.append(logits)
-            labels_list.append(labels)
+    print(
+        f"Initial t is {initial_t} and max optim iterations is {max_optim_iterations}.",
+        flush=True,
+    )
 
-    # Concatenate all the logits and labels
-    logits = torch.cat(logits_list).to(device)
-    labels = torch.cat(labels_list).to(device)
-    del logits_list
-    del labels_list
+    # Perform model inference on the validation set
+    start_time = time.time()
+    logits_and_labels = list(
+        model_inference(
+            model,
+            val_dataloader,
+            device,
+        )
+    )
+    end_time = time.time()
+    print(f"Model inference took {end_time - start_time:.2f} seconds.", flush=True)
+
+    logits_list = torch.cat([logits for logits, _ in logits_and_labels])
+    print("Logits collected", flush=True)
+    labels_list = torch.cat([labels for _, labels in logits_and_labels])
+    print("Labels collected", flush=True)
+
+    del logits_and_labels
     gc.collect()
 
-    temp_scaling = TemperatureScaling(initial_t=initial_t).to(device)
-    loss_function = nn.CrossEntropyLoss().to(device)
+    temp_scaling = TemperatureScaling(initial_t=initial_t).to(variables_device)
+    loss_function = nn.CrossEntropyLoss().to(variables_device)
     optimizer = optim.LBFGS(
         [temp_scaling.temperature], lr=learning_rate, max_iter=max_optim_iterations
     )
 
     def closure():
         optimizer.zero_grad()
-        loss = loss_function(temp_scaling(logits), labels)
+        loss = loss_function(temp_scaling(logits_list), labels_list)
         loss.backward()
         return loss
 
+    print("Optimization process has started.", flush=True)
     optimizer.step(closure)
     optimal_temperature = round(temp_scaling.temperature.item(), 4)
     print(
@@ -276,9 +309,9 @@ def tune_temperature(
     )
 
     # Calculate ECE before and after calibration
-    val_ece_before_calibration = expected_calibration_error(logits, labels)
+    val_ece_before_calibration = expected_calibration_error(logits_list, labels_list)
     val_ece_after_calibration = expected_calibration_error(
-        logits / optimal_temperature, labels
+        logits_list / optimal_temperature, labels_list
     )
     print(
         f"Validation ECE before and after calibration is {val_ece_before_calibration} and {val_ece_after_calibration} respectively.",
@@ -324,7 +357,7 @@ def main(
 
     # Tune temperature parameter
     optimal_temperature = tune_temperature(
-        model, val_dataloader, device, initial_t=1.0, max_optim_iterations=150
+        model, val_dataloader, device, initial_t=1.0, max_optim_iterations=50
     )
 
     # Calculate ECE on test set before and after temperature scaling

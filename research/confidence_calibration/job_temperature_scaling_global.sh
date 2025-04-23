@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=tune_temperature_parameter_global
 #SBATCH --ntasks=1
-#SBATCH --time=2:00:00
-#SBATCH --mem=140G
+#SBATCH --time=18:00:00
+#SBATCH --mem=280G
 #SBATCH --partition=long
 #SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:rtx8000:1
@@ -26,6 +26,7 @@ SECONDS=0
 cp $GLOBAL_CONF_CALIB_TEST_WBDS $SLURM_TMPDIR
 
 echo "Time taken to copy the data: $((SECONDS)) seconds"
+echo "Batch size is 512"
 
 # 5. Launch your job
 python confidence_calibration/temperature_scaling.py \
@@ -35,7 +36,7 @@ python confidence_calibration/temperature_scaling.py \
 --val-webdataset "$SLURM_TMPDIR/test450-{000000..001357}.tar" \
 --test-webdataset "$SLURM_TMPDIR/test450-{000000..001357}.tar" \
 --image-input-size 128 \
---batch-size 32 \
+--batch-size 512 \
 --preprocess-mode torch \
 --trap-dataset-dir $CONF_CALIB_INSECT_CROPS_DIR \
 --region GLOBAL \
