@@ -34,8 +34,9 @@ class ModelInference:
         device: str,
         preprocess_mode: str = "torch",
         input_size: int = 128,
-        topk: int = 5,
+        topk: int = 5,  # set -1 to get all predictions
         checkpoint: bool = False,
+        class_pruning_list: list | None = None,
     ):
         self.device = device
         self.topk = topk
@@ -48,13 +49,15 @@ class ModelInference:
         self.taxon_key_to_name = self._load_taxon_key_to_name_map(
             taxon_key_to_name_json
         )
+        self.name_to_id_map = self._build_name_to_id_map()
         self.model = self._load_model(model_path, num_classes=len(self.id_to_taxon_key))
         self.model.eval()
+        self.class_pruning_list = class_pruning_list
 
     def _load_id_to_taxon_key_map(self, taxon_key_to_id_json: str):
         """Load the mapping from category id to taxon key"""
 
-        with open(taxon_key_to_id_json, "r") as f:
+        with open(taxon_key_to_id_json, "r", encoding="utf-8") as f:
             categories_map = json.load(f)
 
         id2categ = {categories_map[categ]: categ for categ in categories_map}
@@ -63,10 +66,19 @@ class ModelInference:
     def _load_taxon_key_to_name_map(self, taxon_key_to_name_json: str):
         """Load the mapping from category taxon key to species name"""
 
-        with open(taxon_key_to_name_json, "r") as f:
+        with open(taxon_key_to_name_json, "r", encoding="utf-8") as f:
             categ_to_name_map = json.load(f)
 
         return categ_to_name_map
+
+    def _build_name_to_id_map(self):
+        """Build mapping from taxon name to category id"""
+
+        name2key = {self.taxon_key_to_name[key]: key for key in self.taxon_key_to_name}
+        key2id = {self.id_to_taxon_key[id]: id for id in self.id_to_taxon_key}
+        name2id = {name: key2id[name2key[name]] for name in name2key}
+
+        return name2id
 
     def _pad_to_square(self):
         """Padding transformation to make the image square"""
@@ -131,6 +143,23 @@ class ModelInference:
         model = model.to(self.device)
         return model
 
+    def _prune_classes(self, predictions: torch.Tensor):
+        """Class pruning function to include specific output classes and remove the rest"""
+
+        # Create a mask for the classes to prune
+        mask = torch.zeros(
+            predictions.size(1), dtype=torch.bool, device=predictions.device
+        )
+
+        # Get species keys that needs to be removed
+        for taxon_to_keep in self.class_pruning_list:
+            id_to_keep = self.name_to_id_map[taxon_to_keep]
+            mask[id_to_keep] = True
+
+        # Apply the mask to zero out unwanted nodes
+        predictions[:, ~mask] = float("-inf")  # Set to -inf to ignore during softmax
+        return predictions
+
     @torch.no_grad()
     def predict(self, image: PIL.Image.Image):
         """Main function for predicting on image"""
@@ -141,10 +170,18 @@ class ModelInference:
         image = image_transform(image).to(self.device).unsqueeze_(0)
 
         # Model prediction on the image
-        predictions = softmax(self.model(image), dim=1).cpu()
+        predictions = self.model(image)
 
-        # Get top k predictions; k=0 means get all predictions
+        # Prune classes, if requested
+        if self.class_pruning_list:
+            predictions = self._prune_classes(predictions)
+
+        predictions = softmax(predictions, dim=1).cpu()
+
+        # First, get all predictions in decreasing order of confidence
         topk_predictions = torch.topk(predictions, len(predictions[0]))
+
+        # Get only top k predictions
         if self.topk > 0:
             topk_predictions = torch.topk(predictions, self.topk)
 
