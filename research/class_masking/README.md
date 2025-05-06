@@ -50,4 +50,4 @@ taxon_key_to_name_map = {
 ```
 
 
-An example usage of class pruning is in `masking.py`.
+An example usage of class pruning can be found in `masking.py`.
