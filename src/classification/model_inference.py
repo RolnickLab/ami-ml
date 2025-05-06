@@ -36,7 +36,7 @@ class ModelInference:
         input_size: int = 128,
         topk: int = 5,  # set -1 to get all predictions
         checkpoint: bool = False,
-        class_pruning_list: list | None = None,
+        class_masking_list: list | None = None,
     ):
         self.device = device
         self.topk = topk
@@ -52,7 +52,7 @@ class ModelInference:
         self.name_to_id_map = self._build_name_to_id_map()
         self.model = self._load_model(model_path, num_classes=len(self.id_to_taxon_key))
         self.model.eval()
-        self.class_pruning_list = class_pruning_list
+        self.class_masking_list = class_masking_list
 
     def _load_id_to_taxon_key_map(self, taxon_key_to_id_json: str):
         """Load the mapping from category id to taxon key"""
@@ -143,8 +143,8 @@ class ModelInference:
         model = model.to(self.device)
         return model
 
-    def _prune_classes(self, predictions: torch.Tensor):
-        """Class pruning function to include specific output classes and remove the rest"""
+    def _mask_classes(self, predictions: torch.Tensor):
+        """Class mask function to include specific output classes and exclude the rest"""
 
         # Create a mask for the classes to prune
         mask = torch.zeros(
@@ -152,7 +152,7 @@ class ModelInference:
         )
 
         # Get species keys that needs to be removed
-        for taxon_to_keep in self.class_pruning_list:
+        for taxon_to_keep in self.class_masking_list:
             id_to_keep = self.name_to_id_map[taxon_to_keep]
             mask[id_to_keep] = True
 
@@ -173,8 +173,8 @@ class ModelInference:
         predictions = self.model(image)
 
         # Prune classes, if requested
-        if self.class_pruning_list:
-            predictions = self._prune_classes(predictions)
+        if self.class_masking_list:
+            predictions = self._mask_classes(predictions)
 
         predictions = softmax(predictions, dim=1).cpu()
 

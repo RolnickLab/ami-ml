@@ -23,27 +23,27 @@ if __name__ == "__main__":
     test_image = Image.open(ASSETS_PATH / "Arrhenophanes_perspicilla.jpg")
 
     # Model-builder related parameters
-    model_path = os.getenv("CLASS_PRUNING_PANAMA_MODEL", "panama_model.pth")
+    model_path = os.getenv("CLASS_MASKING_PANAMA_MODEL", "panama_model.pth")
     taxon_key_to_id_map = os.getenv(
-        "CLASS_PRUNING_KEY_TO_ID_MAP", "taxon_key_to_id_map.json"
+        "CLASS_MASKING_KEY_TO_ID_MAP", "taxon_key_to_id_map.json"
     )
     taxon_key_to_name_map = os.getenv(
-        "CLASS_PRUNING_KEY_TO_NAME_MAP", "taxon_key_to_name_map.json"
+        "CLASS_MASKING_KEY_TO_NAME_MAP", "taxon_key_to_name_map.json"
     )
     with open(
-        os.getenv("CLASS_PRUNING_SPECIES_OF_INTEREST", "pruning_list.pkl"), "rb"
+        os.getenv("CLASS_MASKING_SPECIES_OF_INTEREST", "masking_list.pkl"), "rb"
     ) as f:
-        class_pruning_list = pickle.load(f)
+        class_masking_list = pickle.load(f)
 
     # Predict on image
-    pruned_classifier = ModelInference(
+    masked_classifier = ModelInference(
         model_path,
         "resnet50",
         taxon_key_to_id_map,
         taxon_key_to_name_map,
         device,
         topk=5,
-        class_pruning_list=class_pruning_list,
+        class_masking_list=class_masking_list,
     )
-    species_prediction = pruned_classifier.predict(test_image)
+    species_prediction = masked_classifier.predict(test_image)
     print(f"The species predictions along with confidences are: {species_prediction}")

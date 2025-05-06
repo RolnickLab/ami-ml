@@ -1,8 +1,8 @@
-## Class Pruning
-This repository contains code for pruning a pre-trained model to only classify a subset of classes. 
-For example, if you have a model that classifies 1000 classes, but you only want to classify 10 of them, you can use this code to prune the model to only classify those 10 classes.
+## Class Masking
+This repository contains code for masking a pre-trained model to only classify a subset of classes. 
+For example, if you have a model that classifies 1000 classes, but you only want to classify 10 of them, you can use this code to mask the output layer to only classify those 10 classes.
 
-As a use case, the Panama model is pruned to only classify the Barro Colorado Island (BCI) species.
+As a use case, the Panama model is masked to only classify the Barro Colorado Island (BCI) species.
 
 ### Species of Interest
 The python notebook `modifications_for_bci_classifier.ipynb` contains code to process a checklist and save the species of interest to a pickle file. Upon reading, the pickle should be a list of species names and the model will restrict predictions to only these species. An example is below:
@@ -20,7 +20,7 @@ species_of_interest = [
 ```
 
 ### Model Inference Class
-The [`ModelInference`](https://github.com/RolnickLab/ami-ml/blob/main/src/classification/model_inference.py) class has been modified to include a species pruning list. In addition to the species list `pruning_list.pkl`, two json mapping files are required:
+The [`ModelInference`](https://github.com/RolnickLab/ami-ml/blob/main/src/classification/model_inference.py) class has been modified to include a species masking list. In addition to the species list `masking_list.pkl`, two json mapping files are required:
 
 ```
 taxon_key_to_id_map = {
@@ -50,4 +50,4 @@ taxon_key_to_name_map = {
 ```
 
 
-An example usage of class pruning is in `pruning.py`.
+An example usage of class pruning is in `masking.py`.
