@@ -172,7 +172,7 @@ class ModelInference:
         # Model prediction on the image
         predictions = self.model(image)
 
-        # Prune classes, if requested
+        # Mask classes, if requested
         if self.class_masking_list:
             predictions = self._mask_classes(predictions)
 
