@@ -9,6 +9,7 @@ import os
 import pickle
 import shutil
 from pathlib import Path
+from typing import Tuple
 
 import dotenv
 
@@ -23,8 +24,18 @@ SPECIES_EXCLUSION_LIST = os.getenv(
 )
 
 
-def _get_ground_truth_info(insect_labels: dict, img_name: str):
-    """Get ground truth label information"""
+def _get_ground_truth_info(
+    insect_labels: dict, img_name: str
+) -> Tuple[str, str, int, str]:
+    """Get ground truth label information
+
+    Args:
+        insect_labels (dict): Dictionary containing insect labels.
+        img_name (str): Name of the image.
+
+    Returns:
+        tuple: Ground truth label, rank, accepted taxon key, and region.
+    """
 
     gt_label = insect_labels[img_name]["label"]
     gt_rank = insect_labels[img_name]["taxon_rank"]
@@ -39,7 +50,7 @@ def convert_raw_data_to_structured_format(
     fine_tuning_dataset_dir: str,
     species_exclusion_list_f: str,
     region: str,
-):
+) -> None:
     """Convert raw AMI Traps data to a structured ML format
 
     Args:
