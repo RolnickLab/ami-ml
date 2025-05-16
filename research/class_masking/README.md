@@ -50,4 +50,4 @@ taxon_key_to_name_map = {
 ```
 
 
-An example usage of class pruning can be found in `masking.py`.
+An example usage of class pruning can be found in `masking.py`. The data for this work is uploaded at `s3://ami-class-masking/`. Please contact the team for access to the Object Store.
