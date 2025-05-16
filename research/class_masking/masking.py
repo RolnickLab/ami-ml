@@ -24,15 +24,12 @@ if __name__ == "__main__":
 
     # Model-builder related parameters
     model_path = os.getenv("CLASS_MASKING_PANAMA_MODEL", "panama_model.pth")
-    taxon_key_to_id_map = os.getenv(
-        "CLASS_MASKING_KEY_TO_ID_MAP", "taxon_key_to_id_map.json"
+    taxon_key_to_id_map = ASSETS_PATH / "class_masking" / "panama_key_to_id_map.json"
+
+    taxon_key_to_name_map = (
+        ASSETS_PATH / "class_masking" / "panama_key_to_taxon_map.json"
     )
-    taxon_key_to_name_map = os.getenv(
-        "CLASS_MASKING_KEY_TO_NAME_MAP", "taxon_key_to_name_map.json"
-    )
-    with open(
-        os.getenv("CLASS_MASKING_SPECIES_OF_INTEREST", "masking_list.pkl"), "rb"
-    ) as f:
+    with open(ASSETS_PATH / "class_masking" / "november_bci_species.pkl", "rb") as f:
         class_masking_list = pickle.load(f)
 
     # Predict on image
