@@ -23,7 +23,32 @@ ASSETS_PATH = PROJECT_ROOT / "assets"
 
 
 class ModelInference:
-    """Model inference class definition"""
+    """This class is used to load a pre-trained model and perform inference on images.
+
+    Parameters
+    ----------
+    model_path : str
+        Path to the pre-trained model file.
+    model_type : str
+        Type of the model (e.g., 'resnet50', 'vit_base_patch16_224_in21k').
+    taxon_key_to_id_json : str
+        Path to the JSON file mapping taxon keys to IDs.
+    taxon_key_to_name_json : str
+        Path to the JSON file mapping taxon keys to species names.
+    device : str
+        Device to run the model on ('cpu' or 'cuda').
+    preprocess_mode : str, optional
+        Preprocessing mode for the input image ('torch', 'tf', or 'default').
+    input_size : int, optional
+        Size of the input image (default is 128).
+    topk : int, optional
+        Number of top predictions to return (default is 5, set to -1 for all predictions).
+    checkpoint : bool, optional
+        Whether to load the model from a checkpoint (default is False).
+    class_masking_list : list, optional
+        List of classes to include in the predictions (default is None, which includes all classes).
+
+    """
 
     def __init__(
         self,
@@ -34,7 +59,7 @@ class ModelInference:
         device: str,
         preprocess_mode: str = "torch",
         input_size: int = 128,
-        topk: int = 5,  # set -1 to get all predictions
+        topk: int = 5,
         checkpoint: bool = False,
         class_masking_list: list | None = None,
     ):
