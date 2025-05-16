@@ -241,14 +241,9 @@ def model_inference(
     model.eval()
     with torch.no_grad():
         for images, labels in dataloader:
-            # start_time = time.time()
-
             images, labels = images.to(device), labels.to(device)
             logits = model(images)
             logits, labels = logits.cpu(), labels.cpu()
-
-            # end_time = time.time()
-            # print(f"Batch processed length is {len(images)} and time taken is {end_time - start_time:.2f} seconds.", flush=True)
 
             yield logits, labels
 
@@ -282,9 +277,7 @@ def tune_temperature(
     print(f"Model inference took {end_time - start_time:.2f} seconds.", flush=True)
 
     logits_list = torch.cat([logits for logits, _ in logits_and_labels])
-    print("Logits collected", flush=True)
     labels_list = torch.cat([labels for _, labels in logits_and_labels])
-    print("Labels collected", flush=True)
 
     del logits_and_labels
     gc.collect()
@@ -373,7 +366,7 @@ def main(
         flush=True,
     )
 
-    # Calculate ECE on AMI-Trapns with and without temperature scaling
+    # Calculate ECE on AMI-Traps with and without temperature scaling
     trap_error_before_calib, trap_error_after_calib = calibration_error_on_ami_traps(
         model,
         device,
@@ -390,23 +383,4 @@ def main(
 
 
 if __name__ == "__main__":
-    # MODEL_WEIGHTS = os.getenv("QUEBEC_VERMONT_WEIGHTS")
-    # CONF_CALIB_VAL_WBDS = os.getenv("TEST_CONF_CALIB_VAL_WBDS")
-    # CONF_CALIB_TEST_WBDS = os.getenv("TEST_CONF_CALIB_TEST_WBDS")
-    # CONF_CALIB_INSECT_CROPS_DIR = os.getenv("CONF_CALIB_INSECT_CROPS_DIR")
-    # CATEGORY_MAP = os.getenv("NEA_CATEGORY_MAP")
-
-    # main(
-    #     model_weights=MODEL_WEIGHTS,
-    #     model_type="resnet50",
-    #     num_classes=2497,
-    #     val_webdataset=CONF_CALIB_VAL_WBDS,
-    #     test_webdataset=CONF_CALIB_TEST_WBDS,
-    #     image_input_size=128,
-    #     batch_size=64,
-    #     preprocess_mode="torch",
-    #     trap_dataset_dir=CONF_CALIB_INSECT_CROPS_DIR,
-    #     region="NorthEasternAmerica",
-    #     category_map=CATEGORY_MAP,
-    # )
     typer.run(main)
