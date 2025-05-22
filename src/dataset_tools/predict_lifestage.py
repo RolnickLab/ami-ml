@@ -6,6 +6,7 @@
 
 import json
 import os
+from typing import Union
 
 import pandas as pd
 import timm
@@ -150,9 +151,9 @@ def predict_lifestage(
     log_frequence: int,
     category_map_json: str,
     results_csv: str,
-    wandb_entity: str,
-    wandb_project: str,
-    wandb_run: str,
+    wandb_entity: Union[str, None],
+    wandb_project: Union[str, None],
+    wandb_run: Union[str, None],
 ):
     # Weights and Biases logging
     if wandb_entity:
