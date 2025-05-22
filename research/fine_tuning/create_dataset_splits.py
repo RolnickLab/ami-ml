@@ -131,6 +131,6 @@ def create_dataset_splits(
 
 if __name__ == "__main__":
     DATA_DIR = os.getenv(
-        "FINE_TUNING_AMI_TRAPS_DATASET", "./fine_tuning_data/ami_traps"
+        "FINE_TUNING_UK_DENMARK_AMI_TRAPS_DATASET", "./fine_tuning_data/ami_traps"
     )
     create_dataset_splits(DATA_DIR)

@@ -16,8 +16,8 @@ import dotenv
 dotenv.load_dotenv()
 
 AMI_TRAPS_DATASET = os.getenv("AMI_TRAPS_DATASET", "./ami_traps_dataset")
-FINE_TUNING_AMI_TRAPS_DATASET = os.getenv(
-    "FINE_TUNING_AMI_TRAPS_DATASET", "./fine_tuning_data/ami_traps"
+FINE_TUNING_UK_DENMARK_AMI_TRAPS_DATASET = os.getenv(
+    "FINE_TUNING_UK_DENMARK_AMI_TRAPS_DATASET", "./fine_tuning_data/ami_traps"
 )
 SPECIES_EXCLUSION_LIST = os.getenv(
     "SPECIES_EXCLUSION_LIST", "ami-traps_sp_missing_in_ami-gbif.pickle"
@@ -98,7 +98,7 @@ def convert_raw_data_to_structured_format(
 if __name__ == "__main__":
     convert_raw_data_to_structured_format(
         AMI_TRAPS_DATASET,
-        FINE_TUNING_AMI_TRAPS_DATASET,
+        FINE_TUNING_UK_DENMARK_AMI_TRAPS_DATASET,
         SPECIES_EXCLUSION_LIST,
-        "NorthEasternAmerica",
+        "WesternEurope",
     )

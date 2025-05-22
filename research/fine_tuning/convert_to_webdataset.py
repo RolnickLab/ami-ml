@@ -122,8 +122,10 @@ def convert_to_webdataset(fine_tuning_data_dir: str, category_map_f: str) -> Non
 
 
 if __name__ == "__main__":
-    FINE_TUNING_DATA_DIR = os.getenv("FINE_TUNING_DATA_DIR", "./fine_tuning_data/")
-    NEAMERICA_CATEGORY_MAP = os.getenv(
-        "NEAMERICA_CATEGORY_MAP", "./neamerica_category_map.csv"
+    FINE_TUNING_UK_DENMARK_DATA_DIR = os.getenv(
+        "FINE_TUNING_UK_DENMARK_DATA_DIR", "./fine_tuning_data/"
     )
-    convert_to_webdataset(FINE_TUNING_DATA_DIR, NEAMERICA_CATEGORY_MAP)
+    WEUROPE_CATEGORY_MAP = os.getenv(
+        "WEUROPE_CATEGORY_MAP", "./neamerica_category_map.csv"
+    )
+    convert_to_webdataset(FINE_TUNING_UK_DENMARK_DATA_DIR, WEUROPE_CATEGORY_MAP)

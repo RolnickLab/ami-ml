@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=fine_tune_classifier
 #SBATCH --ntasks=1
-#SBATCH --time=2:00:00
+#SBATCH --time=1:00:00
 #SBATCH --mem=48G
 #SBATCH --partition=main
 #SBATCH --cpus-per-task=4
@@ -32,9 +32,9 @@ ami-classification train-model \
 --model_type "convnext_tiny_in22k" \
 --num_classes 2497 \
 --existing_weights $NEAMERICA_CONVNEXT_T_WEIGHTS \
---total_epochs 15 \
---early_stopping 4 \
---warmup_epochs 2 \
+--total_epochs 20 \
+--early_stopping 15 \
+--warmup_epochs 8 \
 --train_webdataset "$SLURM_TMPDIR/train-{000000..000002}.tar" \
 --val_webdataset "$SLURM_TMPDIR/val-000000.tar" \
 --test_webdataset "$SLURM_TMPDIR/test-000000.tar" \
@@ -44,7 +44,7 @@ ami-classification train-model \
 --model_save_directory $FINE_TUNING_DATA_DIR \
 --wandb_entity "moth-ai" \
 --wandb_project "fine-tuning" \
---wandb_run_name "fine-tuning_v0"
+--wandb_run_name "fine-tuning_v1"
 
 # Print time taken to execute the script
 echo "Time taken to train the model: $((SECONDS/60)) minutes"
