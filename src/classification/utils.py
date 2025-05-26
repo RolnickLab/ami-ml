@@ -126,7 +126,19 @@ def build_model(
     pretrained: bool = True,
     checkpoint: bool = False,
 ) -> torch.nn.Module:
-    """Model builder"""
+    """Model builder
+
+    Args:
+        device (str): Device to use for the model.
+        model_type (str): Type of the model.
+        num_classes (int): Number of classes for classification.
+        existing_weights (str, optional): Path to existing weights. Defaults to None.
+        pretrained (bool, optional): Whether to use pretrained weights. Defaults to True.
+        checkpoint (bool, optional): Whether to load checkpoint. Defaults to False.
+    Returns:
+        torch.nn.Module: The model.
+
+    """
 
     if model_type not in AVAILABLE_MODELS:
         raise RuntimeError(f"Model {model_type} not implemented")
