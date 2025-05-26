@@ -79,7 +79,7 @@ def create_dataset_splits(
     Splits the dataset into train, validation, and test sets.
 
     Args:
-        data (str): Path to the dataset directory.
+        data_dir (str): Path to the dataset directory.
         train_size (float): Proportion of the dataset to include in the train split.
         val_size (float): Proportion of the dataset to include in the validation split.
         test_size (float): Proportion of the dataset to include in the test split.

@@ -51,11 +51,12 @@ def convert_raw_data_to_structured_format(
     species_exclusion_list_f: str,
     region: str,
 ) -> None:
-    """Convert raw AMI Traps data to a structured ML format
+    """Convert raw AMI Traps data to a structured ML format. It only fiters crops for a particular region, labelled at the species level, and those not in the species exclusion list.
 
     Args:
         ami_traps_dataset_dir (str): Path to the directory containing the original AMI traps dataset.
         fine_tuning_dataset_dir (str): Path to the directory where the AMI traps data will be structured and stored.
+        species_exclusion_list_f (str): Path to the file containing the species exclusion list.
         region (str): Region to store data for.
 
     Returns:
@@ -83,13 +84,13 @@ def convert_raw_data_to_structured_format(
             and (gt_accepted_taxon_key not in species_exclusion_list)
         ):
             # Create directory if doesn't exist
-            targer_dir = Path(fine_tuning_dataset_dir) / str(gt_accepted_taxon_key)
-            os.makedirs(targer_dir, exist_ok=True)
+            target_dir = Path(fine_tuning_dataset_dir) / str(gt_accepted_taxon_key)
+            os.makedirs(target_dir, exist_ok=True)
 
             # Copy image to the directory
             image_path = Path(ami_traps_dataset_dir) / (Path(image_name).stem + ".png")
             try:
-                shutil.copy(image_path, targer_dir)
+                shutil.copy(image_path, target_dir)
             except FileNotFoundError:
                 print(f"File not found: {image_path}")
                 continue

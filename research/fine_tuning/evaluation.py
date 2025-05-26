@@ -28,6 +28,7 @@ def _filter_classes(
     """Filter classes based on the samples type.
 
     Args:
+        data_dir (str): Directory containing the dataset.
         images (torch.Tensor): Tensor of images.
         labels (torch.Tensor): Tensor of labels.
         samples_type (str): Type of samples to filter.
@@ -64,10 +65,15 @@ def evaluate_model(
     """Evaluate a model on the AMI Traps test set.
 
     Args:
-        model_dir (str): Directory containing the model.
-        dataset_dir (str): Directory containing the dataset.
+        data_dir (str): Directory containing the dataset.
+        model_file (str): Path to the model file.
+        model_type (str): Type of the model (e.g., "convnext_tiny_in22k", "resnet50").
+        num_classes (int): Number of output classes in the model.
+        test_webdataset (str): Path to the test WebDataset file.
+        samples_type (str): Type of samples to filter ("all", "seen", "unseen").
         batch_size (int, optional): Batch size for evaluation. Defaults to 32.
-        num_workers (int, optional): Number of workers for data loading. Defaults to 4.
+        image_input_size (int, optional): Input size for the images. Defaults to 128.
+        preprocess_mode (str, optional): Preprocessing mode for the images. Defaults to "torch".
     """
 
     # Load the model

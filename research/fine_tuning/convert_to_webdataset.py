@@ -72,7 +72,7 @@ def _write_samples_to_sink(
 
     Args:
         samples (Generator): Generator object containing the files to be written.
-        webdataset_dir (str): Directory to save the webdataset.
+        webdataset_dir (Path): Directory to save the webdataset.
         split_type (str): Type of split (train, val, test).
         max_shard_size (int): Maximum size of each shard in bytes.
 
