@@ -39,21 +39,23 @@ def _get_image(image_path: Path) -> Image.Image | None:
     return image
 
 
-def _create_samples(dataset_dir: str, category_map: dict, split_type: str) -> Generator:
+def _create_samples(
+    dataset_dir: Path, category_map: dict, split_type: str
+) -> Generator:
     """Create samples for the webdataset.
 
     Args:
-        dataset_dir (str): Directory containing the dataset.
+        dataset_dir (Path): Directory containing the dataset.
         category_map (dict): Mapping of taxon keys to labels.
         split_type (str): Type of split (train, val, test).
     """
 
     # Read the split files
-    dataset_df = pd.read_csv(Path(dataset_dir) / (split_type + ".csv"))
+    dataset_df = pd.read_csv(dataset_dir / (split_type + ".csv"))
 
     for _, row in dataset_df.iterrows():
         taxon_key, filename = str(row["taxonkey"]), row["filename"]
-        image = _get_image(Path(dataset_dir) / "ami_traps" / taxon_key / filename)
+        image = _get_image(dataset_dir / "ami_traps" / taxon_key / filename)
         label = category_map.get(taxon_key, None)
         if not label:
             print(f"Label not found for taxon key {taxon_key}", flush=True)
@@ -79,7 +81,7 @@ def _write_samples_to_sink(
     Returns:
         None: The function saves the samples in the specified directory.
     """
-    webdataset_pattern = str(Path(webdataset_dir) / f"{split_type}-%06d.tar")
+    webdataset_pattern = str(webdataset_dir / f"{split_type}-%06d.tar")
     with wds.ShardWriter(webdataset_pattern, maxsize=max_shard_size) as sink:
         for sample in samples:
             sink.write(sample)
@@ -101,23 +103,24 @@ def convert_to_webdataset(fine_tuning_data_dir: str, category_map_f: str) -> Non
         category_map = json.load(f)
 
     # Create samples for the webdataset
+    fine_tuning_data_path = Path(fine_tuning_data_dir)
     train_samples = _create_samples(
-        fine_tuning_data_dir,
+        fine_tuning_data_path,
         category_map,
         "train",
     )
-    val_samples = _create_samples(fine_tuning_data_dir, category_map, "val")
-    test_samples = _create_samples(fine_tuning_data_dir, category_map, "test")
+    val_samples = _create_samples(fine_tuning_data_path, category_map, "val")
+    test_samples = _create_samples(fine_tuning_data_path, category_map, "test")
 
     # Save the samples to the webdataset format
     _write_samples_to_sink(
-        train_samples, Path(fine_tuning_data_dir) / "webdataset" / "train", "train"
+        train_samples, fine_tuning_data_path / "webdataset" / "train", "train"
     )
     _write_samples_to_sink(
-        val_samples, Path(fine_tuning_data_dir) / "webdataset" / "val", "val"
+        val_samples, fine_tuning_data_path / "webdataset" / "val", "val"
     )
     _write_samples_to_sink(
-        test_samples, Path(fine_tuning_data_dir) / "webdataset" / "test", "test"
+        test_samples, fine_tuning_data_path / "webdataset" / "test", "test"
     )
 
 
