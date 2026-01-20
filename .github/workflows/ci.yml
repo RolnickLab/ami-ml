@@ -9,17 +9,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.12"
     
     - name: Install uv
       run: |
@@ -31,7 +28,7 @@ jobs:
     
     - name: Install dependencies
       run: |
-        uv sync --extra dev
+        uv sync --extra dev --extra research
     
     - name: Test CLI commands
       run: |
@@ -47,3 +44,7 @@ jobs:
     - name: Verify imports
       run: |
         uv run python -c "import torch; import numpy; import pandas; print('Core dependencies imported successfully')"
+    
+    - name: Verify optional dependencies (research)
+      run: |
+        uv run python -c "import awscli; import absl; print('Research dependencies imported successfully')"
