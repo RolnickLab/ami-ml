@@ -1,67 +1,68 @@
-[tool.poetry]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
 name = "ami-ml"
 version = "0.1.0"
 description = "Software & research related to the automated monitoring of insects"
-authors = [
-    "Aditya Jain <aditya.jain@mila.quebec>",
-    "Michael Bunsen <michael.bunsen@mila.quebec>",
-    "Fagner Cunha <fagner.cunha@icomp.ufam.edu.br>",
-    "Léonard Pasi <leonardpasi@gmail.com>",
-]
-license = "MIT"
 readme = "README.md"
-packages = [{ include = "src" }]
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Aditya Jain", email = "aditya.jain@mila.quebec"},
+    {name = "Michael Bunsen", email = "michael.bunsen@mila.quebec"},
+    {name = "Fagner Cunha", email = "fagner.cunha@icomp.ufam.edu.br"},
+    {name = "Léonard Pasi", email = "leonardpasi@gmail.com"},
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-click = "^8.1.6"
-numpy = "^1.25.1"
-torch = "^2.0,!=2.0.1"
-tqdm = "^4.65.0"
-segment-anything = "^1.0"
-torchvision = "^0.15.1,!=0.15.2"
-torchmetrics = "^0.11.4"
-pillow = "^10.0.0"
-matplotlib = "^3.7.2"
-python-dwca-reader = "^0.15.1"
-pandas = "^2.1.0"
-scikit-learn = "^1.3.0"
-webdataset = "^0.2.48"
-timm = "^0.9.8"
-typer = "^0.12.3"
-python-dotenv = "^1.0.1"
-wandb = "^0.17.5"
-pygbif = "^0.6.5"
-opencv-python = "^4.11.0.86"
+dependencies = [
+    "click>=8.1.6",
+    "numpy>=1.25.1",
+    "torch>=2.0,!=2.0.1",
+    "tqdm>=4.65.0",
+    "segment-anything>=1.0",
+    "torchvision>=0.15.1,!=0.15.2",
+    "torchmetrics>=0.11.4",
+    "pillow>=10.0.0",
+    "matplotlib>=3.7.2",
+    "python-dwca-reader>=0.15.1",
+    "pandas>=2.1.0",
+    "scikit-learn>=1.3.0",
+    "webdataset>=0.2.48",
+    "timm>=0.9.8",
+    "typer>=0.12.3",
+    "python-dotenv>=1.0.1",
+    "wandb>=0.17.5",
+    "pygbif>=0.6.5",
+    "opencv-python>=4.11.0.86",
+]
 
-[tool.poetry.group.research]
-optional = true
+[project.optional-dependencies]
+research = [
+    "awscli>=1.33.44",
+    "awscli-plugin-endpoint>=0.4",
+    "absl-py>=2.1.0",
+]
+dev = [
+    "pre-commit>=3.3.3",
+    "black>=23.7.0",
+    "flake8>=6.0.0",
+    "Flake8-pyproject>=1.2.3",
+    "isort>=5.12.0",
+    "mypy>=1.4.1",
+    "ipdb>=0.13.13",
+    "python-devtools>=2",
+    "ipykernel>=6.29.4",
+    "pytest>=8.1.1",
+]
 
-[tool.poetry.group.research.dependencies]
-awscli = "^1.33.44"
-awscli-plugin-endpoint = "^0.4"
-absl-py = "^2.1.0"
-
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^3.3.3"
-black = "^23.7.0"
-flake8 = "^6.0.0"
-Flake8-pyproject = "^1.2.3"
-isort = "^5.12.0"
-mypy = "^1.4.1"
-ipdb = "^0.13.13"
-python-devtools = "^2"
-ipykernel = "^6.29.4"
-pytest = "^8.1.1"
-
-[tool.poetry.scripts]
+[project.scripts]
 ami-dataset = "src.dataset_tools.cli:cli"
 ami-classification = "src.classification.cli:cli"
 
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.flake8]
 max-line-length = 88
