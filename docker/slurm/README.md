@@ -6,7 +6,7 @@ This directory contains a Docker Compose setup that simulates a SLURM environmen
 
 The environment consists of:
 - **SLURM Controller** (`slurmctld`): Manages job scheduling and cluster state
-- **Compute Node** (`c1`): Single compute node with 8 CPUs, 32GB RAM, and optional GPU support
+- **Compute Node** (`c1`): Single compute node with 4 CPUs, 16GB RAM, and optional GPU support
 - **Partitions**: Configured to match DRAC's partition structure:
   - `main`: Default partition for general compute jobs (max 48h)
   - `long`: For longer-running jobs (unlimited time)
@@ -223,7 +223,7 @@ When adapting real job scripts from `research/` or `scripts/`:
 
 3. **Temporary Storage**: `$SLURM_TMPDIR` works the same way in the container
 
-4. **Resource Requests**: Adjust to fit the container limits (8 CPUs, 32GB RAM, 2 GPUs)
+4. **Resource Requests**: Adjust to fit the container limits (4 CPUs, 16GB RAM, optional GPU support)
 
 ## Troubleshooting
 
