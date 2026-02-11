@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  slurm-controller:
+    build:
+      context: .
+      dockerfile: docker/slurm/Dockerfile
+    image: ami-ml-slurm:latest
+    hostname: slurmctld
+    container_name: ami-ml-slurmctld
+    privileged: true
+    networks:
+      - slurm
+    volumes:
+      - ./:/workspace
+      - slurm-etc:/etc/slurm
+      - slurm-var:/var/spool/slurm
+      - slurm-log:/var/log/slurm
+    environment:
+      - SLURM_ROLE=controller
+    command: ["slurmctld"]
+    ports:
+      - "6817:6817"
+      - "6818:6818"
+
+  slurm-compute:
+    build:
+      context: .
+      dockerfile: docker/slurm/Dockerfile
+    image: ami-ml-slurm:latest
+    hostname: c1
+    container_name: ami-ml-c1
+    privileged: true
+    networks:
+      - slurm
+    volumes:
+      - ./:/workspace
+      - slurm-etc:/etc/slurm
+      - slurm-var:/var/spool/slurm
+      - slurm-log:/var/log/slurm
+    environment:
+      - SLURM_ROLE=compute
+    command: ["slurmd"]
+    depends_on:
+      - slurm-controller
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+networks:
+  slurm:
+    driver: bridge
+
+volumes:
+  slurm-etc:
+  slurm-var:
+  slurm-log:

@@ -1,0 +1,126 @@
+name: Test SLURM Jobs
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'scripts/job_*.sh'
+      - 'research/**/job_*.sh'
+      - 'docker/slurm/**'
+      - '.github/workflows/test-slurm-jobs.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'scripts/job_*.sh'
+      - 'research/**/job_*.sh'
+      - 'docker/slurm/**'
+      - '.github/workflows/test-slurm-jobs.yml'
+  workflow_dispatch:
+
+jobs:
+  test-slurm-environment:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build SLURM Docker images
+        run: |
+          docker-compose -f docker-compose.slurm.yml build
+      
+      - name: Start SLURM cluster
+        run: |
+          docker-compose -f docker-compose.slurm.yml up -d
+          # Wait for SLURM to be ready
+          sleep 30
+      
+      - name: Check SLURM cluster status
+        run: |
+          docker exec ami-ml-slurmctld sinfo
+          docker exec ami-ml-slurmctld scontrol show nodes
+      
+      - name: Test basic SLURM job submission
+        run: |
+          # Submit test job
+          docker exec ami-ml-slurmctld bash -c "cd /workspace && sbatch docker/slurm/examples/job_hello.sh"
+          
+          # Wait for job to complete
+          sleep 10
+          
+          # Check job status
+          docker exec ami-ml-slurmctld squeue
+          
+          # Display job output
+          docker exec ami-ml-slurmctld bash -c "cd /workspace && cat hello_slurm_*.out || echo 'Job output not found yet'"
+      
+      - name: Test environment setup job
+        run: |
+          # Submit environment test job
+          JOB_ID=$(docker exec ami-ml-slurmctld bash -c "cd /workspace && sbatch docker/slurm/examples/job_test_env.sh" | grep -oP '\d+')
+          echo "Submitted job ID: $JOB_ID"
+          
+          # Wait for job to complete (with timeout)
+          timeout=120
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            status=$(docker exec ami-ml-slurmctld squeue -j $JOB_ID -h -o "%T" 2>/dev/null || echo "COMPLETED")
+            if [ "$status" = "COMPLETED" ] || [ -z "$status" ]; then
+              echo "Job $JOB_ID completed"
+              break
+            fi
+            echo "Job $JOB_ID status: $status (waiting...)"
+            sleep 10
+            elapsed=$((elapsed + 10))
+          done
+          
+          # Check if job completed successfully
+          docker exec ami-ml-slurmctld bash -c "sacct -j $JOB_ID --format=JobID,State,ExitCode"
+          
+          # Display job output
+          docker exec ami-ml-slurmctld bash -c "cd /workspace && cat test_env_setup_*.out"
+      
+      - name: Test ami-ml package availability
+        run: |
+          # Submit ami-ml test job
+          JOB_ID=$(docker exec ami-ml-slurmctld bash -c "cd /workspace && sbatch docker/slurm/examples/job_test_ami_ml.sh" | grep -oP '\d+')
+          echo "Submitted job ID: $JOB_ID"
+          
+          # Wait for job to complete (with timeout)
+          timeout=300
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            status=$(docker exec ami-ml-slurmctld squeue -j $JOB_ID -h -o "%T" 2>/dev/null || echo "COMPLETED")
+            if [ "$status" = "COMPLETED" ] || [ -z "$status" ]; then
+              echo "Job $JOB_ID completed"
+              break
+            fi
+            echo "Job $JOB_ID status: $status (waiting...)"
+            sleep 15
+            elapsed=$((elapsed + 15))
+          done
+          
+          # Check if job completed successfully
+          docker exec ami-ml-slurmctld bash -c "sacct -j $JOB_ID --format=JobID,State,ExitCode"
+          
+          # Display job output
+          docker exec ami-ml-slurmctld bash -c "cd /workspace && cat test_ami_ml_training_*.out"
+      
+      - name: Collect SLURM logs on failure
+        if: failure()
+        run: |
+          echo "=== SLURM Controller Logs ==="
+          docker-compose -f docker-compose.slurm.yml logs slurm-controller
+          echo "=== SLURM Compute Node Logs ==="
+          docker-compose -f docker-compose.slurm.yml logs slurm-compute
+          echo "=== All job outputs ==="
+          docker exec ami-ml-slurmctld bash -c "cd /workspace && ls -la *.out 2>/dev/null || echo 'No job outputs found'"
+          docker exec ami-ml-slurmctld bash -c "cd /workspace && cat *.out 2>/dev/null || echo 'No job outputs to display'"
+      
+      - name: Stop SLURM cluster
+        if: always()
+        run: |
+          docker-compose -f docker-compose.slurm.yml down -v
