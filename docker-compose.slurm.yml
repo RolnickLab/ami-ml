@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   slurm-controller:
     build:
@@ -43,13 +41,15 @@ services:
     command: ["slurmd"]
     depends_on:
       - slurm-controller
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # Uncomment the deploy section below to enable GPU support
+    # Requires NVIDIA Docker runtime to be installed
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
 
 networks:
   slurm:
