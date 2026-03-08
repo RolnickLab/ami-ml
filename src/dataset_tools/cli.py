@@ -22,7 +22,7 @@ To add a new command, create a new function below following these instructions:
 """
 
 import functools
-from typing import Union
+from typing import Optional, Union
 
 import click
 
@@ -35,6 +35,7 @@ DELETE_CMD = "delete_cmd"
 PREDICT_CMD = "predict_cmd"
 SPLIT_CMD = "split_cmd"
 WEBDATASET_CMD = "webdataset_cmd"
+DOWNLOAD_GBIF_CMD = "download_gbif_cmd"
 
 # This is most useful to automatically test the CLI
 COMMAND_KEYS = frozenset(
@@ -46,6 +47,7 @@ COMMAND_KEYS = frozenset(
         CLEAN_CMD,
         SPLIT_CMD,
         WEBDATASET_CMD,
+        DOWNLOAD_GBIF_CMD,
     ]
 )
 
@@ -58,6 +60,7 @@ COMMANDS = {
     CLEAN_CMD: "clean-dataset",
     SPLIT_CMD: "split-dataset",
     WEBDATASET_CMD: "create-webdataset",
+    DOWNLOAD_GBIF_CMD: "download-gbif",
 }
 
 # Command help text dictionary
@@ -69,6 +72,7 @@ COMMANDS_HELP = {
     CLEAN_CMD: "Filter out images to ensure quality of training data",
     SPLIT_CMD: "Split the provided dataset into train, validate and test sets",
     WEBDATASET_CMD: "Assemble final training set in webdataset format",
+    DOWNLOAD_GBIF_CMD: "Download a GBIF Darwin Core Archive filtered by verbatim scientific names",
 }
 
 
@@ -801,6 +805,71 @@ def create_webdataset_command(
         wandb_project=wandb_project,
         wandb_run=wandb_run,
     )
+
+
+#
+# Download GBIF Command
+#
+@click.command(
+    name=COMMANDS[DOWNLOAD_GBIF_CMD],
+    help=COMMANDS_HELP[DOWNLOAD_GBIF_CMD],
+    context_settings={"show_default": True},
+)
+@click.argument("names", nargs=-1, required=False, metavar="NAME...")
+@click.option(
+    "--names-file",
+    default=None,
+    help="Text file with one species name per line (blank lines and # comments ignored)",
+)
+@click.option(
+    "--output-dir",
+    required=True,
+    help="Directory to save the downloaded DwC-A zip file",
+)
+@click.option(
+    "--dataset-key",
+    default="50c9509d-22c7-4a22-a47d-8c48425ef4a7",
+    help="GBIF dataset UUID (default: iNaturalist Research-grade Observations)",
+)
+@click.option(
+    "--country",
+    multiple=True,
+    help="ISO 3166-1 alpha-2 country code to filter by (e.g. 'US'). Repeat to include multiple countries (e.g. --country US --country CA).",
+)
+@click.option(
+    "--bbox",
+    default=None,
+    help="Bounding box filter: 'min_lat,min_lng,max_lat,max_lng'",
+)
+@click.option(
+    "--poll-interval",
+    default=30,
+    type=int,
+    help="Seconds between GBIF status polls",
+)
+@click.option(
+    "--max-wait",
+    default=3600,
+    type=int,
+    help="Maximum seconds to wait for the download to complete",
+)
+def download_gbif_command(
+    names: tuple,
+    names_file: Optional[str],
+    output_dir: str,
+    dataset_key: str,
+    country: tuple,
+    bbox: Optional[str],
+    poll_interval: int,
+    max_wait: int,
+):
+    from src.dataset_tools.download_gbif import download_gbif, read_names_from_file
+
+    all_names = list(read_names_from_file(names_file)) if names_file else []
+    all_names.extend(names)
+    if not all_names:
+        raise click.UsageError("Provide at least one name via NAME argument(s) or --names-file")
+    download_gbif(all_names, output_dir, dataset_key, list(country) or None, bbox, poll_interval, max_wait)
 
 
 # # # # # # # # # # # # # #
