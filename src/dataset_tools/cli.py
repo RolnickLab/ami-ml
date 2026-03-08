@@ -35,6 +35,7 @@ DELETE_CMD = "delete_cmd"
 PREDICT_CMD = "predict_cmd"
 SPLIT_CMD = "split_cmd"
 WEBDATASET_CMD = "webdataset_cmd"
+FETCH_AND_PACK_CMD = "fetch_and_pack_cmd"
 DOWNLOAD_GBIF_CMD = "download_gbif_cmd"
 
 # This is most useful to automatically test the CLI
@@ -47,6 +48,7 @@ COMMAND_KEYS = frozenset(
         CLEAN_CMD,
         SPLIT_CMD,
         WEBDATASET_CMD,
+        FETCH_AND_PACK_CMD,
         DOWNLOAD_GBIF_CMD,
     ]
 )
@@ -60,6 +62,7 @@ COMMANDS = {
     CLEAN_CMD: "clean-dataset",
     SPLIT_CMD: "split-dataset",
     WEBDATASET_CMD: "create-webdataset",
+    FETCH_AND_PACK_CMD: "fetch-and-pack",
     DOWNLOAD_GBIF_CMD: "download-gbif",
 }
 
@@ -72,6 +75,10 @@ COMMANDS_HELP = {
     CLEAN_CMD: "Filter out images to ensure quality of training data",
     SPLIT_CMD: "Split the provided dataset into train, validate and test sets",
     WEBDATASET_CMD: "Assemble final training set in webdataset format",
+    FETCH_AND_PACK_CMD: (
+        "Fetch images from a split CSV and pack into webdataset shards in chunks, "
+        "deleting raw images after each chunk to minimise file quota usage"
+    ),
     DOWNLOAD_GBIF_CMD: "Download a GBIF Darwin Core Archive filtered by verbatim scientific names",
 }
 
@@ -804,6 +811,154 @@ def create_webdataset_command(
         wandb_entity=wandb_entity,
         wandb_project=wandb_project,
         wandb_run=wandb_run,
+    )
+
+
+#
+# Fetch-and-Pack Command
+#
+@click.command(
+    name=COMMANDS[FETCH_AND_PACK_CMD],
+    help=COMMANDS_HELP[FETCH_AND_PACK_CMD],
+    context_settings={"show_default": True},
+)
+@click.option(
+    "--annotations-csv",
+    type=str,
+    required=True,
+    help="Path to split CSV file with image URL, path, and label columns.",
+)
+@click.option(
+    "--temp-dir",
+    type=str,
+    required=True,
+    help=(
+        "Directory for temporarily storing raw images during a chunk. "
+        "Contents are deleted after each chunk is packed."
+    ),
+)
+@click.option(
+    "--webdataset-dir",
+    type=str,
+    required=True,
+    help="Output directory where webdataset .tar shards will be written.",
+)
+@click.option(
+    "--split",
+    type=str,
+    required=True,
+    help="Split name (e.g. train, val, test). Used as shard filename prefix.",
+)
+@click.option(
+    "--label-column",
+    type=str,
+    required=True,
+    help="CSV column containing the category label.",
+)
+@click.option(
+    "--image-path-column",
+    type=str,
+    required=True,
+    help="CSV column containing the relative image file path.",
+)
+@click.option(
+    "--url-column",
+    type=str,
+    default="identifier",
+    help="CSV column containing the image download URL.",
+)
+@click.option(
+    "--max-shard-size",
+    type=int,
+    default=100 * 1024 * 1024,
+    help="Maximum size of each shard in bytes.",
+)
+@click.option(
+    "--resize-min-size",
+    type=int,
+    help=(
+        "Size which the shortest image side will be resized to. "
+        "If not given, the original image is stored without resizing."
+    ),
+)
+@click.option(
+    "--category-map-json",
+    type=str,
+    help=(
+        "JSON containing the categories id map. If not provided, the category map "
+        "will be inferred from the annotations CSV. "
+        "MUST be provided for val and test splits (use the map saved from train)."
+    ),
+)
+@click.option(
+    "--save-category-map-json",
+    type=str,
+    help="Path to save the inferred category map JSON (use for the train split).",
+)
+@click.option(
+    "--columns-to-json",
+    type=str,
+    help="Comma-separated list of CSV columns to embed as JSON metadata per sample.",
+)
+@click.option(
+    "--chunk-size",
+    type=int,
+    default=10_000,
+    help="Number of images to fetch and pack per chunk.",
+)
+@with_num_workers
+@click.option(
+    "--request-timeout",
+    type=int,
+    default=30,
+    help="Timeout in seconds for unresponsive HTTP connections.",
+)
+@with_random_seed
+@click.option(
+    "--shuffle-images",
+    type=bool,
+    default=True,
+    help="Shuffle the dataset before chunking.",
+)
+def fetch_and_pack_command(
+    annotations_csv: str,
+    temp_dir: str,
+    webdataset_dir: str,
+    split: str,
+    label_column: str,
+    image_path_column: str,
+    url_column: str,
+    max_shard_size: int,
+    resize_min_size: int,
+    category_map_json: str,
+    save_category_map_json: str,
+    columns_to_json: str,
+    chunk_size: int,
+    num_workers: int,
+    request_timeout: int,
+    random_seed: int,
+    shuffle_images: bool,
+):
+    from src.dataset_tools.fetch_and_pack import fetch_and_pack
+
+    fetch_and_pack(
+        annotations_csv=annotations_csv,
+        temp_dir=temp_dir,
+        webdataset_dir=webdataset_dir,
+        split=split,
+        label_column=label_column,
+        image_path_column=image_path_column,
+        url_column=url_column,
+        max_shard_size=max_shard_size,
+        resize_min_size=resize_min_size,
+        category_map_json=category_map_json,
+        save_category_map_json=save_category_map_json,
+        columns_to_json=columns_to_json,
+        chunk_size=chunk_size,
+        num_workers=num_workers,
+        request_timeout=request_timeout,
+        random_seed=random_seed,
+        shuffle_images=shuffle_images,
     )
 
 
