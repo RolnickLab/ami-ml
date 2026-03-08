@@ -171,3 +171,7 @@ cython_debug/
 
 # Weights and Biases files
 wandb/
+
+# Project data and plans (not for version control)
+data/
+plans/
