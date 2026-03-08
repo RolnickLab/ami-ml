@@ -39,6 +39,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+viz = [
+    "fiftyone",
+]
 research = [
     "awscli>=1.33.44",
     "awscli-plugin-endpoint>=0.4",
