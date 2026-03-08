@@ -35,6 +35,7 @@ def load_dwca_data(dwca_file: str):
             "familyKey",
             "orderKey",
             "acceptedTaxonKey",
+            "verbatimScientificName",
             "lifeStage",
             "decimalLatitude",
             "decimalLongitude",
