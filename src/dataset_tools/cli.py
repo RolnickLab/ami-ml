@@ -487,7 +487,25 @@ def predict_lifestage_command(
     context_settings={"show_default": True},
 )
 @with_dwca_file
-@with_verified_data_csv
+@click.option(
+    "--verified-data-csv",
+    type=str,
+    default=None,
+    help=(
+        "CSV file containing verified image info (output of verify-images). "
+        "If not provided, the dataset is loaded directly from the DwC-A file and "
+        "thumbnail filtering is skipped."
+    ),
+)
+@click.option(
+    "--output-csv",
+    type=str,
+    default=None,
+    help=(
+        "Path for the cleaned output CSV. Required when --verified-data-csv is not "
+        "provided. When omitted with a verify CSV, defaults to <verified-data-csv>_clean.csv."
+    ),
+)
 @click.option(
     "--ignore-dataset-by-key",
     type=str,
@@ -539,6 +557,7 @@ def predict_lifestage_command(
 def clean_dataset_command(
     dwca_file: str,
     verified_data_csv: str,
+    output_csv: str,
     remove_duplicate_url: bool,
     ignore_dataset_by_key: str,
     remove_tumbnails: bool,
@@ -546,6 +565,11 @@ def clean_dataset_command(
     remove_non_adults: bool,
     life_stage_predictions: str,
 ):
+    if verified_data_csv is None and output_csv is None:
+        raise click.UsageError(
+            "--output-csv is required when --verified-data-csv is not provided."
+        )
+
     from src.dataset_tools.clean_dataset import clean_dataset
 
     clean_dataset(
@@ -557,6 +581,7 @@ def clean_dataset_command(
         thumb_size=thumb_size,
         remove_non_adults=remove_non_adults,
         life_stage_predictions=life_stage_predictions,
+        output_csv=output_csv,
     )
 
 
