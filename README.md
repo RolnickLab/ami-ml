@@ -58,3 +58,27 @@ Alternatively, one can run the scripts without activating poetry's shell:
 ```bash
  poetry run python <script>
 ```
+
+## Testing SLURM Jobs Locally
+
+A Docker Compose environment is available for testing SLURM job scripts locally before submitting to DRAC/Compute Canada HPC clusters. This simulates a minimal SLURM environment with a controller and compute node.
+
+See [docker/slurm/README.md](docker/slurm/README.md) for detailed instructions on:
+- Starting the SLURM environment
+- Submitting and monitoring jobs
+- Adapting real job scripts for local testing
+- Troubleshooting common issues
+
+Quick start:
+```bash
+# Build and start the SLURM cluster
+docker-compose -f docker-compose.slurm.yml up -d
+
+# Access the controller to submit jobs
+docker exec -it ami-ml-slurmctld bash
+
+# Inside the container
+sinfo  # Check cluster status
+sbatch docker/slurm/examples/job_hello.sh  # Submit a test job
+squeue  # Check job queue
+```
