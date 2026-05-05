@@ -9,16 +9,15 @@ Train a fast butterfly detector for use on ~10M Fieldguide photos.
 ## Quick start (for the next dev)
 
 1. Read `DESIGN.md` end-to-end.
-2. Read the references at the bottom of `DESIGN.md`. Especially the Arbutus 2026 GPU provisioning runbook.
-3. Provision `ami-arbutus-train-01` per `DESIGN.md` § "Arbutus 2026 VM setup".
-4. Add SSH config block to `~/Projects/AMI/ami-devops/ssh/arbutus2026_connections`.
-5. Pull training data from FG via the `detector_dataset/` project — extend it with `--exclude-photo-ids-from <coco>` first. The 4 eval COCO files are at:
+2. Read the references at the bottom of `DESIGN.md`. Especially `2026-04-28-object-store-fuse-mount-setup.md` (the workspace VM is already set up).
+3. SSH to the existing training box: `ssh ami-workspace-02-gpu`. H100 24GB, FUSE-mounted butterfly squashfs already in place. No provisioning needed.
+4. Pull training data from FG via the `detector_dataset/` project — extend it with `--exclude-photo-ids-from <coco>` first. The 4 eval COCO files are at:
    ```
    ~/Projects/Fieldguide/chroma-backend/.claude/worktrees/detector-training/detector_dataset/datasets/
    ```
-6. Sync data + eval set to the VM's persistent volume at `/mnt/data/leps_localizer/`.
-7. Train YOLOv11s first (smallest scope, fastest feedback). Then RT-DETRv2. Then ami-ml's existing torchvision FRCNN.
-8. After each run, evaluate against the 4 locked eval COCOs. Record results at `reports/<arch>-<date>.md`.
+5. Sync data + eval set to `/mnt/data/leps_localizer/` on the VM.
+6. Train YOLOv11s first (smallest scope, fastest feedback). Then RT-DETRv2. Then ami-ml's existing torchvision FRCNN.
+7. After each run, evaluate against the 4 locked eval COCOs. Record results at `reports/<arch>-<date>.md`.
 
 ## Layout
 

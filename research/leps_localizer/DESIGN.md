@@ -88,33 +88,49 @@ Branch: `feat/leps-localizer-training` on `RolnickLab/ami-ml`.
 
 Code added under `src/localization/` follows existing ami-ml conventions: `src` package, click for CLI, wandb for tracking, env-var-driven paths.
 
-## Arbutus 2026 VM setup
+## Arbutus 2026 VM: `ami-workspace-02-gpu`
 
 Cluster: `192.168.129.0/24`. OpenStack project `rpp-drolnick`, user `mihow`. Bastion: `ami-arbutus-bastion` (134.87.8.160), key `~/.ssh/ami2026.pem`.
 
-**Provision a new training VM** (separate from the production ADC inference workers `ami-arbutus-gpu-01..04`). Suggested name `ami-arbutus-train-01`.
+**Use the existing `ami-workspace-02-gpu` box.** No provisioning needed.
 
-| Setting | Value | Notes |
-|---|---|---|
-| Flavor | `g1-24gb-c6-70gb-250` (H100 24GB vGPU, 6 vCPU, 70GB RAM, 20GB root + 250GB ephemeral `/mnt`) | Same as `ami-gpu-04`. If a 2× H100 flavor exists in the project's quota, prefer it for parallel architecture training. |
-| Image | `ami-base-debian13-2026-04` | Same as gpu-03/04. NVIDIA driver `580.105.08` already in DKMS. |
-| Disk | 250 GB ephemeral `/mnt`, plus an attached **persistent volume** for datasets and checkpoints | 20 GB root is tight but fine if Docker root + uv cache live on `/mnt`. Persistent volume so data survives shelving. |
-| Network | default + internal SGs. No floating IP needed (jump via bastion). | |
-| Keypair | `ami2026` | |
-| User | `debian` | |
+| Setting | Value |
+|---|---|
+| SSH alias | `ami-workspace-02-gpu` (also `ami-arbutus-workspace-02-gpu`) |
+| IP | `192.168.129.83` (private; jump via `ami-arbutus-bastion`) |
+| Flavor | `g1-24gb-c6-70gb-250` (H100 24GB vGPU, 6 vCPU, 70GB RAM) |
+| Disk | 246 GB ephemeral `/mnt` |
+| User | `debian` |
+| Keypair | `ami2026` |
 
-**Provisioning runbook:** follow `~/Projects/AMI/ami-devops/docs/claude/sessions/2026-04-20-ami-gpu-04-provisioning.md`, replacing the ADC-worker supervisor configs with a training environment (uv + ami-ml + datasets). Reboot once after driver install before declaring `nvidia-smi` healthy.
+SSH config block already in `~/Projects/AMI/ami-devops/ssh/arbutus2026_connections`.
 
-**Add SSH config** to `~/Projects/AMI/ami-devops/ssh/arbutus2026_connections`:
-```
-Host ami-arbutus-train-01
-  Hostname 192.168.129.<TBD>
-  User debian
-  ProxyJump ami-arbutus-bastion
-  IdentityFile ~/.ssh/ami2026.pem
-  IdentitiesOnly yes
-  ForwardAgent yes
-```
+### Already installed and configured
+
+- NVIDIA driver, `nvidia-smi` working (H100 24GB vGPU)
+- `awscli`, `rclone`, `squashfuse`, `fuse3`, `mount-s3`
+- `~debian/.aws/{credentials,config}` with `[ami]` profile pointing at `https://object-arbutus.cloud.computecanada.ca`
+- `~debian/ami-devops` cloned
+- systemd units for FUSE-mounting `ami-trainingdata` S3 bucket and squashfs shards (`ami-trainingdata-s3.service`, `ami-squashfs@N.service`)
+
+### Existing data on the box
+
+`s3://ami-trainingdata/ai-for-leps/datasets/global_butterflies_2604/sqfs/` is FUSE-mounted as 10 squashfs shards at `/mnt/squash-0..9` (each ~1.18 TB JPEGs, total ~11.8 TB). Currently only `@0` enabled by default — `sudo systemctl enable --now ami-squashfs@N.service` to mount more.
+
+This is a separate dataset from the FG butterflies pull described above. **Decision for first run:** ignore `global_butterflies_2604` and train on the FG-derived 20k. Revisit using the larger squashfs as additional training data after the first model lands and we have a baseline. Provenance, taxonomy, and bbox availability of `global_butterflies_2604` need to be confirmed before relying on it.
+
+### What still needs setup on the box
+
+1. Install `uv` if not present (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+2. Clone `ami-ml` at `~/ami-ml` on the `feat/leps-localizer-training` branch
+3. `uv sync --extra dev --extra research` inside the repo
+4. Sync FG training data + the 4 locked eval COCOs to `/mnt/data/leps_localizer/`
+5. `wandb login` with the kalpa/RolnickLab account
+6. Add Ultralytics + RT-DETR deps as new optional extras under `pyproject.toml` (e.g. `--extra detection`)
+
+### Anomaly to be aware of
+
+`ssh -A ami-workspace-02-gpu 'ssh git@github.com'` authenticates as `adityajain07`, not the local user (per `2026-04-28-object-store-fuse-mount-setup.md` § Anomaly). Forwarded agent key is registered to Aditya's GitHub account. Repo writes from this box will appear under his name unless `GIT_AUTHOR_*` / `GIT_COMMITTER_*` are set explicitly.
 
 ## Data flow to the VM
 
@@ -184,11 +200,12 @@ Per architecture, produce:
 
 ## Open questions for the next dev
 
-1. **GPU flavor**: confirm `g1-24gb-c6-70gb-250` (H100 24GB) is available under the project quota. If a 2× GPU flavor is available, prefer it (parallel training across architectures).
-2. **Persistent volume size**: 200–500 GB. Depends on whether you bulk-copy images or stream from S3.
+1. **`global_butterflies_2604` dataset**: confirm provenance (source, license), bbox availability, taxonomy mapping. If it has bboxes that aren't square-cropped FG-style and the species distribution overlaps butterflies, this is a 12 TB pretraining or co-training opportunity.
+2. **Disk strategy**: 246 GB ephemeral `/mnt` may not survive shelving. Decide whether to attach a persistent volume for `/mnt/data/leps_localizer/` or accept that re-provisioning means re-syncing FG data. Mitigation: keep authoritative dataset on Arbutus S3, treat the VM disk as a cache.
 3. **Square-target augmentation**: implement variant or skip for first run? Recommendation: skip first run, evaluate, decide based on per-dataset IoU vs containment gap.
 4. **YOLO version**: YOLOv11s vs YOLOv8s. YOLOv11 is newer (2026) and Ultralytics-recommended. Default to v11 unless stability issues.
 5. **Image size**: 640 default vs 1024 for small-bbox recall. Run both as separate runs if budget allows.
+6. **Git author identity on the box**: agent-forwarded SSH writes commits as `adityajain07`. Set `GIT_AUTHOR_*` / `GIT_COMMITTER_*` per session, or push from a laptop only.
 
 ## Definition of done (this stage)
 
@@ -216,6 +233,7 @@ These come after this stage's best model demonstrates ≥0.85 mAP@50 + ≥0.70 m
 - Detector dataset project: `~/Projects/Fieldguide/chroma-backend/.claude/worktrees/detector-training/detector_dataset/`
 - Locked eval spec (deferred): `~/Projects/Fieldguide/chroma-backend/.claude/worktrees/detector-training/docs/superpowers/specs/2026-04-27-arthropod-localizer-eval-design.md`
 - Eval dataset spec: `~/Projects/Fieldguide/chroma-backend/.claude/worktrees/detector-training/docs/superpowers/specs/2026-04-24-arthropod-detector-eval-dataset-design.md`
-- Arbutus 2026 GPU provisioning: `~/Projects/AMI/ami-devops/docs/claude/sessions/2026-04-20-ami-gpu-04-provisioning.md`
+- Workspace VM setup: `~/Projects/AMI/ami-devops/docs/claude/sessions/2026-04-28-object-store-fuse-mount-setup.md`
+- Arbutus 2026 GPU provisioning runbook: `~/Projects/AMI/ami-devops/docs/claude/sessions/2026-04-20-ami-gpu-04-provisioning.md`
 - Arbutus 2026 SSH config: `~/Projects/AMI/ami-devops/ssh/arbutus2026_connections`
 - Arbutus infrastructure overview: `~/Projects/AMI/ami-devops/docs/claude/INFRASTRUCTURE.md`
