@@ -42,6 +42,21 @@ awscli = "^1.33.44"
 awscli-plugin-endpoint = "^0.4"
 absl-py = "^2.1.0"
 
+[tool.poetry.group.detection]
+optional = true
+
+[tool.poetry.group.detection.dependencies]
+# Detector training comparison stack — leps_localizer (research/leps_localizer/).
+# torch + torchvision + wandb already in main deps; this group adds the
+# YOLO-family + RT-DETR runtimes plus parquet/S3 readers used by the dataset
+# adapter.
+ultralytics = "^8.3"
+transformers = "^4.45"
+pyarrow = "^17"
+boto3 = "^1.35"
+s3fs = "^2024.10"
+pycocotools = "^2.0.7"
+
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.3.3"
 black = "^23.7.0"
