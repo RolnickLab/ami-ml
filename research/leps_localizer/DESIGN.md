@@ -35,27 +35,53 @@ All four are COCO-format with single class `arthropod`. They live at `~/Projects
 
 ## Training data strategy
 
-Source: Fieldguide production Postgres (`fieldguide.postgres.database.azure.com`, read-only) + Arbutus S3 (`object-arbutus.cloud.computecanada.ca`, bucket `fieldguide-production`).
+**Source:** Fieldguide production Postgres (`fieldguide.postgres.database.azure.com`, read-only) for metadata + bbox; FG image objects already live on the old-cloud `object-arbutus.cloud.computecanada.ca` bucket `fieldguide-production`.
 
-Pull pipeline: extend `detector_dataset/` to support an `--exclude-photo-ids-from <coco>` flag pointing at the 4 eval COCOs.
+**Destination (training-side store):** `s3://ami-trainingdata/ai-for-leps/localization/<dataset-name>/` on the **new** Arbutus 2026 endpoint `https://object-arbutus.alliancecan.ca`. The `ai-for-leps/` prefix mirrors the old-cloud Swift layout that will be rsynced into the new cloud (open follow-up #26 in `2026-04-28-object-store-fuse-mount-setup.md`); the `localization/` sub-prefix is new and reserved for detector training datasets (sibling to the existing `datasets/` prefix used for classification training). Training jobs read from the new endpoint.
+
+For our first dataset, name it `butterflies-fg-2026-05`. Full path: `s3://ami-trainingdata/ai-for-leps/localization/butterflies-fg-2026-05/`.
+
+**Layout in the bucket:**
+```
+s3://ami-trainingdata/ai-for-leps/localization/butterflies-fg-2026-05/
+  index.parquet                  # one row per image, all metadata
+  images/<sha256-prefix>/<sha256>.jpg
+  manifest_train.txt             # newline-delimited image keys
+  manifest_val.txt
+  README.md                      # provenance, extract date, schema
+```
+
+**`index.parquet` schema** (one row per image; this replaces dataset-side stratification):
+
+| Column | Type | Notes |
+|---|---|---|
+| `image_key` | str | S3 key relative to bucket root |
+| `sha256` | str | content hash, also used as filename |
+| `photo_id` | str | FG `photos.mongo_id` |
+| `category_id` | str | FG `photos.category_mongo_id` (species-level) |
+| `parents` | list[str] | FG `categories.parents` array (full taxonomy chain) |
+| `user_id` | str | FG `photos.user_mongo_id` (photographer; for split-by-user if needed) |
+| `width` | int | full image px |
+| `height` | int | full image px |
+| `bbox_xyxy` | list[float] | gt bbox in pixels |
+| `bbox_area_fraction` | float | bbox area / image area (precomputed; train-time filter / weight) |
+| `bbox_is_square` | bool | `abs(w-h) < 2 px` (FG square-crop signal) |
+| `created_at` | str | ISO timestamp from FG (cutoff filter) |
+| `split` | str | `"train"` or `"val"` (90/10 random, fixed seed) |
+
+Training jobs query the parquet at runtime to: filter eval-set `photo_id`s, choose subsets (e.g. only small bboxes for a hardness-focused run), apply per-row weights, etc. **No extract-time bucket stratification.**
 
 **Scope:** Butterflies clade only (`552e76f291201b5ddbcbf77b`). Pool: 74,944 candidate photos with valid `crop_info`.
 
-**Target size:** 20,000 images for first run. Buckets:
+**Target size:** 20,000 images for first run, randomly drawn from the pool with eval-set `photo_id`s excluded. Distribution of `bbox_area_fraction` follows the natural pool — overweight by bucket happens later via parquet filters if needed.
 
-| Area-fraction bucket | Pool | Sample target | Why |
-|---|---|---|---|
-| 0.01–0.05 (tiny) | 528 | up to all (~500) | rarest, hardest, overweight |
-| 0.05–0.10 (small) | 1,403 | ~1,400 | hardest at training scale |
-| 0.10–0.25 | 7,715 | 4,000 | medium-hard |
-| 0.25–0.50 | 22,714 | 6,000 | typical |
-| 0.50–0.95 | 37,868 | 8,000 | easy, but reflects upload distribution |
+**Pull pipeline:** extend `detector_dataset/` (in chroma-backend worktree) with:
+1. `--exclude-photo-ids-from <coco>` flag pointing at the 4 eval COCOs
+2. New stage `assemble-trainset`: writes `index.parquet` + uploads images directly to `s3://ami-trainingdata/ai-for-leps/localization/<name>/` on the new arbutus endpoint, instead of writing local COCO
 
-Approximate stratification — exact counts decided at extract time. Excludes photos in any eval COCO. Uses the same `pi.sort_order = 0` filter and FG `photo_images.crop_info` JSON field for bbox.
+**Train/val split:** 90/10 random, fixed seed, recorded in `index.parquet.split`. Distinct from the locked eval set; used only for early-stopping during training.
 
-**Train/val split:** 90/10 random within the 20k pull. Validation is held-out from training but **distinct from the locked eval set** — used only for early-stopping signal, not final reporting.
-
-**Final reporting:** mAP@50, mAP@50-95, recall by area-frac bucket, computed on the 4 locked eval datasets.
+**Final reporting:** mAP@50, mAP@50-95, recall stratified by `bbox_area_fraction` bucket on the 4 locked eval datasets.
 
 ## Model architecture
 
@@ -81,7 +107,7 @@ Branch: `feat/leps-localizer-training` on `RolnickLab/ami-ml`.
 | `research/leps_localizer/scripts/` | shell wrappers for VM jobs (data pull, train, eval) |
 | `research/leps_localizer/notebooks/` | data exploration, results visualisation |
 | `src/localization/training.py` | existing torchvision trainer — reuse as-is for variant 3 |
-| `src/localization/leps_data.py` | new: COCO-format adapter, area-frac stratified val split |
+| `src/localization/leps_data.py` | new: parquet-index adapter, fixed train/val split read from `index.parquet` |
 | `src/localization/eval_on_locked.py` | new: run a saved checkpoint against the 4 eval COCOs, log per-bucket recall and IoU + containment |
 | `src/localization/yolo_train.py` | new: thin Ultralytics wrapper — calls `YOLO(...).train(data=...)` with our COCO + reporting hooks |
 | `src/localization/rtdetr_train.py` | new: thin RT-DETR wrapper |
@@ -124,7 +150,7 @@ This is a separate dataset from the FG butterflies pull described above. **Decis
 1. Install `uv` if not present (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 2. Clone `ami-ml` at `~/ami-ml` on the `feat/leps-localizer-training` branch
 3. `uv sync --extra dev --extra research` inside the repo
-4. Sync FG training data + the 4 locked eval COCOs to `/mnt/data/leps_localizer/`
+4. FUSE-mount `s3://ami-trainingdata/` at `/mnt/s3-trainingdata/` (analogous to the existing `/mnt/s3` for old-cloud). Training data and eval set both live under it.
 5. `wandb login` with the kalpa/RolnickLab account
 6. Add Ultralytics + RT-DETR deps as new optional extras under `pyproject.toml` (e.g. `--extra detection`)
 
@@ -132,28 +158,38 @@ This is a separate dataset from the FG butterflies pull described above. **Decis
 
 `ssh -A ami-workspace-02-gpu 'ssh git@github.com'` authenticates as `adityajain07`, not the local user (per `2026-04-28-object-store-fuse-mount-setup.md` § Anomaly). Forwarded agent key is registered to Aditya's GitHub account. Repo writes from this box will appear under his name unless `GIT_AUTHOR_*` / `GIT_COMMITTER_*` are set explicitly.
 
-## Data flow to the VM
+## Data flow
 
-The VM is in the **same Arbutus region** as `fieldguide-production` Arbutus S3 — fast intra-region transfer.
+```
+FG Postgres + old-cloud S3 (fieldguide-production)
+        │  (extract via detector_dataset/, on a laptop or beast)
+        ▼
+new-cloud s3://ami-trainingdata/ai-for-leps/localization/butterflies-fg-2026-05/
+        │  (training reads here)
+        ▼
+ami-workspace-02-gpu  →  cache misses fault to S3, hot data lands in /mnt cache
+```
 
-Two options, decide at implementation time:
+Two read modes for the trainer, decide at implementation time:
 
-1. **Bulk copy to local volume.** `s5cmd` or `rclone copy s3:fieldguide-production/<keys>` from a manifest file → `/mnt/data/leps_localizer/images/`. Predictable training I/O, good for repeated runs. ~50–100 GB for 20k images.
-2. **Stream from S3 via webdataset.** ami-ml's existing convention. No local copy. Best for the first exploratory training run.
+1. **Stream from S3** via `webdataset` (ami-ml's existing convention) or `mountpoint-s3` FUSE-mount of `ami-trainingdata` at `/mnt/s3-trainingdata/`, similar to the existing setup at `/mnt/s3` for the old cloud. No bulk copy. Lowest disk pressure on the 246 GB ephemeral.
+2. **Bulk copy to `/mnt`** via `s5cmd` or `rclone` for the active dataset shard. Predictable I/O, good for repeated runs. ~50–100 GB for 20k JPEGs.
 
-Manifests (image keys + bboxes) come from the `detector_dataset/` extract pipeline, packaged as a single tarball or COCO JSON synced to the VM via `scp`.
+Recommendation: start with FUSE-mount streaming. Switch to bulk copy if dataloader I/O caps GPU utilization.
 
-**Credentials:** Arbutus S3 keys live in `~/Projects/Fieldguide/prism/credentials-ami-cc-prism.json` `fieldguide` entry. Copy to the VM's `~/.aws/credentials` or as `AWS_*` env vars. Do **not** commit credentials.
+**Credentials.** Two endpoints involved:
+- New cloud (`object-arbutus.alliancecan.ca`, `ami-trainingdata`) — already configured under `~debian/.aws/[ami]` profile on the box (per `2026-04-28-object-store-fuse-mount-setup.md`). Confirm at session start; rotate if leaked.
+- Old cloud (`object-arbutus.cloud.computecanada.ca`, `fieldguide-production`) — only needed by the **extract** step on a laptop/beast, never on the training VM. Live at `~/Projects/Fieldguide/prism/credentials-ami-cc-prism.json` `fieldguide` entry. Do **not** commit credentials.
 
-**Eval datasets** (the locked 4) sync to `/mnt/data/leps_localizer/eval/` once at provision time. Always re-evaluated from there.
+**Eval datasets** (the locked 4): sync once to `s3://ami-trainingdata/ai-for-leps/localization/eval-locked/` so they live alongside the training data. The training VM reads them via the same FUSE mount.
 
 ## Training loop (YOLOv11s, first model)
 
 ```
 data:
-  path: /mnt/data/leps_localizer/dataset
-  train: images/train.txt
-  val: images/val.txt
+  path: /mnt/s3-trainingdata/ai-for-leps/localization/butterflies-fg-2026-05
+  train: manifest_train.txt
+  val:   manifest_val.txt
   names: ['arthropod']
 
 model: yolo11s.pt   # COCO-pretrained
@@ -172,7 +208,10 @@ project: leps_localizer
 name: yolo11s_butterflies_v0
 ```
 
-Checkpoints to `/mnt/data/leps_localizer/runs/yolo11s_butterflies_v0/`. Best-by-val-mAP50 mirrors to wandb artefact and to `/media/michael/ZWEIBEL/MODELS/leps_localizer/` on `beast` (rsync at end of run).
+Checkpoints to `/mnt/runs/leps_localizer/yolo11s_butterflies_v0/` (ephemeral). Best-by-val-mAP50 mirrors to:
+- wandb artefact
+- `s3://ami-trainingdata/ai-for-leps/localization/runs/yolo11s_butterflies_v0/` (persistent, survives box reshelving)
+- `/media/michael/ZWEIBEL/MODELS/leps_localizer/` on `beast` (local mirror via rsync at end of run)
 
 After training: run `eval_on_locked.py` against the 4 locked eval datasets, log:
 - mAP@50, mAP@50-95 overall
@@ -201,7 +240,7 @@ Per architecture, produce:
 ## Open questions for the next dev
 
 1. **`global_butterflies_2604` dataset**: confirm provenance (source, license), bbox availability, taxonomy mapping. If it has bboxes that aren't square-cropped FG-style and the species distribution overlaps butterflies, this is a 12 TB pretraining or co-training opportunity.
-2. **Disk strategy**: 246 GB ephemeral `/mnt` may not survive shelving. Decide whether to attach a persistent volume for `/mnt/data/leps_localizer/` or accept that re-provisioning means re-syncing FG data. Mitigation: keep authoritative dataset on Arbutus S3, treat the VM disk as a cache.
+2. **Disk strategy**: 246 GB ephemeral `/mnt` does not survive shelving. Authoritative dataset and run artefacts live on `s3://ami-trainingdata/ai-for-leps/localization/`; treat the VM disk as a cache. If FUSE-streaming caps GPU utilization, attach a persistent volume or warm `/mnt` from S3 at job start.
 3. **Square-target augmentation**: implement variant or skip for first run? Recommendation: skip first run, evaluate, decide based on per-dataset IoU vs containment gap.
 4. **YOLO version**: YOLOv11s vs YOLOv8s. YOLOv11 is newer (2026) and Ultralytics-recommended. Default to v11 unless stability issues.
 5. **Image size**: 640 default vs 1024 for small-bbox recall. Run both as separate runs if budget allows.
@@ -209,7 +248,7 @@ Per architecture, produce:
 
 ## Definition of done (this stage)
 
-- [ ] 20k butterfly training set extracted, eval `photo_id`s excluded, on Arbutus VM
+- [ ] 20k butterfly training set extracted, eval `photo_id`s excluded, uploaded to `s3://ami-trainingdata/ai-for-leps/localization/butterflies-fg-2026-05/` with `index.parquet`
 - [ ] YOLOv11s training run completed, eval-set report produced
 - [ ] RT-DETRv2 training run completed, eval-set report produced
 - [ ] Faster R-CNN ResNet50 FPN v2 training run completed, eval-set report produced

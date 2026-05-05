@@ -15,7 +15,7 @@ Train a fast butterfly detector for use on ~10M Fieldguide photos.
    ```
    ~/Projects/Fieldguide/chroma-backend/.claude/worktrees/detector-training/detector_dataset/datasets/
    ```
-5. Sync data + eval set to `/mnt/data/leps_localizer/` on the VM.
+5. Upload extracted dataset to `s3://ami-trainingdata/ai-for-leps/localization/butterflies-fg-2026-05/` (new arbutus 2026 endpoint `object-arbutus.alliancecan.ca`). FUSE-mount it on the VM at `/mnt/s3-trainingdata/`.
 6. Train YOLOv11s first (smallest scope, fastest feedback). Then RT-DETRv2. Then ami-ml's existing torchvision FRCNN.
 7. After each run, evaluate against the 4 locked eval COCOs. Record results at `reports/<arch>-<date>.md`.
 
