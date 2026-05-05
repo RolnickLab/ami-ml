@@ -171,3 +171,9 @@ cython_debug/
 
 # Weights and Biases files
 wandb/
+
+# leps_localizer materialized data (symlinks to host paths, regenerable
+# via research/leps_localizer/scripts/prepare_yolo_dataset.py)
+research/leps_localizer/data/yolo_*/
+research/leps_localizer/eval_outputs/
+research/leps_localizer/runs/
