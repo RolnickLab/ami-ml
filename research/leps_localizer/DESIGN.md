@@ -44,42 +44,61 @@ For our first dataset, name it `butterflies-fg-2026-05`. Full path: `s3://ami-tr
 **Layout in the bucket:**
 ```
 s3://ami-trainingdata/ai-for-leps/localization/butterflies-fg-2026-05/
-  index.parquet                  # one row per image, all metadata
+  index.jsonl                    # one record per image, all metadata (canonical)
+  index.parquet                  # derived from index.jsonl; faster reads at training time
   images/<sha256-prefix>/<sha256>.jpg
-  manifest_train.txt             # newline-delimited image keys
+  manifest_train.txt             # newline-delimited image keys (derived from index.jsonl 'split' field)
   manifest_val.txt
-  README.md                      # provenance, extract date, schema
+  README.md                      # provenance, extract date, schema, source code commit SHA
 ```
 
-**`index.parquet` schema** (one row per image; this replaces dataset-side stratification):
+**Why JSONL is canonical:** human-readable, grep-friendly, append-friendly, line-oriented for streaming, BigQuery-loadable as `NEWLINE_DELIMITED_JSON` without conversion. Parquet sidecar exists for fast filtered reads during training. Both formats round-trip via the same schema.
 
-| Column | Type | Notes |
+### Phase 2 — BigQuery (later)
+
+Phase 1 (this spec): index lives **only as `index.jsonl` (+ `index.parquet`) on S3**. No BigQuery.
+
+Phase 2: the JSONL schema below is intentionally aligned with the planned `leps-ai.global_leps.images` table (see `research/dataset_pipeline_2026/README.md`). Once that table lands, the same JSONL files load directly via `bq load --source_format=NEWLINE_DELIMITED_JSON`. The `dataset_name` and `dataset_version` fields are present from phase 1 so future BigQuery rows from multiple datasets share one table.
+
+### `index.jsonl` schema
+
+One JSON record per image (this replaces dataset-side stratification):
+
+| Field | Type | Notes |
 |---|---|---|
+| `dataset_name` | str | `"butterflies-fg-2026-05"` |
+| `dataset_version` | str | semver-like, e.g. `"v1.0.0"` |
+| `data_source` | str | `"fieldguide-prod"` (vs future `"inat"`, `"gbif"`, …) |
+| `extracted_at` | str | ISO timestamp of the extract run |
+| `extract_commit_sha` | str | git SHA of `detector_dataset/` at extract time |
 | `image_key` | str | S3 key relative to bucket root |
 | `sha256` | str | content hash, also used as filename |
 | `photo_id` | str | FG `photos.mongo_id` |
 | `category_id` | str | FG `photos.category_mongo_id` (species-level) |
 | `parents` | list[str] | FG `categories.parents` array (full taxonomy chain) |
-| `user_id` | str | FG `photos.user_mongo_id` (photographer; for split-by-user if needed) |
+| `user_id` | str | FG `photos.user_mongo_id` (photographer; for split-by-user) |
 | `width` | int | full image px |
 | `height` | int | full image px |
 | `bbox_xyxy` | list[float] | gt bbox in pixels |
 | `bbox_area_fraction` | float | bbox area / image area (precomputed; train-time filter / weight) |
 | `bbox_is_square` | bool | `abs(w-h) < 2 px` (FG square-crop signal) |
-| `created_at` | str | ISO timestamp from FG (cutoff filter) |
+| `created_at` | str | ISO timestamp from FG photo (cutoff filter) |
 | `split` | str | `"train"` or `"val"` (90/10 random, fixed seed) |
 
-Training jobs query the parquet at runtime to: filter eval-set `photo_id`s, choose subsets (e.g. only small bboxes for a hardness-focused run), apply per-row weights, etc. **No extract-time bucket stratification.**
+Training jobs query the index at runtime to: filter eval-set `photo_id`s, choose subsets (e.g. only small bboxes for a hardness-focused run), apply per-row weights, etc. **No extract-time bucket stratification.**
+
+The same schema covers the 4 locked eval datasets — emit one `index.jsonl` per eval dataset and stage them at `s3://ami-trainingdata/ai-for-leps/localization/eval-locked/<name>/`. Eval scripts read the index the same way as training.
 
 **Scope:** Butterflies clade only (`552e76f291201b5ddbcbf77b`). Pool: 74,944 candidate photos with valid `crop_info`.
 
 **Target size:** 20,000 images for first run, randomly drawn from the pool with eval-set `photo_id`s excluded. Distribution of `bbox_area_fraction` follows the natural pool — overweight by bucket happens later via parquet filters if needed.
 
 **Pull pipeline:** extend `detector_dataset/` (in chroma-backend worktree) with:
-1. `--exclude-photo-ids-from <coco>` flag pointing at the 4 eval COCOs
-2. New stage `assemble-trainset`: writes `index.parquet` + uploads images directly to `s3://ami-trainingdata/ai-for-leps/localization/<name>/` on the new arbutus endpoint, instead of writing local COCO
+1. `--exclude-photo-ids-from <coco-or-jsonl>` flag pointing at the 4 eval indexes
+2. New stage `assemble-trainset`: writes `index.jsonl` (canonical) + `index.parquet` (derived) + uploads images directly to `s3://ami-trainingdata/ai-for-leps/localization/<name>/` on the new arbutus endpoint, instead of writing local COCO
+3. **Backfill the 4 locked eval datasets**: re-emit them as `index.jsonl` under `s3://ami-trainingdata/ai-for-leps/localization/eval-locked/<name>/` so all data — training and eval — uses the same schema. Original COCO files stay where they are as a frozen reference.
 
-**Train/val split:** 90/10 random, fixed seed, recorded in `index.parquet.split`. Distinct from the locked eval set; used only for early-stopping during training.
+**Train/val split:** 90/10 random, fixed seed, recorded in `index.jsonl` `split` field. Distinct from the locked eval set; used only for early-stopping during training.
 
 **Final reporting:** mAP@50, mAP@50-95, recall stratified by `bbox_area_fraction` bucket on the 4 locked eval datasets.
 
@@ -107,7 +126,7 @@ Branch: `feat/leps-localizer-training` on `RolnickLab/ami-ml`.
 | `research/leps_localizer/scripts/` | shell wrappers for VM jobs (data pull, train, eval) |
 | `research/leps_localizer/notebooks/` | data exploration, results visualisation |
 | `src/localization/training.py` | existing torchvision trainer — reuse as-is for variant 3 |
-| `src/localization/leps_data.py` | new: parquet-index adapter, fixed train/val split read from `index.parquet` |
+| `src/localization/leps_data.py` | new: index adapter (reads `index.jsonl` or `index.parquet`), fixed train/val split read from the `split` field |
 | `src/localization/eval_on_locked.py` | new: run a saved checkpoint against the 4 eval COCOs, log per-bucket recall and IoU + containment |
 | `src/localization/yolo_train.py` | new: thin Ultralytics wrapper — calls `YOLO(...).train(data=...)` with our COCO + reporting hooks |
 | `src/localization/rtdetr_train.py` | new: thin RT-DETR wrapper |
@@ -248,7 +267,8 @@ Per architecture, produce:
 
 ## Definition of done (this stage)
 
-- [ ] 20k butterfly training set extracted, eval `photo_id`s excluded, uploaded to `s3://ami-trainingdata/ai-for-leps/localization/butterflies-fg-2026-05/` with `index.parquet`
+- [ ] 20k butterfly training set extracted, eval `photo_id`s excluded, uploaded to `s3://ami-trainingdata/ai-for-leps/localization/butterflies-fg-2026-05/` with `index.jsonl` + `index.parquet`
+- [ ] 4 locked eval datasets re-emitted as `index.jsonl` under `eval-locked/<name>/`, original COCOs preserved as reference
 - [ ] YOLOv11s training run completed, eval-set report produced
 - [ ] RT-DETRv2 training run completed, eval-set report produced
 - [ ] Faster R-CNN ResNet50 FPN v2 training run completed, eval-set report produced
