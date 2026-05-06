@@ -177,3 +177,7 @@ wandb/
 research/leps_localizer/data/yolo_*/
 research/leps_localizer/eval_outputs/
 research/leps_localizer/runs/
+
+# Project data and plans (not for version control)
+data/
+plans/

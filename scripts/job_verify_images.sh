@@ -1,34 +1,28 @@
 #!/bin/bash
+#SBATCH --account=def-drolnick
 #SBATCH --job-name=verify_gbif_images
-#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=16G
 #SBATCH --time=24:00:00
-#SBATCH --partition=long-cpu                 # Ask for long-cpu job
-#SBATCH --cpus-per-task=16                   # Ask for 16 CPUs
-#SBATCH --mem=300G                           # Ask for 300 GB of RAM
 #SBATCH --output=verify_gbif_images_%j.out
 
-# 1. Load the required modules
-module load miniconda/3
+BASE_DIR="/home/melabbas/projects/def-drolnick/melabbas/ami-ml"
 
-# 2. Load your environment
-conda activate ami-ml
+cd "$BASE_DIR"
+source .venv/bin/activate
 
-# 3. Load the environment variables outside of python script
-set -o allexport
-source .env
-set +o allexport
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
+fi
 
-# Keep track of time
-SECONDS=0
-
-# 4. Launch your script
 ami-dataset verify-images \
---dataset-path $GLOBAL_MODEL_DATASET_PATH \
---dwca-file $DWCA_FILE \
---num-workers 16 \
---results-csv $VERIFICATION_RESULTS \
---resume-from-ckpt $VERIFICATION_RESULTS \
---subset-list $ACCEPTED_KEY_LIST
+  --dataset-path $GLOBAL_MODEL_DATASET_PATH \
+  --dwca-file $DWCA_FILE \
+  --num-workers 16 \
+  --results-csv $VERIFICATION_RESULTS \
+  --resume-from-ckpt $VERIFICATION_RESULTS \
+  --subset-list $ACCEPTED_KEY_LIST
 
-# Print time taken to execute the script
-echo "Time taken to verify images: $SECONDS seconds"
+echo "Verify completed at $(date)"
