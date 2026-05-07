@@ -103,6 +103,33 @@ def main() -> None:
     if args.no_wandb:
         os.environ["WANDB_DISABLED"] = "true"
 
+    # Ultralytics' wandb callback derives the wandb project name from
+    # `args.project` (the local checkpoint dir) — it sanitizes "/mnt/foo/runs"
+    # into "-mnt-foo-runs". Pre-init wandb here so the callback reuses our
+    # run instead of creating a new one in the wrong project.
+    if not args.no_wandb and os.environ.get("WANDB_API_KEY"):
+        try:
+            import wandb
+        except ImportError:
+            pass
+        else:
+            wandb.init(
+                project=os.environ.get("WANDB_PROJECT", "leps_localizer"),
+                entity=os.environ.get("WANDB_ENTITY"),
+                name=args.name,
+                config={
+                    "model": args.model,
+                    "epochs": args.epochs,
+                    "imgsz": args.imgsz,
+                    "batch": args.batch,
+                    "copy_paste": args.copy_paste,
+                    "mosaic": args.mosaic,
+                    "scale": args.scale,
+                    "data": str(args.data),
+                    "seed": args.seed,
+                },
+            )
+
     from ultralytics import YOLO  # lazy: only import when training
 
     model = YOLO(args.model)
