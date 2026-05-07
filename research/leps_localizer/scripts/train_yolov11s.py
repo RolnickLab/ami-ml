@@ -15,7 +15,26 @@ Ultralytics; pass that to eval_on_locked.py.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
+
+
+def _load_env_file(env_path: Path) -> None:
+    """Lightweight .env loader (avoid the python-dotenv dep import here).
+
+    Only sets keys not already in os.environ.
+    """
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        v = v.strip().strip("'").strip('"')
+        if k and k not in os.environ:
+            os.environ[k] = v
 
 
 def main() -> None:
@@ -52,14 +71,39 @@ def main() -> None:
         default=20260505,
         help="Ultralytics RNG seed (independent of split-assignment seed)",
     )
+    p.add_argument(
+        "--copy-paste",
+        type=float,
+        default=0.0,
+        help="probability of copy-paste augmentation per image (0.0-1.0). "
+        "Big-bang aug for small-object detection.",
+    )
+    p.add_argument(
+        "--mosaic",
+        type=float,
+        default=1.0,
+        help="probability of mosaic augmentation (Ultralytics default 1.0)",
+    )
+    p.add_argument(
+        "--scale",
+        type=float,
+        default=0.5,
+        help="image scale jitter range (Ultralytics default 0.5)",
+    )
+    p.add_argument(
+        "--env-file",
+        type=Path,
+        default=Path(".env"),
+        help="path to .env file with WANDB_API_KEY etc (relative to cwd)",
+    )
     args = p.parse_args()
 
-    from ultralytics import YOLO  # lazy: only import when training
+    _load_env_file(args.env_file)
 
     if args.no_wandb:
-        import os
-
         os.environ["WANDB_DISABLED"] = "true"
+
+    from ultralytics import YOLO  # lazy: only import when training
 
     model = YOLO(args.model)
     model.train(
@@ -73,6 +117,9 @@ def main() -> None:
         workers=args.workers,
         patience=args.patience,
         seed=args.seed,
+        copy_paste=args.copy_paste,
+        mosaic=args.mosaic,
+        scale=args.scale,
         # single-class training: setting `single_cls=True` collapses any
         # multi-class labels into one. Our labels are already class_id=0.
         single_cls=True,
