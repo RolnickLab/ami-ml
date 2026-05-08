@@ -1,0 +1,8 @@
+run_name,arch,imgsz,batch,epochs,copy_paste,init_weights,n_train,n_val,leeds_n,leeds_recall_iou,leeds_recall_containment,leeds_mean_iou,leeds_mean_containment,leeds_missed,fgval_mAP50,fgval_mAP50_95,fgval_precision,fgval_recall,notes
+yolov11s-fg-2026-05,YOLOv11s,1280,16,80,0.0,yolo11s.pt (COCO),2572,290,832,0.6971,0.7296,0.5578,0.6020,20,0.892,0.551,0.877,0.834,baseline; no copy-paste
+yolov11s-fg-2026-05-r2,YOLOv11s,1536,16,80,0.5,yolo11s.pt (COCO),2572,290,832,0.7031,0.7849,0.5324,0.6350,53,0.870,0.508,0.865,0.840,higher imgsz + copy-paste; better Leeds containment
+yolov11s-fg-2026-05-r2 + SAHI 768/0.2,SAHI(YOLOv11s),768,n/a,n/a,n/a,(uses r2 weights),2572,290,832,0.7200,0.7740,0.5532,0.6265,51,n/a,n/a,n/a,n/a,test-time tiling; no retraining
+yolov11s-fg-2026-05-r2 + SAHI 1024/0.3,SAHI(YOLOv11s),1024,n/a,n/a,n/a,(uses r2 weights),2572,290,832,0.7200,0.7704,0.5520,0.6244,53,n/a,n/a,n/a,n/a,test-time tiling; no retraining
+rtdetr-l-fg-2026-05,RT-DETR-l,640,16,80,n/a,rtdetr-l.pt (COCO),2572,290,832,0.6719,0.6815,0.5675,0.5729,1,0.898,0.506,0.875,0.872,end-to-end DETR; finds something on nearly every image
+yolo26s-fg-2026-05,YOLO26-s,1280,16,80,0.0,yolo26s.pt (COCO),2572,290,832,0.6755,0.6899,0.5534,0.5708,26,0.896,0.554,0.867,0.879,NMS-free; best FG val mAP50-95
+deim-d-fine-s-fg-2026-05,DEIM-D-FINE-S,640,16,80,n/a,deim_dfine_s_coco.pth (COCO),2572,290,832,,,,,,,,,,planned (task #51)
