@@ -23,13 +23,41 @@ This document describes (a) the dataset construction, (b) each model architectur
   - medlarge (0.25-0.50): **underrepresented** — only what the random sample contributed
   - large (>0.50): **underrepresented**
 
-### 1.2 Held-out eval set: Leeds-butterflies (832 images)
+### 1.2 Available FG pool (Butterflies / Papilionoidea clade, snapshot 2026-04-27)
+
+74,944 candidate FG photos with valid `crop_info` in the Butterflies (Papilionoidea, `552e76f291201b5ddbcbf77b`) clade. Bbox-area-fraction distribution:
+
+| frac bucket | count | notes |
+|---|---|---|
+| 0.01-0.05 | 528 | tiny — hardest detector cases |
+| 0.05-0.10 | 1,403 | small |
+| 0.10-0.25 | 7,715 | medsmall |
+| 0.25-0.50 | 22,714 | **medlarge — underrepresented in current train set** |
+| 0.50-0.95 | 37,868 | large |
+| ≥0.95 | 4,716 | skipped (subject crops to nearly full frame) |
+
+Used in current train+val: ~2,862 photos (<4% of pool). Substantial headroom for enrichment runs.
+
+The broader **Lepidoptera** (butterflies + moths, `5926f024fd89783b2a721ba8`) clade has 217,914 subtree categories — moths can be added to widen coverage if butterfly-only saturates.
+
+### 1.3 Held-out test set: GAP (no FG test set reserved)
+
+The original detector-dataset spec (2026-04-24) intended **all 4 datasets** (`leps-butterflies-500`, `-small-1000`, `-medsmall-1000`, Leeds) to be held out as eval-only forever. During stage-3 training, the 3 FG datasets were repartitioned into train+val seed=20260505. **Only Leeds remains held-out.**
+
+Implications:
+- No FG-style framing test set — can't measure quality on the actual production distribution
+- Leeds is biased (see §1.4) so the only held-out metric we have is structurally penalizing correct models
+- Comparing checkpoints across architectures relies on Leeds + visual gym inspection, no clean tiebreaker
+
+**Fix when next data pull happens (#48)**: stratify pull by frac bucket, **reserve 1K as locked FG test** before training touches the rest.
+
+### 1.4 Held-out eval set: Leeds-butterflies (832 images)
 
 - Standard butterfly dataset, 10 species, single butterfly per image, mostly large/centered
 - **Never seen during training of any model in this comparison**
 - GT bboxes: see Bias section below
 
-### 1.3 Bias note: Leeds GT framing
+### 1.5 Bias note: Leeds GT framing
 
 Leeds GT bboxes systematically clip the **antennae** and **wing tips**. They are tight crops around head + main wing surface only. This biases IoU/containment metrics **against** models that produce biologically correct boxes (which would include antennae). Discovered 2026-05-07 by visual inspection in the gym.
 
