@@ -73,6 +73,13 @@ detection = [
     "pycocotools>=2.0.7",
 ]
 
+demo = [
+    # Multi-model side-by-side comparison gym (research/leps_localizer/scripts/serve_gym.py).
+    # Lighter than the detection extra — only adds gradio. Ultralytics + sahi
+    # come from `detection` if you want those backends loaded.
+    "gradio>=4.44",
+]
+
 [project.scripts]
 ami-dataset = "src.dataset_tools.cli:cli"
 ami-classification = "src.classification.cli:cli"
