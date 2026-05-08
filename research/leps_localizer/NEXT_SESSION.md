@@ -1,60 +1,64 @@
-# Next Session — Execute Leps Localizer Training Plan
+# NEXT SESSION — leps localizer
 
-## State at hand-off (2026-05-05)
+## Where we are (2026-05-08)
 
-- Branch `feat/leps-localizer-training` pushed to `RolnickLab/ami-ml` (5 commits).
-- Spec: `research/leps_localizer/DESIGN.md` (approved).
-- Plan: `docs/superpowers/plans/2026-05-05-leps-localizer-training.md` (18 tasks, 5 phases).
-- VM `ami-workspace-02-gpu` already provisioned (H100 24GB) with FUSE-mount tooling installed.
-- Eval set locked: 4 COCO datasets at `~/Projects/Fieldguide/chroma-backend/.claude/worktrees/detector-training/detector_dataset/datasets/`.
+4 trained runs + 2 SAHI test-time configs. Leeds eval done. Gym live at https://leps-localizer.dev.antenna.insectai.org with 3 models (yolov11s r2, yolo26s, rtdetr-l).
 
-## First moves
+Methods doc + CSV committed: `research/leps_localizer/METHODS_AND_RESULTS.md`, `research/leps_localizer/results.csv`.
 
-1. **Pull plan into context**: read `docs/superpowers/plans/2026-05-05-leps-localizer-training.md` end-to-end.
-2. **Decide execution mode** (skill suggests subagent-driven; for this multi-VM, multi-repo work the inline-plus-handoff hybrid works fine):
-   - Phase 1 (extract pipeline) → execute on laptop or beast.
-   - Phase 2 (VM bootstrap) → execute via SSH to `ami-workspace-02-gpu`.
-   - Phase 3 (ami-ml laptop side) → execute on laptop, push.
-   - Phase 4 (training) → SSH to VM, launch `nohup`, monitor via wandb.
-   - Phase 5 (RT-DETR + FRCNN + comparison) → same as 4.
-3. **Phase 1 Task 1 first**: implement `IndexRecord` JSONL writer in `detector_dataset/src/detector_dataset/index_jsonl.py`. TDD style — test then code.
+### Headline finding
+Leeds GT bboxes clip antennae+wingtips. v11s "wins" Leeds metrics by being wrong in the same direction as GT. RT-DETR-l produces biologically correct boxes but is penalized. **Leeds metrics ≠ downstream-classification quality.** Need E2E classifier-acc eval (#46) for unbiased ranking.
 
-## Working directories
+### Real gap
+We violated the original locked-eval constraint — 3 of 4 FG eval sets got pulled into train+val. **No FG-style held-out test set exists.** Only Leeds is held-out. Fix when pulling more data: reserve 1K as locked test.
 
-- Plan + spec: `~/Projects/AMI/ami-ml` (branch `feat/leps-localizer-training`)
-- Extract pipeline: `~/Projects/Fieldguide/chroma-backend/.claude/worktrees/detector-training/detector_dataset/` (branch `worktree-detector-training`)
-- Infra unit file: `~/Projects/AMI/ami-devops/systemd/storage/`
+## Next concrete step: train DEIM-D-FINE-S (task #51)
 
-## Connect to VM
+Repo: `Intellindust-AI-Lab/DEIM` (Apache-2.0). NOT in Ultralytics — standalone repo.
 
-```
-ssh ami-workspace-02-gpu          # 192.168.129.83 via ami-arbutus-bastion
-# key: ~/.ssh/ami2026.pem (loaded by ssh config)
-# CAUTION: agent-forwarded git writes commit author as adityajain07.
-# Override per-session:
-#   GIT_AUTHOR_NAME='Michael Bunsen' GIT_AUTHOR_EMAIL='michael@mixedneeds.com' \
-#   GIT_COMMITTER_NAME='Michael Bunsen' GIT_COMMITTER_EMAIL='michael@mixedneeds.com' \
-#     <command>
-```
+Steps:
+1. Clone DEIM repo on `ami-workspace-02-gpu`
+2. Convert `/mnt/butterflies-fg-2026-05/yolo/` labels → COCO JSON. Write small converter (Ultralytics has `convert_coco` in reverse; or use `globox` / `pylabel`).
+3. Custom config YAML based on `configs/deim_dfine/deim_hgnetv2_s_*.yml`:
+   - `num_classes: 1`
+   - `remap_mscoco_category: False` (CRITICAL)
+   - point dataset paths at COCO-converted FG butterfly set
+4. Download `deim_dfine_s_coco.pth` (Google Drive — link in repo README)
+5. `torchrun --nproc_per_node=1 train.py -c <cfg> -t deim_dfine_s_coco.pth --use-amp --seed=0`
+6. Estimate: ~1.5-3hr at bs=8/imgsz=640 on H100 24GB MIG. Try bs=16 first.
+7. Eval on Leeds with same harness as RT-DETR-l (need DEIM predict_fn for `eval_locked.py`)
+8. Add to gym (will need a new `_build_deim_predictor` since not in Ultralytics shared interface)
 
-## Open decisions for next session
+## After DEIM
 
-- YOLOv11 vs YOLOv8 → default v11
-- `imgsz` 640 vs 1024 → run 640 first, 1024 second
-- Square-target augmentation → skip first run
-- `global_butterflies_2604` 12TB squashfs already on box → confirm provenance before using
-- Disk strategy → start with FUSE streaming, switch to bulk copy if dataloader I/O bottlenecks
+- Pull 4-6K medlarge FG data + reserve 1K as locked FG test (#48 + new task)
+- Repartition + retrain best-of-class (DEIM for server, YOLO26 for mobile)
+- E2E classifier-acc eval (#46) — the unbiased ranking
+- CoreML export YOLO26 (#38)
 
-## Production safety (still relevant)
+## Constraints
+- Don't touch FG prod or prod DB
+- Wait for chroma-backend repo to do data pulls (Azure access lives there)
+- DEIM training compute on `ami-workspace-02-gpu` H100 MIG only
 
-- FG DB queries are read-only with `SET LOCAL statement_timeout`
-- FG image fetches go through Arbutus S3, not the FG app server
-- Production EC2 sees zero traffic from training pipeline
+## Key files
+- `research/leps_localizer/scripts/train_yolov11s.py`, `train_rtdetr.py`, `train_yolo26s.py` — Ultralytics drivers
+- `research/leps_localizer/scripts/eval_on_locked.py`, `eval_sahi.py` — Leeds eval drivers
+- `research/leps_localizer/scripts/serve_gym.py` — gradio gym
+- `src/localization/eval_locked.py`, `metrics.py`, `leps_data.py` — eval core
+- `research/leps_localizer/METHODS_AND_RESULTS.md` — full writeup
+- `research/leps_localizer/results.csv` — results table
 
-## References
+## Data
+- Train+val: `/mnt/butterflies-fg-2026-05/yolo/` (2,572 train / 290 val, single class)
+- Leeds: `/mnt/butterflies-fg-2026-05/datasets/leeds-butterflies/images/` + `metadata/leeds-index.jsonl`
+- Trained checkpoints: `/mnt/butterflies-fg-2026-05/runs/{yolov11s-fg-2026-05,yolov11s-fg-2026-05-r2,rtdetr-l-fg-2026-05,yolo26s-fg-2026-05}/weights/best.pt`
+- Eval results: `/mnt/butterflies-fg-2026-05/eval/*/{metrics.json,report.md,per_sample.jsonl}`
 
-- Spec: `research/leps_localizer/DESIGN.md`
-- Plan: `docs/superpowers/plans/2026-05-05-leps-localizer-training.md`
-- VM setup history: `~/Projects/AMI/ami-devops/docs/claude/sessions/2026-04-28-object-store-fuse-mount-setup.md`
-- Old-cloud GPU runbook: `~/Projects/AMI/ami-devops/docs/claude/sessions/2026-04-20-ami-gpu-04-provisioning.md`
-- Memory entry: `~/.claude/projects/-home-michael-Projects-Fieldguide-chroma-backend/memory/leps-localizer-training.md`
+## FG pool (Butterflies / Papilionoidea, ~74k photos)
+- frac 0.01-0.05: 528
+- frac 0.05-0.10: 1,403
+- frac 0.10-0.25: 7,715
+- frac 0.25-0.50: 22,714 (where to pull next)
+- frac 0.50-0.95: 37,868
+- frac ≥0.95: 4,716 (skip)
