@@ -6,11 +6,26 @@ ship via `model.export()` from Ultralytics; classifiers are plain
 torch+timm modules and need a different path: trace, normalize-baked,
 then `coremltools.convert` / `torch.onnx.export` / `torch.jit.save`.
 
-iOS target: `--formats coreml --imgsz 512`. The CoreML model embeds
-ImageNet normalization (input is a plain RGB image with pixel range
-[0, 255]) and uses a `ClassifierConfig` so prediction returns a
-`{species_name: probability}` dict natively — no postprocessing on
-the device side.
+Two CoreML output patterns:
+
+* **Default (image-native)**: input is `ct.ImageType` named `image`
+  with ImageNet normalization baked into the traced graph; output uses
+  `ct.ClassifierConfig(labels)` so the model returns a
+  `{species_name: probability}` dict natively. Best for new iOS apps —
+  no preprocessing or label lookup on the device side.
+
+* **`--raw-output` (LepsAI iOS pattern)**: input is `ct.TensorType`
+  named `input` (`(1, 3, H, W)` float, app-normalized); output is
+  `ct.TensorType` named `logits`. App handles resize, `/255`, mean/std
+  normalization, softmax, and label lookup against the side-loaded
+  category-map JSON. Required for the existing LepsAI
+  `CoreMLClassifier.swift` codepath.
+
+A `<model-id>-category-map.json` (enriched format,
+`[{class_index, scientific_name}, ...]`) is always written next to the
+artifact. Pass `--ios-bundle` to also emit a stub
+`<model-id>.model-info.json` matching LepsAI's `ModelRegistry` schema
+(fill in the TODO display fields before bundling into the iOS app).
 
 Inputs (`--weights`, `--label-map`) accept:
   * a local path
@@ -146,9 +161,13 @@ def _build_model(
     weights_path: Path,
     mean: tuple[float, float, float],
     std: tuple[float, float, float],
+    raw_output: bool,
 ):
-    """Load timm model + wrap with ImageNet normalization so CoreML/ONNX
-    consumers can pass a plain [0, 1] image tensor."""
+    """Load timm model. When `raw_output` is False (default), wrap with
+    ImageNet normalization so CoreML/ONNX consumers can pass a plain
+    [0, 1] image tensor. When `raw_output` is True, return the bare
+    timm model — the consumer is expected to do its own resize +
+    `/255` + mean/std normalization (matches LepsAI iOS pattern)."""
     import timm
     import torch
     import torch.nn as nn
@@ -168,6 +187,9 @@ def _build_model(
             file=sys.stderr,
         )
 
+    if raw_output:
+        return base.eval()
+
     class Wrapped(nn.Module):
         def __init__(self, m, mean_, std_):
             super().__init__()
@@ -178,8 +200,7 @@ def _build_model(
         def forward(self, x):
             return self.m((x - self.mean) / self.std)
 
-    wrapped = Wrapped(base, mean, std).eval()
-    return wrapped
+    return Wrapped(base, mean, std).eval()
 
 
 def _smoke_test_onnx(onnx_path: Path, imgsz: int, num_classes: int) -> str:
@@ -233,22 +254,38 @@ def _export_coreml(model, args, labels: list[str], out_dir: Path) -> dict:
     try:
         example = torch.zeros(1, 3, args.imgsz, args.imgsz, dtype=torch.float32)
         traced = torch.jit.trace(model, example, strict=False)
-        cml = ct.convert(
-            traced,
-            inputs=[
-                ct.ImageType(
-                    name="image",
+        if args.raw_output:
+            inputs = [
+                ct.TensorType(
+                    name="input",
                     shape=(1, 3, args.imgsz, args.imgsz),
-                    scale=1 / 255.0,
-                    bias=[0.0, 0.0, 0.0],
-                    color_layout=ct.colorlayout.RGB,
                 )
-            ],
-            classifier_config=ct.ClassifierConfig(labels),
-            convert_to="mlprogram",
-            compute_units=ct.ComputeUnit.ALL,
-            minimum_deployment_target=ct.target.iOS16,
-        )
+            ]
+            outputs = [ct.TensorType(name="logits")]
+            convert_kwargs: dict = dict(
+                inputs=inputs,
+                outputs=outputs,
+                convert_to="mlprogram",
+                compute_units=ct.ComputeUnit.ALL,
+                minimum_deployment_target=ct.target.iOS17,
+            )
+        else:
+            convert_kwargs = dict(
+                inputs=[
+                    ct.ImageType(
+                        name="image",
+                        shape=(1, 3, args.imgsz, args.imgsz),
+                        scale=1 / 255.0,
+                        bias=[0.0, 0.0, 0.0],
+                        color_layout=ct.colorlayout.RGB,
+                    )
+                ],
+                convert_to="mlprogram",
+                compute_units=ct.ComputeUnit.ALL,
+                minimum_deployment_target=ct.target.iOS16,
+                classifier_config=ct.ClassifierConfig(labels),
+            )
+        cml = ct.convert(traced, **convert_kwargs)
         try:
             cml.short_description = (  # type: ignore[union-attr]
                 f"{args.arch} classifier, {args.num_classes} classes, "
@@ -256,7 +293,7 @@ def _export_coreml(model, args, labels: list[str], out_dir: Path) -> dict:
             )
         except AttributeError:
             pass
-        out = out_dir / f"{args.arch}_{args.imgsz}_classifier.mlpackage"
+        out = out_dir / f"{args.model_id}.mlpackage"
         if out.exists():
             import shutil
 
@@ -290,16 +327,17 @@ def _export_onnx(model, args, out_dir: Path) -> dict:
     t0 = time.monotonic()
     try:
         example = torch.zeros(1, 3, args.imgsz, args.imgsz, dtype=torch.float32)
-        out = out_dir / f"{args.arch}_{args.imgsz}_classifier.onnx"
+        out = out_dir / f"{args.model_id}.onnx"
+        in_name = "input" if args.raw_output else "image"
         torch.onnx.export(
             model,
             (example,),
             str(out),
-            input_names=["image"],
+            input_names=[in_name],
             output_names=["logits"],
             opset_version=args.opset,
             dynamic_axes=(
-                {"image": {0: "batch"}, "logits": {0: "batch"}}
+                {in_name: {0: "batch"}, "logits": {0: "batch"}}
                 if args.dynamic_batch
                 else None
             ),
@@ -342,7 +380,7 @@ def _export_torchscript(model, args, out_dir: Path) -> dict:
     try:
         example = torch.zeros(1, 3, args.imgsz, args.imgsz, dtype=torch.float32)
         traced = torch.jit.trace(model, example, strict=False)
-        out = out_dir / f"{args.arch}_{args.imgsz}_classifier.torchscript"
+        out = out_dir / f"{args.model_id}.torchscript"
         traced.save(str(out))
         rec["elapsed_s"] = round(time.monotonic() - t0, 2)
         rec["path"] = str(out)
@@ -424,6 +462,33 @@ def main() -> int:
         ),
     )
     p.add_argument(
+        "--raw-output",
+        action="store_true",
+        help=(
+            "skip CoreML ClassifierConfig and emit raw logits. Required for"
+            " LepsAI iOS app (CoreMLClassifier expects logits + does softmax"
+            " + argmax against the side-loaded category map)."
+        ),
+    )
+    p.add_argument(
+        "--model-id",
+        type=str,
+        default=None,
+        help=(
+            "iOS modelID (also used as basename for category-map.json /"
+            " model-info.json side files). Defaults to <arch>_<imgsz>_classifier."
+        ),
+    )
+    p.add_argument(
+        "--ios-bundle",
+        action="store_true",
+        help=(
+            "write a <model-id>.model-info.json template alongside the"
+            " category-map.json (LepsAI iOS bundle pattern). Display fields"
+            " are stubbed; fill them in before bundling."
+        ),
+    )
+    p.add_argument(
         "--smoke-test",
         action="store_true",
         help="run dummy inference for ONNX + load-check for CoreML",
@@ -440,6 +505,9 @@ def main() -> int:
     )
     args = p.parse_args()
 
+    if args.model_id is None:
+        args.model_id = f"{args.arch}_{args.imgsz}_classifier"
+
     _load_env_file(args.env_file)
 
     print("=" * 72)
@@ -447,8 +515,10 @@ def main() -> int:
     print(f"label_map : {args.label_map}")
     print(f"arch      : {args.arch}  num_classes: {args.num_classes}")
     print(f"imgsz     : {args.imgsz}")
+    print(f"model_id  : {args.model_id}")
     print(f"formats   : {', '.join(args.formats)}")
     print(f"mean/std  : {tuple(args.mean)} / {tuple(args.std)}")
+    print(f"raw_output: {args.raw_output}  ios_bundle: {args.ios_bundle}")
     print(f"out_dir   : {args.out_dir}")
     print("=" * 72)
 
@@ -494,6 +564,7 @@ def main() -> int:
         weights_path,
         tuple(args.mean),
         tuple(args.std),
+        raw_output=args.raw_output,
     )
 
     dispatch = {
@@ -539,6 +610,32 @@ def main() -> int:
     manifest_path = out_dir / "EXPORT_MANIFEST.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, default=str))
     print(f"\nmanifest -> {manifest_path}")
+
+    cat_map_path = out_dir / f"{args.model_id}-category-map.json"
+    cat_map = [
+        {"class_index": i, "scientific_name": name} for i, name in enumerate(labels)
+    ]
+    cat_map_path.write_text(json.dumps(cat_map, indent=2))
+    print(f"category-map -> {cat_map_path}")
+
+    if args.ios_bundle:
+        info = {
+            "modelID": args.model_id,
+            "displayName": "TODO: human-readable display name",
+            "author": "TODO",
+            "subject": "TODO (e.g. Butterflies)",
+            "region": "TODO (e.g. Vermont, Global)",
+            "speciesCount": args.num_classes,
+            "version": 1,
+            "inferenceMode": "onDevice",
+            "supportsGeoPrior": False,
+            "inputSize": args.imgsz,
+            "categoryMapFile": f"{args.model_id}-category-map",
+            "modelFile": args.model_id,
+        }
+        info_path = out_dir / f"{args.model_id}.model-info.json"
+        info_path.write_text(json.dumps(info, indent=2))
+        print(f"model-info -> {info_path} (fill in TODO fields before bundling)")
 
     n_ok = sum(1 for r in records if not r["error"])
     n_fail = len(records) - n_ok
