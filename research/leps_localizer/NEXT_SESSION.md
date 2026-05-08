@@ -52,6 +52,7 @@ Steps:
 - Repartition + retrain best-of-class (DEIM for server, YOLO26 for mobile)
 - E2E classifier-acc eval (#46) — the unbiased ranking
 - CoreML export YOLO26 (#38) — script done at `research/leps_localizer/scripts/export_model.py`, ONNX+CoreML verified on yolo26s v1 (2026-05-08). Re-run on v2 best.pt when training finishes.
+- Classifier edge export — sibling script at `research/leps_localizer/scripts/export_classifier.py` (timm-based, not Ultralytics). Verified 2026-05-08 on `mohammedelabbas/global-butterflies-max1000img-512` (resnet50, 8851 classes, 512×512): CoreML `.mlpackage` 79.7 MB with native `classLabel`+`classLabel_probs` outputs (iOS-ready, normalization baked in), ONNX 158.8 MB. Pending: end-to-end iOS app integration + species sanity check on real images via mac VM.
 - DEIMv2 vs D-FINE comparison — current `/home/debian/Projects/DEIM` clone is v1 (`Intellindust-AI-Lab/DEIM`, arxiv 2412.04234). DEIMv2 is a separate project page (`intellindust-ai-lab.github.io/projects/DEIMv2/`). After v1 D-FINE-S baseline is trained on FG, repeat with DEIMv2 backbone + config and compare on Leeds + locked FG test.
 
 ## Candidate stack — multi-arthropod detector (post-leps)

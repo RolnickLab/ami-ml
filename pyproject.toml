@@ -91,6 +91,7 @@ export-edge = [
     "onnx>=1.16",
     "onnxslim>=0.1.34",
     "onnxruntime>=1.18",
+    "onnxscript>=0.1",
     "coremltools>=7.2",
     "tensorflow>=2.16; python_version < '3.13'",
     "tensorflowjs>=4.20; python_version < '3.13'",
