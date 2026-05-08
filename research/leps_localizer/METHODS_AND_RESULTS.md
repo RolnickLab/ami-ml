@@ -59,7 +59,7 @@ Implications:
 
 ### 1.5 Bias note: Leeds GT framing
 
-Leeds GT bboxes systematically clip the **antennae** and **wing tips**. They are tight crops around head + main wing surface only. This biases IoU/containment metrics **against** models that produce biologically correct boxes (which would include antennae). Discovered 2026-05-07 by visual inspection in the gym.
+Leeds GT bboxes systematically clip the **antennae** (wing tips are intact). Tight crops cover head + full wing area but exclude antennae. This biases IoU/containment metrics **against** models that produce biologically correct boxes (which would include antennae). Discovered 2026-05-07 by visual inspection in the gym.
 
 Implication: a model that wins on Leeds IoU may be losing for the downstream classifier (antennae are diagnostic). Don't treat Leeds recall@IoU as the ground truth ranking.
 
@@ -193,8 +193,12 @@ YOLO26 has the best mAP50-95 on FG val (0.554). RT-DETR-l has the best plain mAP
 ### 5.3 Read
 
 - **By Leeds metrics**: v11s r2 + SAHI wins recall@IoU (0.720); v11s r2 wins recall@cont (0.785).
-- **But**: Leeds GT clips antennae+wingtips. Models that include antennae (RT-DETR, YOLO26) are penalized.
-- **For server-side bulk annotation pipeline**: RT-DETR-l is the right choice — it produces inclusive, biologically correct boxes that the downstream classifier can crop without losing diagnostic features. Visual gym inspection confirms: RT-DETR clearly wins on smaller butterflies.
+- **But**: Leeds GT clips antennae. Models that include antennae (RT-DETR, YOLO26) are penalized on Leeds metrics.
+- **Per-model framing observed in gym**:
+  - RT-DETR-l: most inclusive — antennae intact, full wings (rectangular boxes, biologically correct)
+  - YOLO26-s: antennae intact, slight wing-tip clipping (tight rectangular)
+  - YOLOv11s: clips wing tips, antennae intact (near-square boxes)
+- **For server-side bulk annotation pipeline**: RT-DETR-l is the right choice — most inclusive boxes, downstream classifier gets antennae + full wings. Visual gym inspection confirms: RT-DETR clearly wins on smaller butterflies.
 - **For mobile/web app**: YOLO26-s — NMS-free, native CoreML, similar accuracy to v11s, smaller compute graph.
 
 ### 5.4 The unbiased eval (#46, planned)
