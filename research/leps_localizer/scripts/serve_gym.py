@@ -215,29 +215,63 @@ def _parse_gt(gt_str: str) -> list[float] | None:
     return parts if len(parts) == 4 else None
 
 
+def _nms_filter(
+    boxes_scores: PredictResult, *, iou_threshold: float, top_k: int
+) -> PredictResult:
+    """Greedy NMS + top-k. Cleans up DETR-style query duplicates."""
+    if not boxes_scores:
+        return []
+    sorted_bs = sorted(boxes_scores, key=lambda bs: bs[1], reverse=True)
+    kept: PredictResult = []
+    for box, score in sorted_bs:
+        drop = False
+        for kept_box, _ in kept:
+            if iou_xyxy(box, kept_box) >= iou_threshold:
+                drop = True
+                break
+        if drop:
+            continue
+        kept.append((box, score))
+        if top_k > 0 and len(kept) >= top_k:
+            break
+    return kept
+
+
 def _run_one(
     name: str,
     pred: Predictor,
     img: Image.Image,
     conf: float,
+    nms_iou: float,
+    top_k: int,
     gt_box: list[float] | None,
 ) -> tuple[Image.Image, list[object], list[float] | None]:
     t0 = time.perf_counter()
-    boxes = pred.predict(img, conf)
+    raw = pred.predict(img, conf)
     ms = (time.perf_counter() - t0) * 1000.0
+    boxes = _nms_filter(raw, iou_threshold=nms_iou, top_k=top_k)
     best_iou = 0.0
     best_cont = 0.0
     top_box: list[float] | None = None
     if boxes:
-        top_box = max(boxes, key=lambda bs: bs[1])[0]
+        top_box = boxes[0][0]
         if gt_box is not None:
             best_iou = max(iou_xyxy(b, gt_box) for b, _ in boxes)
             best_cont = max(containment_iou(b, gt_box) for b, _ in boxes)
-    title = name + " | n=" + str(len(boxes)) + " | " + ("%.0f" % ms) + "ms"
+    title = (
+        name
+        + " | n="
+        + str(len(boxes))
+        + "/"
+        + str(len(raw))
+        + " | "
+        + ("%.0f" % ms)
+        + "ms"
+    )
     annotated = _draw_overlay(img, boxes, gt_box=gt_box, title=title)
     iou_cell = round(best_iou, 3) if gt_box is not None else NA
     cont_cell = round(best_cont, 3) if gt_box is not None else NA
-    row = [name, len(boxes), round(ms, 1), iou_cell, cont_cell]
+    row = [name, len(boxes), len(raw), round(ms, 1), iou_cell, cont_cell]
     return annotated, row, top_box
 
 
@@ -246,6 +280,8 @@ def _run_models(
     img: Image.Image | None,
     gt_str: str,
     conf: float,
+    nms_iou: float,
+    top_k: int,
     selected: list[str],
 ) -> tuple[list[tuple[Image.Image, str]], list[list[object]]]:
     if img is None:
@@ -258,13 +294,15 @@ def _run_models(
         pred = predictors.get(name)
         if pred is None:
             continue
-        annotated, row, top_box = _run_one(name, pred, img, conf, gt_box)
+        annotated, row, top_box = _run_one(
+            name, pred, img, conf, nms_iou, top_k, gt_box
+        )
         per_model_top.append(top_box)
         gallery.append((annotated, name))
         rows.append(row)
     if gt_box is None and len(per_model_top) >= 2:
         cons = _consensus_iou(per_model_top)
-        rows.append(["[consensus IoU]", NA, NA, round(cons, 3), NA])
+        rows.append(["[consensus IoU]", NA, NA, NA, round(cons, 3), NA])
     return gallery, rows
 
 
@@ -307,8 +345,8 @@ def _build_ui(
             return None, ""
         return _load_leeds_sample(leeds_entries, leeds_root, idx_str)
 
-    def _on_run(img, gt_str, conf, selected):
-        return _run_models(predictors, img, gt_str, conf, selected)
+    def _on_run(img, gt_str, conf, nms_iou, top_k, selected):
+        return _run_models(predictors, img, gt_str, conf, nms_iou, int(top_k), selected)
 
     with gr.Blocks(title="Leps Localizer Gym") as demo:
         gr.Markdown(
@@ -344,6 +382,20 @@ def _build_ui(
                     step=0.05,
                     label="Confidence threshold",
                 )
+                nms_iou = gr.Slider(
+                    0.1,
+                    0.9,
+                    value=0.45,
+                    step=0.05,
+                    label="NMS IoU threshold (drop overlapping preds)",
+                )
+                top_k = gr.Slider(
+                    0,
+                    10,
+                    value=5,
+                    step=1,
+                    label="Top K (0 = keep all post-NMS)",
+                )
                 models_cb = gr.CheckboxGroup(
                     choices=list(predictors.keys()),
                     value=list(predictors.keys()),
@@ -360,13 +412,15 @@ def _build_ui(
                 metrics = gr.Dataframe(
                     headers=[
                         "model",
-                        "n_preds",
+                        "n_kept",
+                        "n_raw",
                         "ms",
                         "best_iou",
                         "best_containment",
                     ],
                     label=(
-                        "Per-model metrics " "(best_iou/containment vs GT if available)"
+                        "Per-model metrics "
+                        "(n_kept = post-NMS+top-K; n_raw = raw model output)"
                     ),
                     wrap=True,
                 )
@@ -378,7 +432,7 @@ def _build_ui(
         )
         run_btn.click(
             fn=_on_run,
-            inputs=[img_in, gt_text, conf, models_cb],
+            inputs=[img_in, gt_text, conf, nms_iou, top_k, models_cb],
             outputs=[gallery, metrics],
         )
     return demo
