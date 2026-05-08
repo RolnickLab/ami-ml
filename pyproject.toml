@@ -110,7 +110,8 @@ ignore = ["E203", "E266", "E501", "W503"]
 max-complexity = 25
 per-file-ignores = [
     "__init__.py:F401",
-    "src/localization/training.py:E402"
+    "src/localization/training.py:E402",
+    "research/leps_localizer/scripts/validate_export.py:E231"
 ]
 exclude = [
     ".git",
