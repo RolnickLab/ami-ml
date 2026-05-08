@@ -80,6 +80,22 @@ demo = [
     "gradio>=4.44",
 ]
 
+export-edge = [
+    # Edge-deployment-format export for leps_localizer (research/leps_localizer/scripts/export_model.py).
+    # Pulls in CoreML / ONNX / TFLite / TFJS toolchains. Heavy (TF + tensorflowjs);
+    # gate behind this extra so it doesn't bloat `detection`.
+    #
+    # TF wheels lag Python releases — `tensorflow` and `tensorflowjs` are gated to
+    # Python <3.13. On 3.13 the TFLite/TFJS exports will fail; use a 3.12 venv if you
+    # need them. ONNX + CoreML stay available everywhere.
+    "onnx>=1.16",
+    "onnxslim>=0.1.34",
+    "onnxruntime>=1.18",
+    "coremltools>=7.2",
+    "tensorflow>=2.16; python_version < '3.13'",
+    "tensorflowjs>=4.20; python_version < '3.13'",
+]
+
 [project.scripts]
 ami-dataset = "src.dataset_tools.cli:cli"
 ami-classification = "src.classification.cli:cli"

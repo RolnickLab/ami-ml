@@ -1,6 +1,23 @@
 # NEXT SESSION — leps localizer
 
-## Where we are (2026-05-08)
+## Where we are (2026-05-08, evening)
+
+**In-flight on workspace VM (`ami-workspace-02-gpu`):**
+- YOLO26-s v2 retrain (`yolo26s-fg-2026-05-v2`), PID 30709 — epoch 57/80 at imgsz=1280, batch=16. ETA ~70 min. Source: `/mnt/butterflies-fg-2026-05/yolo/` (8,673-image set, supplement A merged).
+- DEIM-D-FINE-S waiter, PID 31283 — sleeping in `bash /tmp/launch_deim_after_yolo.sh`. Launches when YOLO26 finishes.
+- Gym (PID 23141) live since 06:00 with 3 models (v11s-r2, yolo26s, rtdetr-l) on port 7860.
+
+**Verify before acting:** see `.claude/notes/workspace-vm.md` "Live state check" snippet. PIDs and progress drift fast.
+
+**Pending plans (not yet started):**
+- Mobile/JS export CLI (CoreML/ONNX/TFJS) at `research/leps_localizer/scripts/export_model.py` — task #38
+- Batch BQ inference over 10.7M `training_images` writing to planned `localizer_eval_results` + MERGE into `training_images.primary_subject_bbox`. See `.claude/skills/bigquery-leps/`.
+
+## New context for this branch (added 2026-05-08)
+
+- **BigQuery is source-of-truth.** Training set: `leps-ai.global_butterflies_2604.localizer_training_images` (9,628 FG rows). Sibling: `training_images` (10.7M iNat/eButterfly/museum). Schema, MERGE, two-host workflow → `.claude/skills/bigquery-leps/SKILL.md`.
+- **Local infra notes** at `.claude/notes/` (gitignored). Read these before asking about infra.
+- **`gcloud` only on BEAST**, not workspace VM. Move files via rsync.
 
 4 trained runs + 2 SAHI test-time configs. Leeds eval done. Gym live at https://leps-localizer.dev.antenna.insectai.org with 3 models (yolov11s r2, yolo26s, rtdetr-l).
 
@@ -34,7 +51,20 @@ Steps:
 - Pull 4-6K medlarge FG data + reserve 1K as locked FG test (#48 + new task)
 - Repartition + retrain best-of-class (DEIM for server, YOLO26 for mobile)
 - E2E classifier-acc eval (#46) — the unbiased ranking
-- CoreML export YOLO26 (#38)
+- CoreML export YOLO26 (#38) — script done at `research/leps_localizer/scripts/export_model.py`, ONNX+CoreML verified on yolo26s v1 (2026-05-08). Re-run on v2 best.pt when training finishes.
+- DEIMv2 vs D-FINE comparison — current `/home/debian/Projects/DEIM` clone is v1 (`Intellindust-AI-Lab/DEIM`, arxiv 2412.04234). DEIMv2 is a separate project page (`intellindust-ai-lab.github.io/projects/DEIMv2/`). After v1 D-FINE-S baseline is trained on FG, repeat with DEIMv2 backbone + config and compare on Leeds + locked FG test.
+
+## Candidate stack — multi-arthropod detector (post-leps)
+
+Once leps single-class is solid, generalize to all-arthropod. Candidate pipeline:
+
+- **Per-tile detector**: DEIMv2-S or DEIMv2-M (DINOv3-distilled ViT-Tiny+ backbone). Class-agnostic or coarse-arthropod-class.
+- **Tiling/merging layer**: SAHI. 640×640 tiles, 20–25% overlap.
+- **Inference batching**: async batched 8–16 tiles to saturate the H100 MIG slice.
+- **Post-merge**: NMS across tile boundaries → crop list.
+- **Species classifier**: BioCLIP 2.5 on each merged crop.
+
+Open questions to settle before training: detector class granularity (1-class vs ~10 coarse orders), training-data source for non-leps arthropods, how SAHI's overlap interacts with DEIMv2's NMS-free head.
 
 ## Constraints
 - Don't touch FG prod or prod DB
