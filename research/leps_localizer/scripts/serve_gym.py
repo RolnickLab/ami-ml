@@ -173,6 +173,43 @@ def _consensus_iou(per_model_top: list[list[float] | None]) -> float:
     return sum(pairs) / len(pairs) if pairs else 0.0
 
 
+_SAMPLE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _load_sample_sets(dirs: list[Path], labels: list[str]) -> dict[str, list[Path]]:
+    out: dict[str, list[Path]] = {}
+    for i, d in enumerate(dirs):
+        if not d.is_dir():
+            print("warn: --samples-dir not a directory, skipping: " + str(d))
+            continue
+        label = labels[i] if i < len(labels) else d.name
+        imgs = sorted(p for p in d.iterdir() if p.suffix.lower() in _SAMPLE_EXTS)
+        if not imgs:
+            print("warn: no images in " + str(d))
+            continue
+        out[label] = imgs
+        print("Loaded " + str(len(imgs)) + " samples for set '" + label + "'")
+    return out
+
+
+def _load_random_sample(
+    sample_sets: dict[str, list[Path]], set_label: str, idx_str: str
+) -> tuple[Image.Image | None, str]:
+    if not sample_sets or set_label not in sample_sets:
+        return None, ""
+    paths = sample_sets[set_label]
+    if not paths:
+        return None, ""
+    try:
+        idx = int(idx_str) if idx_str.strip() else random.randrange(len(paths))
+    except ValueError:
+        idx = random.randrange(len(paths))
+    idx = max(0, min(idx, len(paths) - 1))
+    p = paths[idx]
+    img = Image.open(p).convert("RGB")
+    return img, ""
+
+
 def _resolve_leeds_image(image_root: Path, image_key: str) -> Path | None:
     candidate = image_root / image_key
     if candidate.exists():
@@ -335,6 +372,7 @@ def _build_ui(
     predictors: dict[str, Predictor],
     leeds_entries: list[IndexEntry],
     leeds_images: Path | None,
+    sample_sets: dict[str, list[Path]],
 ):
     import gradio as gr  # noqa: WPS433
 
@@ -344,6 +382,9 @@ def _build_ui(
         if leeds_root is None:
             return None, ""
         return _load_leeds_sample(leeds_entries, leeds_root, idx_str)
+
+    def _on_load_sample(set_label: str, idx_str: str):
+        return _load_random_sample(sample_sets, set_label, idx_str)
 
     def _on_run(img, gt_str, conf, nms_iou, top_k, selected):
         return _run_models(predictors, img, gt_str, conf, nms_iou, int(top_k), selected)
@@ -369,6 +410,24 @@ def _build_ui(
                         scale=2,
                     )
                     load_leeds_btn = gr.Button("Load Leeds", scale=1)
+                if sample_sets:
+                    with gr.Row():
+                        sample_set_dd = gr.Dropdown(
+                            choices=list(sample_sets.keys()),
+                            value=list(sample_sets.keys())[0],
+                            label="Sample set (non-Leeds)",
+                            scale=2,
+                        )
+                        sample_idx = gr.Textbox(
+                            label="idx (blank = random)",
+                            value="",
+                            scale=1,
+                        )
+                        load_sample_btn = gr.Button("Load sample", scale=1)
+                else:
+                    sample_set_dd = None
+                    sample_idx = None
+                    load_sample_btn = None
                 gt_text = gr.Textbox(
                     label=(
                         "GT bbox xyxy (auto-filled by Leeds; " "clear for no-GT mode)"
@@ -430,6 +489,12 @@ def _build_ui(
             inputs=[leeds_idx],
             outputs=[img_in, gt_text],
         )
+        if load_sample_btn is not None:
+            load_sample_btn.click(
+                fn=_on_load_sample,
+                inputs=[sample_set_dd, sample_idx],
+                outputs=[img_in, gt_text],
+            )
         run_btn.click(
             fn=_on_run,
             inputs=[img_in, gt_text, conf, nms_iou, top_k, models_cb],
@@ -463,6 +528,20 @@ def main() -> None:
     p.add_argument("--sahi-overlap", type=float, default=0.2)
     p.add_argument("--leeds-index", type=Path, default=None)
     p.add_argument("--leeds-images", type=Path, default=None)
+    p.add_argument(
+        "--samples-dir",
+        type=Path,
+        action="append",
+        default=[],
+        help="dir of test images (no GT). Repeat to register multiple sets.",
+    )
+    p.add_argument(
+        "--samples-label",
+        type=str,
+        action="append",
+        default=[],
+        help="label for each --samples-dir (defaults to dir name).",
+    )
     p.add_argument("--device", type=str, default="0")
     p.add_argument("--port", type=int, default=7860)
     p.add_argument("--host", type=str, default="0.0.0.0")
@@ -484,7 +563,9 @@ def main() -> None:
     for name in predictors:
         print("  - " + name)
 
-    demo = _build_ui(predictors, leeds_entries, args.leeds_images)
+    sample_sets = _load_sample_sets(args.samples_dir, args.samples_label)
+
+    demo = _build_ui(predictors, leeds_entries, args.leeds_images, sample_sets)
     demo.queue(default_concurrency_limit=1).launch(
         server_name=args.host,
         server_port=args.port,
