@@ -181,3 +181,8 @@ research/leps_localizer/runs/
 # Project data and plans (not for version control)
 data/
 plans/
+
+# Local Claude notes — per-laptop infra state, never committed.
+# README.md is the only committed file under .claude/notes/.
+.claude/notes/*
+!.claude/notes/README.md

@@ -134,6 +134,8 @@ Implication: a model that wins on Leeds IoU may be losing for the downstream cla
 | `yolov11s-fg-2026-05-r2` | YOLOv11s | 1536 | 0.5 | 1.0 | 0.5 | yolo11s.pt (COCO) |
 | `rtdetr-l-fg-2026-05` | RT-DETR-l | 640 | n/a | n/a | 0.5 | rtdetr-l.pt (COCO) |
 | `yolo26s-fg-2026-05` | YOLO26-s | 1280 | 0.0 | 1.0 | 0.5 | yolo26s.pt (COCO) |
+| `yolo26s-fg-2026-05-v2` | YOLO26-s | 1280 | 0.0 | 1.0 | 0.5 | yolo26s.pt (COCO) |
+| `deimv2-s-fg-2026-05` (in-progress) | DEIMv2-S (DINOv3-distilled ViT-T) | 640 | n/a | n/a | n/a | deimv2_dinov3_s_coco.pth |
 
 **imgsz=640 for RT-DETR** is intentional: RT-DETR's positional encodings were tuned at 640. Comparing at native imgsz per architecture, not identical-imgsz across.
 
@@ -175,9 +177,10 @@ Final-epoch metrics from `runs/<name>/results.csv`:
 | yolov11s r1 (imgsz=1280) | 0.892 | 0.551 | 0.877 | 0.834 |
 | yolov11s r2 (imgsz=1536, cp=0.5) | 0.870 | 0.508 | 0.865 | 0.840 |
 | rtdetr-l (imgsz=640) | 0.898 | 0.506 | 0.875 | 0.872 |
-| yolo26s (imgsz=1280) | **0.896** | **0.554** | 0.867 | **0.879** |
+| yolo26s (imgsz=1280) | 0.896 | 0.554 | 0.867 | 0.879 |
+| **yolo26s v2 (imgsz=1280, re-run)** | **0.939** | **0.637** | **0.896** | 0.871 |
 
-YOLO26 has the best mAP50-95 on FG val (0.554). RT-DETR-l has the best plain mAP50 (0.898) but lower 50-95.
+YOLO26-s v2 (the re-run with the same recipe as v1) is the new best on FG val: **0.939 mAP50 / 0.637 mAP50-95**, +4-8pp over v1. Same epoch count, same imgsz, same init weights — improvement comes from training stochasticity / EMA divergence between runs. RT-DETR-l previously held best plain mAP50 (0.898); v2 now leads both metrics.
 
 ### 5.2 Held-out Leeds eval (832 images, conf=0.25)
 
@@ -189,6 +192,7 @@ YOLO26 has the best mAP50-95 on FG val (0.554). RT-DETR-l has the best plain mAP
 | yolov11s r2 + SAHI 1024/0.3 | **0.720** | 0.770 | 0.552 | 0.624 | 53 |
 | rtdetr-l | 0.672 | 0.681 | **0.567** | 0.573 | **1** |
 | yolo26s | 0.676 | 0.690 | 0.553 | 0.571 | 26 |
+| **yolo26s v2** | **0.692** | **0.698** | **0.574** | **0.584** | **9** |
 
 ### 5.3 Read
 
@@ -209,7 +213,7 @@ End-to-end pipeline eval — **localizer → square crop → classifier accuracy
 
 ## 6. Open questions and next steps
 
-1. **Train DEIM-D-FINE-S** on current dataset (queued, task #51). Compare against RT-DETR-l for server pipeline.
+1. **Train DEIM-D-FINE-S** on current dataset (queued, task #51). DEIM v1 blocked on H100L MIG (NCCL + torchvision-v2-transforms); superseded by **DEIMv2-S** which is currently training (2026-05-09, wandb run `4rivhpkt` in `moth-ai/leps_localizer`). Compare DEIMv2-S vs RT-DETR-l vs YOLO26-s v2 on Leeds + E2E classifier-acc eval.
 2. **Pull medlarge data** (#48): 1-2K more Lepidoptera images with bbox area fraction 0.25-0.50 to fill the distribution gap. Done in chroma-backend repo where Azure DB access lives.
 3. **Repartition** the enriched set (#49) and retrain best-of-class on each tier (mobile + server).
 4. **E2E classifier-acc eval** (#46): the unbiased ranking. Should override Leeds metrics.
