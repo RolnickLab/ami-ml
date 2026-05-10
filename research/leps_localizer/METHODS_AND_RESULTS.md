@@ -63,6 +63,22 @@ Leeds GT bboxes systematically clip the **antennae** (wing tips are intact). Tig
 
 Implication: a model that wins on Leeds IoU may be losing for the downstream classifier (antennae are diagnostic). Don't treat Leeds recall@IoU as the ground truth ranking.
 
+### 1.6 Bias note: framing skew (large/centered subjects)
+
+Beyond the antenna clip, Leeds is **easy-mode framing** — most subjects are large and roughly centered, filling the frame. Distribution of bbox area fraction in Leeds:
+
+| ratio bin | n | share |
+|---|---|---|
+| 0.00–0.05 | 2 | 0.2% |
+| 0.05–0.10 | 13 | 1.6% |
+| **0.10–0.25 (small)** | **128** | **15.4%** |
+| **0.25–0.50 (mid)** | **396** | **47.6%** |
+| 0.50–1.01 (large) | 293 | 35.2% |
+
+A model that always emits a near-full-frame box scores well on the bottom row. The **real ranking signal** is recall on the small/mid bins, where detection actually has to work. Headline `recall@IoU0.5` averages over all bins and is dominated by the large bucket; read the per-bin table, not the headline.
+
+The current train + Leeds eval splits both lean large/centered. Field-deployment images (camera traps, citizen-sci photos, app screenshots) routinely produce small-ratio subjects, so this is the deployment-relevant gap. Filling it is the motivation for the medlarge data pull (#48) and the planned reserved FG test set with framing diversity.
+
 ---
 
 ## 2. Architectures compared
@@ -101,15 +117,20 @@ Implication: a model that wins on Leeds IoU may be losing for the downstream cla
 - **No retraining** — same checkpoint as v11s
 - **Why included**: Low-cost way to test if v11s misses small objects in raw inference
 
-### 2.5 DEIM-D-FINE-S (planned, queued for training)
+### 2.5 DEIM-D-FINE-S (blocked, superseded by DEIMv2-S)
 
 - **Params**: 10M, **GFLOPs**: 25
-- **Backbone**: HGNetv2 (smaller than RT-DETR-l)
-- **Head**: D-FINE Fine-grained Distribution Refinement + DEIM Improved Matching for faster convergence
-- **Pretrained on**: COCO 80-class detection
-- **License**: Apache-2.0 (Intellindust-AI-Lab/DEIM repo)
-- **Mobile/web export**: ONNX native. CoreML via coremltools.convert(). DETR-class inference cost.
-- **Why include**: Current SOTA real-time DETR (CVPR 2025). Smaller than RT-DETR-l but expected to match or beat on accuracy. Successor to RT-DETR-l in our server-side pipeline.
+- Blocked on H100L MIG slice: NCCL fails DDP init on the partition, and torchvision-v2 transforms raise `NotImplementedError` against the venv torch we had pinned. Documented in `NEXT_SESSION.md`. Superseded by DEIMv2-S below.
+
+### 2.6 DEIMv2-S (Intellindust-AI-Lab, NMS-free transformer + DINOv3-distilled ViT-T)
+
+- **Params**: 9.7M, **GFLOPs**: 25
+- **Backbone**: DINOv3-distilled ViT-T (`vitt_distill.pt`, 22 MB) + Lite Spatial Prior Module
+- **Head**: NMS-free transformer decoder (descended from D-FINE, with DEIMv2 improved matching). 300 queries, no NMS at inference.
+- **Pretrained on**: COCO 80-class detection (`deimv2_dinov3_s_coco.pth`, 38 MB)
+- **License**: Apache-2.0 (Intellindust-AI-Lab/DEIMv2 repo)
+- **Mobile/web export**: ONNX native. CoreML via coremltools — DINOv3 attention is multi-head-attention, supported in coremltools 8.x. DETR-class inference cost.
+- **Why included**: Successor to DEIM v1 with pinned `torch==2.5.1` / `torchvision==0.20.1` to dodge the v1 blockers. Single-process bypass of `torchrun` works on MIG-1-24C. NMS-free with strong "always emits something" behavior — useful for downstream pipelines that want a guaranteed crop.
 
 ---
 
@@ -135,7 +156,7 @@ Implication: a model that wins on Leeds IoU may be losing for the downstream cla
 | `rtdetr-l-fg-2026-05` | RT-DETR-l | 640 | n/a | n/a | 0.5 | rtdetr-l.pt (COCO) |
 | `yolo26s-fg-2026-05` | YOLO26-s | 1280 | 0.0 | 1.0 | 0.5 | yolo26s.pt (COCO) |
 | `yolo26s-fg-2026-05-v2` | YOLO26-s | 1280 | 0.0 | 1.0 | 0.5 | yolo26s.pt (COCO) |
-| `deimv2-s-fg-2026-05` (in-progress) | DEIMv2-S (DINOv3-distilled ViT-T) | 640 | n/a | n/a | n/a | deimv2_dinov3_s_coco.pth |
+| `deimv2-s-fg-2026-05` | DEIMv2-S (DINOv3-distilled ViT-T) | 640 | n/a | n/a | n/a | deimv2_dinov3_s_coco.pth |
 
 **imgsz=640 for RT-DETR** is intentional: RT-DETR's positional encodings were tuned at 640. Comparing at native imgsz per architecture, not identical-imgsz across.
 
@@ -170,7 +191,7 @@ The recall@containment metric is generally more informative than recall@IoU for 
 
 ### 5.1 Training-time metrics (FG val, 290 images)
 
-Final-epoch metrics from `runs/<name>/results.csv`:
+Final-epoch metrics from `runs/<name>/results.csv` (DEIMv2 row from COCO eval at the best-epoch checkpoint, epoch 37):
 
 | Run | mAP50 | mAP50-95 | Precision | Recall |
 |---|---|---|---|---|
@@ -179,10 +200,13 @@ Final-epoch metrics from `runs/<name>/results.csv`:
 | rtdetr-l (imgsz=640) | 0.898 | 0.506 | 0.875 | 0.872 |
 | yolo26s (imgsz=1280) | 0.896 | 0.554 | 0.867 | 0.879 |
 | **yolo26s v2 (imgsz=1280, re-run)** | **0.939** | **0.637** | **0.896** | 0.871 |
+| deimv2-s (imgsz=640) | 0.936 | 0.606 | n/a | n/a |
 
-YOLO26-s v2 (the re-run with the same recipe as v1) is the new best on FG val: **0.939 mAP50 / 0.637 mAP50-95**, +4-8pp over v1. Same epoch count, same imgsz, same init weights — improvement comes from training stochasticity / EMA divergence between runs. RT-DETR-l previously held best plain mAP50 (0.898); v2 now leads both metrics.
+YOLO26-s v2 (the re-run with the same recipe as v1) is the new best on FG val: **0.939 mAP50 / 0.637 mAP50-95**, +4-8pp over v1. Same epoch count, same imgsz, same init weights — improvement comes from training stochasticity / EMA divergence between runs. RT-DETR-l previously held best plain mAP50 (0.898); v2 now leads both metrics. DEIMv2-S lands close behind (0.936 / 0.606) at half the input resolution.
 
-### 5.2 Held-out Leeds eval (832 images, conf=0.25)
+### 5.2 Held-out Leeds eval (832 images)
+
+YOLO runs at conf=0.25; DEIMv2-S at score>=0.45 (DETR-style). Aggregate metrics:
 
 | Run | recall@IoU0.5 | recall@cont0.5 | mean IoU | mean cont | missed |
 |---|---|---|---|---|---|
@@ -192,18 +216,34 @@ YOLO26-s v2 (the re-run with the same recipe as v1) is the new best on FG val: *
 | yolov11s r2 + SAHI 1024/0.3 | **0.720** | 0.770 | 0.552 | 0.624 | 53 |
 | rtdetr-l | 0.672 | 0.681 | **0.567** | 0.573 | **1** |
 | yolo26s | 0.676 | 0.690 | 0.553 | 0.571 | 26 |
-| **yolo26s v2** | **0.692** | **0.698** | **0.574** | **0.584** | **9** |
+| **yolo26s v2** | **0.692** | 0.698 | **0.574** | **0.584** | 9 |
+| deimv2-s | 0.669 | 0.669 | 0.564 | 0.564 | **2** |
+
+### 5.2.1 Recall by bbox-area-fraction bucket (the real ranking)
+
+Per §1.6, the headline averages above are dominated by the large-ratio bucket. The rank-the-models question lives in the small (0.10–0.25) and mid (0.25–0.50) bins. Recall@IoU0.5 per bin:
+
+| Run | <0.05 (n=2) | 0.05–0.10 (n=13) | **0.10–0.25 (n=128)** | **0.25–0.50 (n=396)** | 0.50–1.01 (n=293) |
+|---|---|---|---|---|---|
+| yolo26s v2 | 0.000 | 0.077 | **0.328** | **0.629 (0.636 cont)** | 0.969 (0.976 cont) |
+| deimv2-s | 0.000 | 0.077 | **0.281** | **0.573** | **1.000** |
+
+- **YOLO26-s v2 wins the small + mid bins** by 4.7pp small / 6.3pp mid — the buckets that matter for deployment.
+- **DEIMv2-S wins the large bin** (perfect 100%) and "finds something" rate (2 missed vs 9). Behavior is consistent with NMS-free DETR-class detectors that always emit a high-confidence query, even on hard images.
+- **Caveat — confound:** DEIMv2-S trained at imgsz=640, YOLO26-s v2 at 1280. Small-object recall correlates strongly with input resolution. **This is not yet an architectural verdict.** Fair-fight rerun = DEIMv2 @ 1280 (preferred, on the 2× 3090 NVLink rig).
 
 ### 5.3 Read
 
-- **By Leeds metrics**: v11s r2 + SAHI wins recall@IoU (0.720); v11s r2 wins recall@cont (0.785).
-- **But**: Leeds GT clips antennae. Models that include antennae (RT-DETR, YOLO26) are penalized on Leeds metrics.
+- **Real ranking signal (small + mid bins)**: YOLO26-s v2 currently leads.
+- **Leeds headline metrics**: v11s r2 + SAHI wins recall@IoU (0.720); v11s r2 wins recall@cont (0.785). Both lift come from large-bin saturation, not small-bin gains — see the per-bin table above.
+- **Antenna bias**: Leeds GT clips antennae. Models that include antennae (RT-DETR, YOLO26, DEIMv2) are penalized on IoU.
 - **Per-model framing observed in gym**:
   - RT-DETR-l: most inclusive — antennae intact, full wings (rectangular boxes, biologically correct)
+  - DEIMv2-S: similar inclusion to RT-DETR; nearly always emits a box.
   - YOLO26-s: antennae intact, slight wing-tip clipping (tight rectangular)
   - YOLOv11s: clips wing tips, antennae intact (near-square boxes)
-- **For server-side bulk annotation pipeline**: RT-DETR-l is the right choice — most inclusive boxes, downstream classifier gets antennae + full wings. Visual gym inspection confirms: RT-DETR clearly wins on smaller butterflies.
-- **For mobile/web app**: YOLO26-s — NMS-free, native CoreML, similar accuracy to v11s, smaller compute graph.
+- **For server-side bulk annotation pipeline**: RT-DETR-l or DEIMv2-S — most inclusive boxes, "finds something" behavior, downstream classifier gets antennae + full wings.
+- **For mobile/web app**: YOLO26-s v2 — NMS-free, native CoreML, leads small-ratio recall in current data.
 
 ### 5.4 The unbiased eval (#46, planned)
 
@@ -213,11 +253,11 @@ End-to-end pipeline eval — **localizer → square crop → classifier accuracy
 
 ## 6. Open questions and next steps
 
-1. **Train DEIM-D-FINE-S** on current dataset (queued, task #51). DEIM v1 blocked on H100L MIG (NCCL + torchvision-v2-transforms); superseded by **DEIMv2-S** which is currently training (2026-05-09, wandb run `4rivhpkt` in `moth-ai/leps_localizer`). Compare DEIMv2-S vs RT-DETR-l vs YOLO26-s v2 on Leeds + E2E classifier-acc eval.
-2. **Pull medlarge data** (#48): 1-2K more Lepidoptera images with bbox area fraction 0.25-0.50 to fill the distribution gap. Done in chroma-backend repo where Azure DB access lives.
+1. **Fair-fight DEIMv2-S @ imgsz=1280** on the 2× 3090 NVLink rig. Current DEIMv2-S run was at 640px; the small-ratio gap vs YOLO26-s v2 may be a resolution effect, not architectural. Until rerun, treat the YOLO26-s v2 lead as conditional.
+2. **Pull medlarge data** (#48): 1-2K more Lepidoptera images with bbox area fraction 0.25-0.50 to fill the distribution gap, plus reserve 1K as locked FG test with framing diversity (small/off-center). Done in chroma-backend repo where Azure DB access lives.
 3. **Repartition** the enriched set (#49) and retrain best-of-class on each tier (mobile + server).
 4. **E2E classifier-acc eval** (#46): the unbiased ranking. Should override Leeds metrics.
-5. **CoreML / ONNX exports** (#38): YOLO26-s native, RT-DETR/DEIM via ONNX → coremltools.
+5. **CoreML / ONNX exports** (#38): YOLO26-s native, RT-DETR/DEIMv2 via ONNX → coremltools.
 
 ---
 
@@ -233,4 +273,4 @@ End-to-end pipeline eval — **localizer → square crop → classifier accuracy
 
 ---
 
-*Last updated: 2026-05-08*
+*Last updated: 2026-05-09*
