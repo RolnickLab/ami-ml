@@ -1,0 +1,13 @@
+[
+  {"name": "dataset_source_uuid", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "model_id",            "type": "STRING", "mode": "REQUIRED"},
+  {"name": "run_id",              "type": "STRING", "mode": "REQUIRED"},
+  {"name": "run_at",              "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "arch",                "type": "STRING", "mode": "NULLABLE"},
+  {"name": "imgsz",               "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "predicted_bbox_xyxy", "type": "FLOAT",  "mode": "REPEATED"},
+  {"name": "score",               "type": "FLOAT",  "mode": "NULLABLE"},
+  {"name": "image_width",         "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "image_height",        "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "n_detections_above_thresh", "type": "INTEGER", "mode": "NULLABLE"}
+]

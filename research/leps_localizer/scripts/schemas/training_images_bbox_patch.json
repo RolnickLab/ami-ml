@@ -1,0 +1,14 @@
+[
+  {"name": "primary_subject_bbox", "type": "RECORD", "mode": "NULLABLE",
+   "fields": [
+     {"name": "x1", "type": "FLOAT"},
+     {"name": "y1", "type": "FLOAT"},
+     {"name": "x2", "type": "FLOAT"},
+     {"name": "y2", "type": "FLOAT"},
+     {"name": "score", "type": "FLOAT"},
+     {"name": "area_fraction", "type": "FLOAT"}
+   ]},
+  {"name": "bbox_model_id",         "type": "STRING",    "mode": "NULLABLE"},
+  {"name": "bbox_inference_run_id", "type": "STRING",    "mode": "NULLABLE"},
+  {"name": "bbox_inferred_at",      "type": "TIMESTAMP", "mode": "NULLABLE"}
+]
