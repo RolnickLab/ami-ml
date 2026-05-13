@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Leps Localizer — YOLO26-s browser demo</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<header>
+  <h1>Leps Localizer</h1>
+  <p class="sub">
+    YOLO26-s, single class (butterfly), trained on FG-2026-05.
+    Runs entirely in the browser via <code>onnxruntime-web</code> (WASM SIMD).
+  </p>
+</header>
+
+<section id="controls">
+  <div class="row">
+    <label class="btn">
+      <input type="file" id="file" accept="image/*" hidden />
+      Pick image
+    </label>
+    <button id="webcam-btn" class="btn">Start webcam</button>
+    <button id="stop-btn" class="btn" disabled>Stop</button>
+    <span id="status">loading model…</span>
+  </div>
+  <div class="row sliders">
+    <label>conf
+      <input type="range" id="conf" min="0" max="1" step="0.01" value="0.25" />
+      <span id="conf-v">0.25</span>
+    </label>
+    <label>iou
+      <input type="range" id="iou" min="0" max="1" step="0.01" value="0.50" />
+      <span id="iou-v">0.50</span>
+    </label>
+    <label>max det
+      <input type="range" id="maxdet" min="1" max="300" step="1" value="100" />
+      <span id="maxdet-v">100</span>
+    </label>
+  </div>
+</section>
+
+<section id="stage">
+  <div class="canvas-wrap">
+    <canvas id="cv"></canvas>
+    <video id="cam" autoplay playsinline muted hidden></video>
+  </div>
+  <aside id="info">
+    <div><b>Input</b>: <span id="meta-in">—</span></div>
+    <div><b>Inference</b>: <span id="meta-ms">—</span></div>
+    <div><b>Detections</b>: <span id="meta-n">—</span></div>
+    <div><b>Backend</b>: <span id="meta-ep">—</span></div>
+  </aside>
+</section>
+
+<footer>
+  <p>
+    Drop or pick a photo above. Or use webcam. Model is ~19 MB FP32 ONNX,
+    cached after first load. Source: <code>research/leps_localizer/</code>.
+  </p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

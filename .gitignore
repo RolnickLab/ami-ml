@@ -178,6 +178,12 @@ research/leps_localizer/data/yolo_*/
 research/leps_localizer/eval_outputs/
 research/leps_localizer/runs/
 
+# leps_localizer browser demo - model weights not committed
+research/leps_localizer/demo/model/*.onnx
+research/leps_localizer/demo/model/*.onnx.br
+research/leps_localizer/demo/model/*.onnx.gz
+research/leps_localizer/demo/model/web_model/
+
 # Project data and plans (not for version control)
 data/
 plans/

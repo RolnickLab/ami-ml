@@ -251,6 +251,36 @@ End-to-end pipeline eval — **localizer → square crop → classifier accuracy
 
 ---
 
+## 5.5 Web deployment — quantization shootout (in progress, 2026-05-13)
+
+Goal: ship a browser demo (onnxruntime-web, WASM SIMD) with wire size **≤2 MB**
+for use as a convenience suggestor. Detector accuracy can degrade noticeably
+without hurting the use case.
+
+Baseline reference: yolo26s-fg-2026-05-v2 trained at imgsz=1280, eval here at
+imgsz=640 (cheaper for web, ~half the FLOPs).
+
+| Variant | Disk | Brotli wire | R_all | R_small | R_mid | R_large | ms/img (CPU) | Notes |
+|---|---|---|---|---|---|---|---|---|
+| yolo26s FP32 | 36.4 MB | 33.4 MB | 0.846 | 0.580 | 0.842 | 0.955 | 179 | baseline for the size race |
+| yolo26s dyn-INT8 | 9.5 MB | 5.8 MB | 0.722 | 0.420 | 0.691 | 0.914 | 918 | recall -12pp, **slower** (QDQ overhead on conv-heavy graph) |
+| yolo26s static-INT8 | 9.8 MB | — | **0.000** | 0 | 0 | 0 | 107 | output sigmoid collapsed; known YOLO + QDQ pathology |
+| yolo26n FP32 | est ~12 MB | est ~11 MB | training | — | — | — | — | ETA ~3h, epoch 12/80 mAP50=0.887 |
+| yolo26n dyn-INT8 | est ~3 MB | est ~1.5-2 MB | pending | — | — | — | — | only path to ≤2 MB wire |
+
+Wire-size compressibility: FP32 weights are entropic — Brotli only buys ~10%.
+INT8 weights compress to ~60% (33 MB → 6 MB on yolo26s).
+
+Conclusions so far:
+- **s-class is out of the running** for ≤2 MB. Best wire we can hit is ~6 MB Brotli, and only with the dyn-INT8 variant that already costs 12pp recall and runs 5× slower.
+- **Static INT8 needs head exclusion**, not a tooling switch. ORT QDQ insertion around the YOLO26 sigmoid + end2end decoder squashes all confidences to zero. Fix would be selective node exclusion (per Ultralytics + ONNX issue tracker) or QAT-during-training. Not pursued here.
+- **Path forward**: yolo26n + dynamic INT8 + Brotli. Measured numbers will be filled in once nano training finishes.
+
+Demo location: `research/leps_localizer/demo/` (HTML + JS + `serve.py` with
+COOP/COEP + Content-Encoding handling). Model weights gitignored.
+
+---
+
 ## 6. Open questions and next steps
 
 1. **Fair-fight DEIMv2-S @ imgsz=1280** on the 2× 3090 NVLink rig. Current DEIMv2-S run was at 640px; the small-ratio gap vs YOLO26-s v2 may be a resolution effect, not architectural. Until rerun, treat the YOLO26-s v2 lead as conditional.
@@ -273,4 +303,4 @@ End-to-end pipeline eval — **localizer → square crop → classifier accuracy
 
 ---
 
-*Last updated: 2026-05-09*
+*Last updated: 2026-05-13*

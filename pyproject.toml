@@ -111,7 +111,11 @@ max-complexity = 25
 per-file-ignores = [
     "__init__.py:F401",
     "src/localization/training.py:E402",
-    "research/leps_localizer/scripts/validate_export.py:E231"
+    "research/leps_localizer/scripts/validate_export.py:E231",
+    "research/leps_localizer/scripts/quantize_onnx.py:E231",
+    "research/leps_localizer/scripts/compress_onnx.py:E231",
+    "research/leps_localizer/scripts/eval_onnx_recall.py:E231",
+    "research/leps_localizer/demo/serve.py:E231"
 ]
 exclude = [
     ".git",
