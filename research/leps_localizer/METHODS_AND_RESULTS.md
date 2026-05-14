@@ -295,8 +295,8 @@ weights alone — the inference runtime itself isn't free.
 | ORT-web + yolo26n FP16 | 2.5 MB (js+wasm) | 4.0 MB | **6.5 MB** | 0.860 | current `index.html` |
 | ORT-web + yolo26n FP32 | 2.5 MB | 8.2 MB | 10.7 MB | 0.860 | fallback |
 | ORT-web + yolo26s FP32 | 2.5 MB | 32 MB | 34.5 MB | 0.846 | not viable |
-| **TFJS + yolo26n uint8** | **0.36 MB (js)** | **1.6 MB (shards)** | **~2.0 MB** | pending | `tfjs.html`, ship candidate |
-| TFJS + yolo26n FP16 | 0.36 MB | 4.0 MB | 4.4 MB | pending | TFJS converter native FP16 |
+| **TFJS + yolo26n uint8** | **0.36 MB (js)** | **1.6 MB (shards)** | **~2.0 MB** | **0.862** | `tfjs.html`, ship candidate; recall measured via TFLite proxy |
+| TFJS + yolo26n FP16 | 0.36 MB | 4.0 MB | 4.4 MB | (≈0.860) | TFJS converter native FP16, expected identical to FP32 |
 
 Why TFJS wins on cold-load: (a) `@tensorflow/tfjs` ships as a single 360 KB
 brotli JS that bundles core + converter + WebGL + CPU backends — no

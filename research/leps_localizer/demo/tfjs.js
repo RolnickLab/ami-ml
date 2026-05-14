@@ -44,8 +44,23 @@ let lastFrame = null;
 
 async function ensureBackend(name) {
   if (tf.getBackend() === name) return;
-  await tf.setBackend(name);
+  const ok = await tf.setBackend(name);
+  if (!ok) {
+    throw new Error(`backend ${name} not available in this browser`);
+  }
   await tf.ready();
+}
+
+// First inference on a fresh WebGL context compiles all GLSL shaders
+// (~1-3 s of stutter). Run a zero-tensor pass right after load so the
+// user's first real frame isn't the warm-up frame.
+async function warmup() {
+  if (!model) return;
+  const zero = tf.zeros([1, IMGSZ, IMGSZ, 3]);
+  const out = model.execute(zero);
+  await out.data();
+  out.dispose();
+  zero.dispose();
 }
 
 async function loadModel(key, backendName) {
@@ -59,8 +74,12 @@ async function loadModel(key, backendName) {
     await ensureBackend(backendName);
     const t0 = performance.now();
     model = await tf.loadGraphModel(MODELS[key]);
-    const ms = (performance.now() - t0).toFixed(0);
-    els.status.textContent = `ready (${key}, ${backendName}, ${ms} ms load)`;
+    const loadMs = (performance.now() - t0).toFixed(0);
+    els.status.textContent = `warming up ${backendName}…`;
+    const tw = performance.now();
+    await warmup();
+    const warmMs = (performance.now() - tw).toFixed(0);
+    els.status.textContent = `ready (${key}, ${backendName}, load=${loadMs} ms, warm=${warmMs} ms)`;
     els.status.className = "ready";
     els.metaEp.textContent = `tfjs ${tf.version_core}, ${tf.getBackend()}`;
     if (lastFrame) rerun();
@@ -151,18 +170,59 @@ function drawDetections(dets) {
   }
 }
 
-async function runOnce(source, srcW, srcH) {
+// Translucent banner + spinner ring overlaid on the canvas while inference
+// is running. Sized relative to the canvas so it works on big and small
+// source images.
+function drawLoadingOverlay(label) {
+  const w = els.cv.width;
+  const h = els.cv.height;
+  const padY = Math.max(40, Math.round(h * 0.08));
+  ctx.save();
+  ctx.fillStyle = "rgba(15, 17, 21, 0.55)";
+  ctx.fillRect(0, 0, w, padY);
+  const fontPx = Math.max(14, Math.round(w / 50));
+  ctx.font = `${fontPx}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.fillStyle = "rgb(74, 222, 128)";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, Math.round(w * 0.02), padY / 2);
+  ctx.restore();
+}
+
+let inferenceInFlight = false;
+
+async function runOnce(source, srcW, srcH, opts = {}) {
   if (!model) return;
+  if (inferenceInFlight && !opts.fromWebcam) return;
+  inferenceInFlight = true;
+
   const confTh = parseFloat(els.conf.value);
   const maxDet = parseInt(els.maxdet.value, 10);
 
+  // For pick-from-file: draw image + loading banner BEFORE running
+  // inference, so the user sees the picked frame instantly even if
+  // detection takes 1-3 s. Webcam loop skips this — its frames already
+  // animate from the <video>.
+  if (!opts.fromWebcam) {
+    drawSource(source, srcW, srcH);
+    drawLoadingOverlay(opts.label || "running detection…");
+    els.metaIn.textContent = `${srcW}×${srcH}`;
+    els.metaMs.textContent = "…";
+    els.metaN.textContent = "…";
+    // Yield once so the canvas paints before we block on inference.
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+
   const pre = preprocess(source, srcW, srcH);
   const t0 = performance.now();
-  const outTensor = model.execute(pre.tensor);
-  const arr = await outTensor.data();
+  let arr;
+  try {
+    const outTensor = model.execute(pre.tensor);
+    arr = await outTensor.data();
+    outTensor.dispose();
+  } finally {
+    pre.tensor.dispose();
+  }
   const t1 = performance.now();
-  outTensor.dispose();
-  pre.tensor.dispose();
 
   const out = { data: arr, shape: [1, arr.length / 6, 6] };
   const dets = postprocess(out, pre, confTh, maxDet);
@@ -174,6 +234,7 @@ async function runOnce(source, srcW, srcH) {
   els.metaMs.textContent = `${(t1 - t0).toFixed(1)} ms`;
   els.metaN.textContent = `${dets.length}`;
   lastFrame = { source, srcW, srcH };
+  inferenceInFlight = false;
 }
 
 function rerun() {
@@ -228,7 +289,9 @@ async function startWebcam() {
   const loop = async () => {
     if (!webcamStream) return;
     if (els.cam.readyState >= 2 && !document.hidden) {
-      await runOnce(els.cam, els.cam.videoWidth, els.cam.videoHeight);
+      await runOnce(els.cam, els.cam.videoWidth, els.cam.videoHeight, {
+        fromWebcam: true,
+      });
     }
     webcamLoop = requestAnimationFrame(loop);
   };

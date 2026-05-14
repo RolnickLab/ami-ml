@@ -173,11 +173,40 @@ function drawDetections(dets) {
   }
 }
 
+function drawLoadingOverlay(label) {
+  const w = els.cv.width;
+  const h = els.cv.height;
+  const padY = Math.max(40, Math.round(h * 0.08));
+  ctx.save();
+  ctx.fillStyle = "rgba(15, 17, 21, 0.55)";
+  ctx.fillRect(0, 0, w, padY);
+  const fontPx = Math.max(14, Math.round(w / 50));
+  ctx.font = `${fontPx}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.fillStyle = "rgb(74, 222, 128)";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, Math.round(w * 0.02), padY / 2);
+  ctx.restore();
+}
+
 // ---------- inference ----------
-async function runOnce(source, srcW, srcH) {
+let inferenceInFlight = false;
+
+async function runOnce(source, srcW, srcH, opts = {}) {
   if (!session) return;
+  if (inferenceInFlight && !opts.fromWebcam) return;
+  inferenceInFlight = true;
+
   const confTh = parseFloat(els.conf.value);
   const maxDet = parseInt(els.maxdet.value, 10);
+
+  if (!opts.fromWebcam) {
+    drawSource(source, srcW, srcH);
+    drawLoadingOverlay(opts.label || "running detection…");
+    els.metaIn.textContent = `${srcW}×${srcH}`;
+    els.metaMs.textContent = "…";
+    els.metaN.textContent = "…";
+    await new Promise((r) => requestAnimationFrame(r));
+  }
 
   const pre = preprocess(source, srcW, srcH);
   const t0 = performance.now();
@@ -194,6 +223,7 @@ async function runOnce(source, srcW, srcH) {
   els.metaN.textContent = `${dets.length}`;
 
   lastFrame = { source, srcW, srcH };
+  inferenceInFlight = false;
 }
 
 // Re-run with current sliders against last frame.
@@ -250,7 +280,9 @@ async function startWebcam() {
   const loop = async () => {
     if (!webcamStream) return;
     if (els.cam.readyState >= 2 && !document.hidden) {
-      await runOnce(els.cam, els.cam.videoWidth, els.cam.videoHeight);
+      await runOnce(els.cam, els.cam.videoWidth, els.cam.videoHeight, {
+        fromWebcam: true,
+      });
     }
     webcamLoop = requestAnimationFrame(loop);
   };
