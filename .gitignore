@@ -183,6 +183,7 @@ research/leps_localizer/demo/model/*.onnx
 research/leps_localizer/demo/model/*.onnx.br
 research/leps_localizer/demo/model/*.onnx.gz
 research/leps_localizer/demo/model/web_model/
+research/leps_localizer/demo/model/tfjs/
 
 # Project data and plans (not for version control)
 data/

@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Leps Localizer — YOLO26 browser demo</title>
+<title>Leps Localizer — TFJS browser demo</title>
 <link rel="stylesheet" href="style.css" />
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 <header>
-  <h1>Leps Localizer</h1>
+  <h1>Leps Localizer — TFJS</h1>
   <p class="sub">
-    YOLO26, single class (butterfly), trained on FG-2026-05.
-    Runs entirely in the browser via <code>onnxruntime-web</code> (WASM SIMD).
+    Same YOLO26-n model, TFJS runtime. Compare with
+    <a href="index.html">ORT-web build</a>.
   </p>
 </header>
 
@@ -24,14 +24,19 @@
     </label>
     <button id="webcam-btn" class="btn">Start webcam</button>
     <button id="stop-btn" class="btn" disabled>Stop</button>
-    <span id="status">loading model…</span>
+    <span id="status">loading…</span>
   </div>
   <div class="row">
     <label>model
       <select id="model">
-        <option value="yolo26n-fp16">yolo26n FP16 (4.0 MB wire)</option>
-        <option value="yolo26n">yolo26n FP32 (8.2 MB wire)</option>
-        <option value="yolo26s">yolo26s FP32 (32 MB wire)</option>
+        <option value="uint8">yolo26n uint8 (1.6 MB wire)</option>
+        <option value="fp16">yolo26n fp16 (4.0 MB wire)</option>
+      </select>
+    </label>
+    <label>backend
+      <select id="backend">
+        <option value="webgl">webgl (GPU)</option>
+        <option value="cpu">cpu</option>
       </select>
     </label>
   </div>
@@ -39,10 +44,6 @@
     <label>conf
       <input type="range" id="conf" min="0" max="1" step="0.01" value="0.25" />
       <span id="conf-v">0.25</span>
-    </label>
-    <label>iou
-      <input type="range" id="iou" min="0" max="1" step="0.01" value="0.50" />
-      <span id="iou-v">0.50</span>
     </label>
     <label>max det
       <input type="range" id="maxdet" min="1" max="300" step="1" value="100" />
@@ -66,12 +67,11 @@
 
 <footer>
   <p>
-    Drop or pick a photo above. Or use webcam. Models served Brotli-compressed,
-    cached after first load. Source: <code>research/leps_localizer/</code>.
-    See also: <a href="tfjs.html">TFJS runtime build</a> (smaller cold load).
+    TFJS path: graph model + sharded weights, Brotli-precompressed.
+    Models served from <code>model/tfjs/&lt;variant&gt;/</code>.
   </p>
 </footer>
 
-<script src="app.js"></script>
+<script src="tfjs.js"></script>
 </body>
 </html>

@@ -282,9 +282,31 @@ Conclusions:
 - **s-class is out of the running** for the web build entirely — 32 MB Brotli is too heavy regardless of accuracy.
 
 Demo location: `research/leps_localizer/demo/` (HTML + JS + `serve.py` with
-COOP/COEP + Content-Encoding handling). Model picker switches between
-yolo26n-INT8 / yolo26n-FP32 / yolo26s-FP32 in the browser. Model weights
-gitignored.
+COOP/COEP + Content-Encoding handling). Two pages: `index.html` (ORT-web
+runtime) and `tfjs.html` (TFJS runtime). Model weights gitignored.
+
+### Cold-load wire size (runtime + weights)
+
+Measuring the **total bytes a fresh visitor downloads** matters more than
+weights alone — the inference runtime itself isn't free.
+
+| Stack | Runtime wire | Model wire | **Cold-load total** | Recall | Notes |
+|---|---|---|---|---|---|
+| ORT-web + yolo26n FP16 | 2.5 MB (js+wasm) | 4.0 MB | **6.5 MB** | 0.860 | current `index.html` |
+| ORT-web + yolo26n FP32 | 2.5 MB | 8.2 MB | 10.7 MB | 0.860 | fallback |
+| ORT-web + yolo26s FP32 | 2.5 MB | 32 MB | 34.5 MB | 0.846 | not viable |
+| **TFJS + yolo26n uint8** | **0.36 MB (js)** | **1.6 MB (shards)** | **~2.0 MB** | pending | `tfjs.html`, ship candidate |
+| TFJS + yolo26n FP16 | 0.36 MB | 4.0 MB | 4.4 MB | pending | TFJS converter native FP16 |
+
+Why TFJS wins on cold-load: (a) `@tensorflow/tfjs` ships as a single 360 KB
+brotli JS that bundles core + converter + WebGL + CPU backends — no
+separate WASM binary needed for GPU inference; (b) TFJS converter's
+`--quantize_uint8=*` works on the graph model format directly (no
+ConvInteger op required at inference) and the WebGL backend dequantizes
+weights to FP32 textures at load, so the runtime executes in FP32 while
+the wire payload stays uint8. ORT-web's WASM EP requires a 2.2 MB
+brotli binary regardless, and its quant path needs ConvInteger which
+the WASM EP doesn't implement.
 
 ---
 
