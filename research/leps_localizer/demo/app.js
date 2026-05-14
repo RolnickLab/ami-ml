@@ -4,7 +4,11 @@
 // in pixel coords relative to letterboxed 640x640 input. End2end / NMS-free,
 // so no JS-side NMS — just confidence threshold + max-det clamp.
 
-const MODEL_URL = "model/yolo26s-fg-640.onnx";
+const MODELS = {
+  "yolo26n-int8": "model/yolo26n-fg-640.dyn-int8.onnx",
+  "yolo26n": "model/yolo26n-fg-640.onnx",
+  "yolo26s": "model/yolo26s-fg-640.onnx",
+};
 const IMGSZ = 640;
 const CLASS_NAMES = ["butterfly"];
 
@@ -19,6 +23,7 @@ const els = {
   confV: document.getElementById("conf-v"),
   iouV: document.getElementById("iou-v"),
   maxdetV: document.getElementById("maxdet-v"),
+  model: document.getElementById("model"),
   cv: document.getElementById("cv"),
   cam: document.getElementById("cam"),
   metaIn: document.getElementById("meta-in"),
@@ -36,27 +41,35 @@ let webcamLoop = null;
 let lastFrame = null; // {bitmap|video, w, h}
 
 // ---------- model load ----------
-async function loadModel() {
-  els.status.textContent = "loading model…";
+ort.env.wasm.wasmPaths =
+  "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
+ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 1);
+ort.env.wasm.simd = true;
+
+async function loadModel(key) {
+  els.status.textContent = `loading ${key}…`;
   els.status.className = "";
+  session = null;
 
-  // Configure WASM. SIMD + threads. WebGPU/WebGL skipped — onnxruntime-web's
-  // WebGL backend doesn't cover all ops YOLO26 uses; WASM SIMD is the
-  // reliable path.
-  ort.env.wasm.wasmPaths =
-    "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
-  ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 1);
-  ort.env.wasm.simd = true;
+  const url = MODELS[key];
+  if (!url) {
+    els.status.textContent = `unknown model: ${key}`;
+    els.status.className = "error";
+    return;
+  }
 
+  const t0 = performance.now();
   try {
-    session = await ort.InferenceSession.create(MODEL_URL, {
+    session = await ort.InferenceSession.create(url, {
       executionProviders: ["wasm"],
       graphOptimizationLevel: "all",
     });
     inputName = session.inputNames[0];
-    els.status.textContent = "ready — pick an image or start webcam";
+    const ms = (performance.now() - t0).toFixed(0);
+    els.status.textContent = `ready (${key}, ${ms} ms load) — pick an image or start webcam`;
     els.status.className = "ready";
     els.metaEp.textContent = `wasm-simd, threads=${ort.env.wasm.numThreads}`;
+    if (lastFrame) rerun();
   } catch (err) {
     console.error(err);
     els.status.textContent = `model load failed: ${err.message}`;
@@ -275,5 +288,7 @@ bindSlider(els.conf, els.confV);
 bindSlider(els.iou, els.iouV);
 bindSlider(els.maxdet, els.maxdetV);
 
+els.model.addEventListener("change", (e) => loadModel(e.target.value));
+
 // ---------- init ----------
-loadModel();
+loadModel(els.model.value);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Leps Localizer — YOLO26-s browser demo</title>
+<title>Leps Localizer — YOLO26 browser demo</title>
 <link rel="stylesheet" href="style.css" />
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js" crossorigin="anonymous"></script>
 </head>
@@ -11,7 +11,7 @@
 <header>
   <h1>Leps Localizer</h1>
   <p class="sub">
-    YOLO26-s, single class (butterfly), trained on FG-2026-05.
+    YOLO26, single class (butterfly), trained on FG-2026-05.
     Runs entirely in the browser via <code>onnxruntime-web</code> (WASM SIMD).
   </p>
 </header>
@@ -25,6 +25,15 @@
     <button id="webcam-btn" class="btn">Start webcam</button>
     <button id="stop-btn" class="btn" disabled>Stop</button>
     <span id="status">loading model…</span>
+  </div>
+  <div class="row">
+    <label>model
+      <select id="model">
+        <option value="yolo26n-int8">yolo26n INT8 (1.5 MB)</option>
+        <option value="yolo26n">yolo26n FP32 (8.2 MB)</option>
+        <option value="yolo26s">yolo26s FP32 (32 MB)</option>
+      </select>
+    </label>
   </div>
   <div class="row sliders">
     <label>conf
@@ -57,7 +66,7 @@
 
 <footer>
   <p>
-    Drop or pick a photo above. Or use webcam. Model is ~19 MB FP32 ONNX,
+    Drop or pick a photo above. Or use webcam. Models served Brotli-compressed,
     cached after first load. Source: <code>research/leps_localizer/</code>.
   </p>
 </footer>
