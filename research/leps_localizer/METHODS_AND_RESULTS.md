@@ -265,17 +265,19 @@ imgsz=640 (cheaper for web, ~half the FLOPs).
 | yolo26s FP32 | 9.5 M | 36.4 MB | 33.4 MB | 0.92 | 0.846 | 0.580 | 0.842 | 0.955 | 179 | baseline for the size race |
 | yolo26s dyn-INT8 | 9.5 M | 9.5 MB | 5.8 MB | — | 0.722 | 0.420 | 0.691 | 0.914 | 918 | recall -12pp, **slower** (QDQ overhead on conv-heavy graph) |
 | yolo26s static-INT8 | 9.5 M | 9.8 MB | — | — | **0.000** | 0 | 0 | 0 | 107 | output sigmoid collapsed; known YOLO + QDQ pathology |
-| yolo26n FP32 | 2.4 M | 9.4 MB | 8.2 MB | **0.935** | pending | — | — | — | — | trained 80 epochs @ imgsz=1280 |
-| yolo26n dyn-INT8 | 2.4 M | 2.7 MB | **1.5 MB** | — | pending | — | — | — | — | **under 2 MB target, ship candidate** |
+| yolo26n FP32 | 2.4 M | 9.4 MB | 8.2 MB | **0.935** | **0.860** | 0.519 | 0.877 | 0.937 | **18** | beats s on R_all, 10× faster on CPU |
+| yolo26n dyn-INT8 | 2.4 M | 2.7 MB | **1.5 MB** | — | 0.838 | 0.556 | 0.847 | 0.914 | 104 | **under 2 MB target, recall only -2.2pp** |
 
 Wire-size compressibility: FP32 weights are entropic — Brotli only buys ~10%.
 INT8 weights compress to ~55% (2.7 MB → 1.5 MB on yolo26n).
 
 Conclusions:
-- **yolo26n dyn-INT8 + Brotli = 1.53 MB wire**, under the 2 MB target. Ship candidate.
-- yolo26n actually **beat yolo26s on val mAP50** (0.935 vs ~0.92). Single-class detection at imgsz=1280 doesn't need s-tier capacity, and 80 epochs of focused training closes the gap. Recall-by-size still pending (eval running 2026-05-14).
+- **yolo26n dyn-INT8 + Brotli = 1.53 MB wire**, under the 2 MB target. R_all = 0.838 (vs FP32 0.860, -2.2pp). Ship candidate.
+- **yolo26n FP32 actually beat yolo26s FP32 on val mAP50 and on overall recall** (R_all 0.860 vs 0.846, val mAP50 0.935 vs 0.92). s only wins on the small bucket (R_small 0.580 vs 0.519, +6pp). For a convenience suggestor where small-object recall isn't the use case, nano is straightforwardly better.
+- **Nano dyn-INT8 didn't collapse like s did.** Same QDQ pathway, same end2end head, but recall held. Likely because the single-class head is simpler (1 sigmoid vs 80 in COCO models) and per-tensor dynamic ranges stay well-conditioned with one class.
+- Nano dyn-INT8 still has the QDQ overhead pattern: 18 ms FP32 → 104 ms INT8 on CPU (~5.8× slower). Web inference is bandwidth-bound on download, not compute-bound on a frame — the size win matters more than the latency hit for cold-load UX.
 - **s-class is out of the running** for ≤2 MB. Best wire is ~6 MB Brotli with -12pp recall and 5× slower inference.
-- **Static INT8 needs head exclusion**, not a tooling switch. ORT QDQ insertion around the YOLO26 sigmoid + end2end decoder squashes all confidences to zero. Fix would be selective node exclusion or QAT-during-training. Not pursued here.
+- **Static INT8 needs head exclusion**, not a tooling switch. ORT QDQ insertion around the YOLO26 sigmoid + end2end decoder squashes all confidences to zero on s. Not pursued for nano since dyn-INT8 already meets the target.
 
 Demo location: `research/leps_localizer/demo/` (HTML + JS + `serve.py` with
 COOP/COEP + Content-Encoding handling). Model picker switches between
