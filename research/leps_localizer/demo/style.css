@@ -87,6 +87,7 @@ code {
 }
 
 #status.ready { color: var(--box); }
+#status.warn { color: #f59e0b; }
 #status.error { color: #ef4444; }
 
 .sliders label {

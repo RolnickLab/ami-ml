@@ -42,13 +42,22 @@ let webcamStream = null;
 let webcamLoop = null;
 let lastFrame = null;
 
+// Returns the actual backend tfjs chose. "auto" defers to tfjs's
+// priority registry — currently webgl > cpu in the umd bundle (webgpu
+// not bundled). An explicit name forces that backend or throws if the
+// runtime can't init it.
 async function ensureBackend(name) {
-  if (tf.getBackend() === name) return;
+  if (name === "auto") {
+    await tf.ready();
+    return tf.getBackend();
+  }
+  if (tf.getBackend() === name) return name;
   const ok = await tf.setBackend(name);
   if (!ok) {
     throw new Error(`backend ${name} not available in this browser`);
   }
   await tf.ready();
+  return tf.getBackend();
 }
 
 // First inference on a fresh WebGL context compiles all GLSL shaders
@@ -71,17 +80,24 @@ async function loadModel(key, backendName) {
     model = null;
   }
   try {
-    await ensureBackend(backendName);
+    const picked = await ensureBackend(backendName);
+    const pickedLabel =
+      backendName === "auto" ? `auto → ${picked}` : picked;
     const t0 = performance.now();
     model = await tf.loadGraphModel(MODELS[key]);
     const loadMs = (performance.now() - t0).toFixed(0);
-    els.status.textContent = `warming up ${backendName}…`;
+    els.status.textContent = `warming up ${pickedLabel}…`;
     const tw = performance.now();
     await warmup();
     const warmMs = (performance.now() - tw).toFixed(0);
-    els.status.textContent = `ready (${key}, ${backendName}, load=${loadMs} ms, warm=${warmMs} ms)`;
-    els.status.className = "ready";
-    els.metaEp.textContent = `tfjs ${tf.version_core}, ${tf.getBackend()}`;
+    // Warmup time is a strong signal: > 1500 ms on a graph with this many
+    // ops usually means tfjs picked CPU or is falling back per-op
+    // mid-graph. Warn the user explicitly so they don't think it's broken.
+    const slow = warmMs > 1500;
+    const slowSuffix = slow ? "  ⚠ slow device — consider ORT version" : "";
+    els.status.textContent = `ready (${key}, ${pickedLabel}, load=${loadMs} ms, warm=${warmMs} ms)${slowSuffix}`;
+    els.status.className = slow ? "warn" : "ready";
+    els.metaEp.textContent = `tfjs ${tf.version_core}, backend=${tf.getBackend()}`;
     if (lastFrame) rerun();
   } catch (err) {
     console.error(err);
