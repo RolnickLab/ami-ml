@@ -91,7 +91,15 @@ def fp16(src: Path, dst: Path) -> None:
     from onnxconverter_common import float16  # noqa: WPS433
 
     model = onnx.load(str(src))
-    fp16_model = float16.convert_float_to_float16(model, keep_io_types=True)
+    # Resize, NonMaxSuppression, TopK, and Where don't survive blanket fp16
+    # conversion in YOLO end2end graphs — they have mixed-type IO that
+    # onnxconverter-common doesn't bridge cleanly. Block them so they stay
+    # FP32; surrounding nodes Cast as needed.
+    fp16_model = float16.convert_float_to_float16(
+        model,
+        keep_io_types=True,
+        op_block_list=["Resize", "TopK", "NonMaxSuppression", "Where", "GatherND"],
+    )
     onnx.save(fp16_model, str(dst))
 
 

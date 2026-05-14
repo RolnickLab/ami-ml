@@ -266,18 +266,20 @@ imgsz=640 (cheaper for web, ~half the FLOPs).
 | yolo26s dyn-INT8 | 9.5 M | 9.5 MB | 5.8 MB | — | 0.722 | 0.420 | 0.691 | 0.914 | 918 | recall -12pp, **slower** (QDQ overhead on conv-heavy graph) |
 | yolo26s static-INT8 | 9.5 M | 9.8 MB | — | — | **0.000** | 0 | 0 | 0 | 107 | output sigmoid collapsed; known YOLO + QDQ pathology |
 | yolo26n FP32 | 2.4 M | 9.4 MB | 8.2 MB | **0.935** | **0.860** | 0.519 | 0.877 | 0.937 | **18** | beats s on R_all, 10× faster on CPU |
-| yolo26n dyn-INT8 | 2.4 M | 2.7 MB | **1.5 MB** | — | 0.838 | 0.556 | 0.847 | 0.914 | 104 | **under 2 MB target, recall only -2.2pp** |
+| yolo26n FP16 (browser-ship) | 2.4 M | 4.7 MB | **4.0 MB** | — | **0.860** | 0.519 | 0.877 | 0.937 | 19 | **lossless** vs FP32 nano (same per-bin counts); ships in onnxruntime-web WASM |
+| yolo26n dyn-INT8 (native-only) | 2.4 M | 2.7 MB | 1.5 MB | — | 0.838 | 0.556 | 0.847 | 0.914 | 104 | **does not run in onnxruntime-web** (no ConvInteger op in WASM EP); fine for native iOS/Android |
+| yolo26n static-INT8 (QDQ) | 2.4 M | 3.0 MB | — | — | **0.000** | 0 | 0 | 0 | 18 | same sigmoid collapse as on s |
 
 Wire-size compressibility: FP32 weights are entropic — Brotli only buys ~10%.
 INT8 weights compress to ~55% (2.7 MB → 1.5 MB on yolo26n).
 
 Conclusions:
-- **yolo26n dyn-INT8 + Brotli = 1.53 MB wire**, under the 2 MB target. R_all = 0.838 (vs FP32 0.860, -2.2pp). Ship candidate.
+- **Browser ship target: yolo26n FP16 @ 4.0 MB Brotli.** Recall is **identical** to FP32 nano (R_all 0.860, same per-bin matched counts). Ultralytics' native `half=True` export handles the Resize + Cast type wrangling that onnxconverter-common's `convert_float_to_float16` mishandles on YOLO26 end2end graphs (mixed-type IO around the decoder).
+- **The ≤2 MB target is not reachable today in the browser.** Both INT8 pathways are blocked:
+  - **dyn-INT8 (QOperator format, 1.5 MB Brotli)** uses `ConvInteger` ops, which `onnxruntime-web` WASM EP does not implement (verified by `ERROR_CODE: 9, Could not find an implementation for ConvInteger`). It runs fine in native onnxruntime (CPU/iOS/Android) with R_all=0.838, only -2.2pp vs FP32 nano. **Keep this build for native deployments.**
+  - **static-INT8 (QDQ format, ~3 MB Brotli)** decomposes to Quantize→Conv→Dequant which WASM does support, but the YOLO26 sigmoid + end2end decoder collapses output ranges to zero on both s and n. Fix would be selective node exclusion (skip QDQ around the head) or QAT-during-training. Not pursued.
 - **yolo26n FP32 actually beat yolo26s FP32 on val mAP50 and on overall recall** (R_all 0.860 vs 0.846, val mAP50 0.935 vs 0.92). s only wins on the small bucket (R_small 0.580 vs 0.519, +6pp). For a convenience suggestor where small-object recall isn't the use case, nano is straightforwardly better.
-- **Nano dyn-INT8 didn't collapse like s did.** Same QDQ pathway, same end2end head, but recall held. Likely because the single-class head is simpler (1 sigmoid vs 80 in COCO models) and per-tensor dynamic ranges stay well-conditioned with one class.
-- Nano dyn-INT8 still has the QDQ overhead pattern: 18 ms FP32 → 104 ms INT8 on CPU (~5.8× slower). Web inference is bandwidth-bound on download, not compute-bound on a frame — the size win matters more than the latency hit for cold-load UX.
-- **s-class is out of the running** for ≤2 MB. Best wire is ~6 MB Brotli with -12pp recall and 5× slower inference.
-- **Static INT8 needs head exclusion**, not a tooling switch. ORT QDQ insertion around the YOLO26 sigmoid + end2end decoder squashes all confidences to zero on s. Not pursued for nano since dyn-INT8 already meets the target.
+- **s-class is out of the running** for the web build entirely — 32 MB Brotli is too heavy regardless of accuracy.
 
 Demo location: `research/leps_localizer/demo/` (HTML + JS + `serve.py` with
 COOP/COEP + Content-Encoding handling). Model picker switches between

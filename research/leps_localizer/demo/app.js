@@ -5,7 +5,7 @@
 // so no JS-side NMS — just confidence threshold + max-det clamp.
 
 const MODELS = {
-  "yolo26n-int8": "model/yolo26n-fg-640.dyn-int8.onnx",
+  "yolo26n-fp16": "model/yolo26n-fg-640.fp16.onnx",
   "yolo26n": "model/yolo26n-fg-640.onnx",
   "yolo26s": "model/yolo26s-fg-640.onnx",
 };
