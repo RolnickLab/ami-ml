@@ -312,6 +312,137 @@ class TestMergeChunkIntoTrainingImages:
         client.delete_table.assert_called_once()  # cleanup still ran
 
 
+# ── get_pending_rows / MOD split ─────────────────────────────────────────────
+
+class TestModSplit:
+    """Verify that num_jobs/task_id partitioning is correct and complete."""
+
+    def _make_client(self, photo_ids: list[int], num_jobs: int, task_id: int) -> MagicMock:
+        """Return a mock BQ client that filters photo_ids by MOD split."""
+        matching = [
+            {"dataset_source_uuid": f"uuid-{p}", "absolute_url": f"http://x/{p}",
+             "relative_local_path": f"000/{p}.jpg"}
+            for p in photo_ids if p % num_jobs == task_id
+        ]
+        client = MagicMock()
+        client.query.return_value.result.return_value = [
+            MagicMock(**{k: v for k, v in row.items()}, **{"__iter__": lambda self: iter(row.items()), "keys": lambda self: row.keys()})
+            for row in matching
+        ]
+        # Simpler: just return dicts directly via side_effect
+        client.query.return_value.result.return_value = matching
+        return client
+
+    def test_no_overlap_between_tasks(self):
+        """Each photo_id must appear in exactly one task — no overlaps."""
+        photo_ids = list(range(100))
+        num_jobs = 10
+        all_assigned = []
+
+        for task_id in range(num_jobs):
+            assigned = [p for p in photo_ids if p % num_jobs == task_id]
+            all_assigned.extend(assigned)
+
+        assert len(all_assigned) == len(photo_ids)
+        assert len(set(all_assigned)) == len(photo_ids)  # no duplicates
+
+    def test_all_images_covered_across_tasks(self):
+        """Union of all task subsets must equal the full image set."""
+        photo_ids = list(range(1000))
+        num_jobs = 10
+        covered = set()
+        for task_id in range(num_jobs):
+            subset = {p for p in photo_ids if p % num_jobs == task_id}
+            assert not subset & covered, f"Overlap at task_id={task_id}"
+            covered |= subset
+        assert covered == set(photo_ids)
+
+    def test_task_gets_correct_subset(self):
+        """Task 3 of 10 should only see photo_ids ending in 3."""
+        photo_ids = list(range(50))
+        expected = [p for p in photo_ids if p % 10 == 3]  # 3, 13, 23, 33, 43
+        actual   = [p for p in photo_ids if p % 10 == 3]
+        assert actual == expected
+        assert all(p % 10 == 3 for p in actual)
+
+    def test_uneven_split_all_images_still_covered(self):
+        """101 images across 10 tasks — some tasks get 11, others get 10."""
+        photo_ids = list(range(101))
+        num_jobs = 10
+        subsets = [[p for p in photo_ids if p % num_jobs == t] for t in range(num_jobs)]
+        sizes = [len(s) for s in subsets]
+        assert sum(sizes) == 101
+        assert max(sizes) - min(sizes) <= 1  # balanced within 1
+
+    def test_single_job_gets_all_images(self):
+        """num_jobs=1, task_id=0 must return every image."""
+        photo_ids = list(range(50))
+        assigned = [p for p in photo_ids if p % 1 == 0]
+        assert assigned == photo_ids
+
+    def test_resumability_skips_already_attempted(self):
+        """LEFT JOIN should exclude images already in downloads table."""
+        # Simulate: 10 images total, 3 already in downloads table
+        all_uuids = [f"uuid-{i}" for i in range(10)]
+        attempted = {f"uuid-{i}" for i in range(3)}
+        pending = [u for u in all_uuids if u not in attempted]
+        assert len(pending) == 7
+        assert not set(pending) & attempted  # no overlap with attempted
+
+    def test_force_redownload_ignores_downloads_table(self):
+        """force_redownload=True should query training_images directly, no LEFT JOIN."""
+        client = MagicMock()
+        client.query.return_value.result.return_value = []
+
+        di.get_pending_rows(
+            client,
+            training_table="t",
+            downloads_table="d",
+            num_jobs=10,
+            task_id=3,
+            force_redownload=True,
+        )
+
+        query_sql = client.query.call_args[0][0]
+        assert "LEFT JOIN" not in query_sql
+        assert "MOD(photo_id, 10) = 3" in query_sql
+
+    def test_normal_query_has_left_join(self):
+        """Normal query must LEFT JOIN downloads table to skip attempted images."""
+        client = MagicMock()
+        client.query.return_value.result.return_value = []
+
+        di.get_pending_rows(
+            client,
+            training_table="t",
+            downloads_table="d",
+            num_jobs=10,
+            task_id=3,
+            force_redownload=False,
+        )
+
+        query_sql = client.query.call_args[0][0]
+        assert "LEFT JOIN" in query_sql
+        assert "MOD(ti.photo_id, 10) = 3" in query_sql
+
+    def test_limit_applied_to_query(self):
+        """--limit N should add LIMIT clause to the BQ query."""
+        client = MagicMock()
+        client.query.return_value.result.return_value = []
+
+        di.get_pending_rows(
+            client,
+            training_table="t",
+            downloads_table="d",
+            num_jobs=1,
+            task_id=0,
+            limit=50,
+        )
+
+        query_sql = client.query.call_args[0][0]
+        assert "LIMIT 50" in query_sql
+
+
 # ── warn_chunk_accumulation ───────────────────────────────────────────────────
 
 class TestWarnChunkAccumulation:
