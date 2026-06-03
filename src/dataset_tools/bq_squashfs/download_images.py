@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Download images from training_images BQ table to a local staging directory,
-record results in training_images_downloads BQ table, then pack into SquashFS.
+record results in training_images_downloads, merge status back into
+training_images, then pack images into SquashFS chunks.
 
 Images are split across parallel jobs using MOD(photo_id, num_jobs) = task_id
 so each job handles a balanced, non-overlapping subset of images.
@@ -9,25 +10,33 @@ so each job handles a balanced, non-overlapping subset of images.
 Resumable: already-attempted images are skipped by LEFT JOINing with
 training_images_downloads. Re-running the same task_id is safe.
 
-Usage (single job):
-    python download_images.py \
-        --staging-dir /localscratch/$USER/staging \
-        --num-jobs 1 \
-        --task-id 0
+NOTE — mid-chunk restart behaviour: if the job dies after downloading a chunk
+but before the BQ write, those images are on disk but unrecorded. On resume
+the LEFT JOIN will re-queue them and they will be re-downloaded. No data is
+lost but ~chunk_size images are downloaded twice. This is acceptable given
+the low probability and low cost of a single chunk redo.
 
-Usage (one task in a SLURM array):
-    python download_images.py \
-        --staging-dir /localscratch/$USER/staging \
-        --num-jobs 10 \
-        --task-id $SLURM_ARRAY_TASK_ID
+Usage (single job / test):
+    python download_images.py \\
+        --staging-dir /scratch/$USER/staging \\
+        --num-jobs 1 --task-id 0 \\
+        --limit 50 --table-prefix test_
 
-After all array tasks finish, run job_bq_pack_squashfs.sh to merge
-all staging directories into a single SquashFS archive.
+Usage (SLURM array):
+    python download_images.py \\
+        --staging-dir /scratch/$USER/staging \\
+        --num-jobs 10 --task-id $SLURM_ARRAY_TASK_ID
+
+After all array tasks finish, run job_bq_pack_per_task.sh to merge
+chunk sqfs files into the final task_N.sqfs archives.
 """
 
 import argparse
-import os
+import random
 import subprocess
+import threading
+import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -41,144 +50,259 @@ Image.MAX_IMAGE_PIXELS = None
 
 BQ_PROJECT = "leps-ai"
 BQ_DATASET = "global_butterflies_2604"
-TRAINING_TABLE = f"{BQ_PROJECT}.{BQ_DATASET}.training_images"
-DOWNLOADS_TABLE = f"{BQ_PROJECT}.{BQ_DATASET}.training_images_downloads"
+
+# Retry config for HTTP downloads
+_RETRY_STATUSES = {429, 500, 502, 503, 504}
+_MAX_RETRIES    = 5
+_BACKOFF_BASE   = 2.0   # seconds
+_BACKOFF_MAX    = 60.0  # seconds cap
+
+# Warn if this many chunk sqfs files accumulate (pack job falling behind)
+_CHUNK_ACCUMULATION_WARN = 20
 
 DOWNLOADS_SCHEMA = [
     bigquery.SchemaField("dataset_source_uuid", "STRING"),
-    bigquery.SchemaField("fetch_status", "STRING"),
-    bigquery.SchemaField("image_width", "INTEGER"),
-    bigquery.SchemaField("image_height", "INTEGER"),
-    bigquery.SchemaField("image_size", "INTEGER"),
-    bigquery.SchemaField("corrupted", "BOOLEAN"),
+    bigquery.SchemaField("fetch_status",        "STRING"),
+    bigquery.SchemaField("image_width",         "INTEGER"),
+    bigquery.SchemaField("image_height",        "INTEGER"),
+    bigquery.SchemaField("image_size",          "INTEGER"),
+    bigquery.SchemaField("corrupted",           "BOOLEAN"),
 ]
+
+# Thread-local storage for per-thread requests sessions
+_thread_local = threading.local()
+
+
+def _get_session() -> requests.Session:
+    """Return a per-thread requests.Session with a single keep-alive connection."""
+    if not hasattr(_thread_local, "session"):
+        s = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=1,
+            pool_maxsize=1,
+            max_retries=0,  # retries handled manually below
+        )
+        s.mount("https://", adapter)
+        s.mount("http://", adapter)
+        _thread_local.session = s
+    return _thread_local.session
+
+
+def _fetch_with_retry(url: str, dest: Path) -> None:
+    """Download url → dest with exponential backoff + jitter.
+
+    Retries on rate-limit (429), transient server errors (5xx),
+    connection errors (including Errno 16 — too many open sockets),
+    and timeouts.  Raises on permanent client errors (4xx except 429)
+    or after exhausting all retries.
+    """
+    session = _get_session()
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            resp = session.get(url, timeout=30, stream=True)
+            if resp.status_code in _RETRY_STATUSES and attempt < _MAX_RETRIES:
+                delay = min(_BACKOFF_BASE * (2 ** attempt), _BACKOFF_MAX)
+                delay += random.uniform(0, delay * 0.25)
+                print(f"  HTTP {resp.status_code} {url} — retry {attempt+1}/{_MAX_RETRIES} "
+                      f"in {delay:.1f}s", flush=True)
+                time.sleep(delay)
+                continue
+            resp.raise_for_status()
+            with open(dest, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            return
+        except requests.exceptions.ConnectionError as e:
+            if attempt < _MAX_RETRIES:
+                delay = min(_BACKOFF_BASE * (2 ** attempt), _BACKOFF_MAX)
+                delay += random.uniform(0, delay * 0.25)
+                print(f"  ConnectionError {url} — retry {attempt+1}/{_MAX_RETRIES} "
+                      f"in {delay:.1f}s: {e}", flush=True)
+                time.sleep(delay)
+            else:
+                raise
+        except requests.exceptions.Timeout:
+            if attempt < _MAX_RETRIES:
+                delay = min(_BACKOFF_BASE * (2 ** attempt), _BACKOFF_MAX)
+                delay += random.uniform(0, delay * 0.25)
+                print(f"  Timeout {url} — retry {attempt+1}/{_MAX_RETRIES} "
+                      f"in {delay:.1f}s", flush=True)
+                time.sleep(delay)
+            else:
+                raise
+    raise RuntimeError(f"Exhausted {_MAX_RETRIES} retries for {url}")
 
 
 def download_and_verify(row: dict, staging_dir: Path) -> dict:
-    """Download one image from absolute_url, verify with PIL, return result."""
-    url = row["absolute_url"]
+    """Download one image, verify with PIL, return result dict."""
+    url      = row["absolute_url"]
     rel_path = row["relative_local_path"]
-    dest = staging_dir / rel_path
+    dest     = staging_dir / rel_path
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     result = {
         "dataset_source_uuid": row["dataset_source_uuid"],
         "fetch_status": None,
-        "image_width": None,
+        "image_width":  None,
         "image_height": None,
-        "image_size": None,
-        "corrupted": None,
+        "image_size":   None,
+        "corrupted":    None,
     }
 
-    # Download
     try:
-        resp = requests.get(url, timeout=30, stream=True)
-        resp.raise_for_status()
-        with open(dest, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=8192):
-                f.write(chunk)
+        _fetch_with_retry(url, dest)
     except Exception as e:
-        print(f"Failed {url}: {e}", flush=True)
+        print(f"  Failed {url}: {e}", flush=True)
         result["fetch_status"] = "failed"
         return result
 
-    # Verify with PIL
     try:
         with Image.open(dest) as img:
             img.convert("RGB")
             result["image_width"], result["image_height"] = img.size
-        result["image_size"] = dest.stat().st_size
-        result["corrupted"] = False
+        result["image_size"]   = dest.stat().st_size
+        result["corrupted"]    = False
         result["fetch_status"] = "downloaded"
     except (PIL.UnidentifiedImageError, OSError) as e:
-        print(f"Corrupted {url}: {e}", flush=True)
-        result["corrupted"] = True
+        print(f"  Corrupted {url}: {e}", flush=True)
+        result["corrupted"]    = True
         result["fetch_status"] = "corrupted"
 
     return result
 
 
-def ensure_downloads_table(client: bigquery.Client) -> None:
-    """Create training_images_downloads table if it doesn't exist."""
+def ensure_downloads_table(client: bigquery.Client, downloads_table: str) -> None:
+    """Create the downloads table if it doesn't exist."""
     try:
-        client.get_table(DOWNLOADS_TABLE)
+        client.get_table(downloads_table)
     except Exception:
-        table = bigquery.Table(DOWNLOADS_TABLE, schema=DOWNLOADS_SCHEMA)
+        table = bigquery.Table(downloads_table, schema=DOWNLOADS_SCHEMA)
         table.description = (
             "Download results for training_images. One row per download attempt. "
             "Appended to by parallel download jobs. Used to track fetch progress "
             "without DML updates on the base training_images table."
         )
         client.create_table(table)
-        print(f"Created table {DOWNLOADS_TABLE}", flush=True)
+        print(f"Created table {downloads_table}", flush=True)
 
 
-def write_results_to_bq(client: bigquery.Client, results: list[dict]) -> None:
-    """
-    Append download results to training_images_downloads via batch load job.
-    Uses load_table_from_dataframe which does not require DML billing.
-    Multiple parallel jobs can safely append to the same table simultaneously.
+def write_results_to_bq(
+    client: bigquery.Client,
+    results: list[dict],
+    downloads_table: str,
+    max_retries: int = 3,
+) -> None:
+    """Append download results to the downloads table via batch load (free tier).
+
+    Multiple parallel tasks can safely append simultaneously.
+    Retries up to max_retries times on transient BQ errors.
     """
     df = pd.DataFrame(results)
     job_config = bigquery.LoadJobConfig(
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
         schema=DOWNLOADS_SCHEMA,
     )
-    job = client.load_table_from_dataframe(df, DOWNLOADS_TABLE, job_config=job_config)
-    job.result()
+    for attempt in range(max_retries):
+        try:
+            job = client.load_table_from_dataframe(df, downloads_table, job_config=job_config)
+            job.result()
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                delay = 30 * (attempt + 1)
+                print(f"  BQ write failed (attempt {attempt+1}/{max_retries}): {e} "
+                      f"— retrying in {delay}s", flush=True)
+                time.sleep(delay)
+            else:
+                raise
+
+
+def merge_chunk_into_training_images(
+    client: bigquery.Client,
+    results: list[dict],
+    training_table: str,
+    downloads_table: str,
+) -> int:
+    """MERGE this chunk's successful results directly into training_images.
+
+    Uses a temp table containing only this chunk's rows so the MERGE scans
+    a small dataset rather than all of training_images_downloads.
+    Only updates rows that are still 'pending' — safe to run from parallel tasks.
+    Returns the number of rows updated.
+    """
+    successful = [r for r in results if r["fetch_status"] in ("downloaded", "corrupted")]
+    if not successful:
+        return 0
+
+    tmp_table = f"{BQ_PROJECT}.{BQ_DATASET}._dl_merge_tmp_{uuid.uuid4().hex[:8]}"
+    df = pd.DataFrame(successful)
+    job_config = bigquery.LoadJobConfig(
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        schema=DOWNLOADS_SCHEMA,
+    )
+    client.load_table_from_dataframe(df, tmp_table, job_config=job_config).result()
+
+    try:
+        job = client.query(f"""
+        MERGE `{training_table}` T
+        USING `{tmp_table}` S
+          ON T.dataset_source_uuid = S.dataset_source_uuid
+        WHEN MATCHED AND T.fetch_status = 'pending' THEN UPDATE SET
+          T.fetch_status  = S.fetch_status,
+          T.image_width   = S.image_width,
+          T.image_height  = S.image_height,
+          T.image_size    = S.image_size,
+          T.corrupted     = S.corrupted
+        """)
+        job.result()
+        return job.dml_stats.updated_row_count
+    finally:
+        client.delete_table(tmp_table, not_found_ok=True)
 
 
 def get_pending_rows(
-    client: bigquery.Client, num_jobs: int, task_id: int,
-    limit: int | None = None, force_redownload: bool = False
+    client: bigquery.Client,
+    training_table: str,
+    downloads_table: str,
+    num_jobs: int,
+    task_id: int,
+    limit: int | None = None,
+    force_redownload: bool = False,
 ) -> list[dict]:
-    """
-    Query training_images for rows assigned to this task (MOD split),
-    excluding images already attempted in training_images_downloads.
-    Pass force_redownload=True to ignore existing download records (e.g. to
-    re-download images whose staging files were deleted).
-    """
+    """Query pending images for this task, skipping already-attempted ones."""
     limit_clause = f"LIMIT {limit}" if limit else ""
     if force_redownload:
         query = f"""
-        SELECT
-            ti.dataset_source_uuid,
-            ti.absolute_url,
-            ti.relative_local_path
-        FROM `{TRAINING_TABLE}` ti
-        WHERE ti.fetch_status = 'pending'
-          AND MOD(ti.photo_id, {num_jobs}) = {task_id}
+        SELECT dataset_source_uuid, absolute_url, relative_local_path
+        FROM `{training_table}`
+        WHERE fetch_status = 'pending'
+          AND MOD(photo_id, {num_jobs}) = {task_id}
         {limit_clause}
         """
     else:
         query = f"""
-        SELECT
-            ti.dataset_source_uuid,
-            ti.absolute_url,
-            ti.relative_local_path
-        FROM `{TRAINING_TABLE}` ti
-        LEFT JOIN `{DOWNLOADS_TABLE}` d
-            ON ti.dataset_source_uuid = d.dataset_source_uuid
+        SELECT ti.dataset_source_uuid, ti.absolute_url, ti.relative_local_path
+        FROM `{training_table}` ti
+        LEFT JOIN `{downloads_table}` d
+          ON ti.dataset_source_uuid = d.dataset_source_uuid
         WHERE ti.fetch_status = 'pending'
           AND MOD(ti.photo_id, {num_jobs}) = {task_id}
           AND d.dataset_source_uuid IS NULL
         {limit_clause}
         """
-    rows = list(client.query(query).result())
-    return [dict(r) for r in rows]
+    return [dict(r) for r in client.query(query).result()]
 
 
 def pack_chunk_to_sqfs(staging_dir: Path, chunk_num: int, num_workers: int = 4) -> Path | None:
-    """Pack downloaded images in staging_dir into a per-chunk SquashFS file.
+    """Pack downloaded images into a per-chunk SquashFS file.
 
-    Passes bucket dirs (000/, 001/, ...) directly to mksquashfs so paths inside
-    the archive are clean: 000/abc123.jpg — not staging_dir/000/abc123.jpg.
-
-    Returns the path to the created .sqfs file, or None if staging_dir is empty.
+    Uses bucket subdirs (000/, 001/, ...) directly so paths inside the archive
+    are clean: 000/abc123.jpg rather than staging_dir/000/abc123.jpg.
+    Raises RuntimeError if mksquashfs fails so the SLURM task is marked failed.
     """
     bucket_dirs = sorted(d for d in staging_dir.iterdir() if d.is_dir())
     if not bucket_dirs:
-        print(f"  No images in staging dir, skipping sqfs pack for chunk {chunk_num}", flush=True)
+        print(f"  No images in staging dir — skipping sqfs pack for chunk {chunk_num}", flush=True)
         return None
 
     chunk_sqfs = staging_dir / f"chunk_{chunk_num:04d}.sqfs"
@@ -193,104 +317,146 @@ def pack_chunk_to_sqfs(staging_dir: Path, chunk_num: int, num_workers: int = 4) 
         "-processors", str(num_workers),
     ]
     print(f"  Packing {len(bucket_dirs)} bucket dirs → {chunk_sqfs.name}...", flush=True)
-    subprocess.run(cmd, check=True)
+    result = subprocess.run(cmd, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"mksquashfs failed with exit code {result.returncode} for chunk {chunk_num}. "
+            f"Staging dir preserved for inspection: {staging_dir}"
+        )
     size_mb = chunk_sqfs.stat().st_size / (1024 ** 2)
     print(f"  Packed: {chunk_sqfs.name} ({size_mb:.1f} MB)", flush=True)
     return chunk_sqfs
 
 
 def clear_staging(staging_dir: Path) -> None:
-    """Remove all image files from staging dir; preserve .sqfs chunk files."""
+    """Remove all image files from staging dir, preserving .sqfs chunk files."""
     for f in staging_dir.rglob("*"):
         if f.is_file() and f.suffix != ".sqfs":
             f.unlink()
     for d in sorted(staging_dir.rglob("*"), reverse=True):
         if d.is_dir():
             try:
-                d.rmdir()  # only removes empty dirs; bucket dirs with no images will be gone
+                d.rmdir()
             except OSError:
                 pass
 
 
+def warn_chunk_accumulation(staging_dir: Path) -> None:
+    """Warn if too many chunk sqfs files have built up in staging."""
+    count = len(list(staging_dir.glob("chunk_*.sqfs")))
+    if count >= _CHUNK_ACCUMULATION_WARN:
+        print(
+            f"  WARNING: {count} chunk sqfs files in {staging_dir} — "
+            f"pack job may be falling behind or a previous run left chunks behind.",
+            flush=True,
+        )
+
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--staging-dir",  required=True,
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--staging-dir",      required=True,
                         help="Local directory to download images into")
-    parser.add_argument("--num-jobs",     type=int, required=True,
-                        help="Total number of parallel jobs (used for MOD split)")
-    parser.add_argument("--task-id",      type=int, required=True,
+    parser.add_argument("--num-jobs",         type=int, required=True,
+                        help="Total number of parallel jobs (MOD split denominator)")
+    parser.add_argument("--task-id",          type=int, required=True,
                         help="This job's task ID (0 to num_jobs-1)")
-    parser.add_argument("--num-workers",  type=int, default=32,
-                        help="Parallel download workers")
-    parser.add_argument("--chunk-size",   type=int, default=10000,
-                        help="Images per chunk before writing to BQ")
-    parser.add_argument("--limit",        type=int, default=None,
-                        help="Cap total images queried (for small-scale tests)")
+    parser.add_argument("--num-workers",      type=int, default=32,
+                        help="Parallel download workers (default: 32)")
+    parser.add_argument("--chunk-size",       type=int, default=10000,
+                        help="Images per chunk before packing to sqfs (default: 10000)")
+    parser.add_argument("--limit",            type=int, default=None,
+                        help="Cap total images queried — for small-scale tests")
     parser.add_argument("--force-redownload", action="store_true",
-                        help="Re-download all images for this task, ignoring existing BQ records")
+                        help="Ignore existing download records and re-download all images")
+    parser.add_argument("--table-prefix",     default="",
+                        help="BQ table prefix for testing (e.g. 'test_' uses "
+                             "test_training_images and test_training_images_downloads)")
     args = parser.parse_args()
 
-    client = bigquery.Client(project=BQ_PROJECT)
+    training_table  = f"{BQ_PROJECT}.{BQ_DATASET}.{args.table_prefix}training_images"
+    downloads_table = f"{BQ_PROJECT}.{BQ_DATASET}.{args.table_prefix}training_images_downloads"
+
+    client      = bigquery.Client(project=BQ_PROJECT)
     staging_dir = Path(args.staging_dir)
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    ensure_downloads_table(client)
+    print(f"=== download_images task={args.task_id}/{args.num_jobs} ===", flush=True)
+    print(f"training table  : {training_table}", flush=True)
+    print(f"downloads table : {downloads_table}", flush=True)
+    print(f"staging dir     : {staging_dir}", flush=True)
+    print(f"workers         : {args.num_workers}  chunk_size={args.chunk_size}", flush=True)
+    print(flush=True)
 
-    print(f"Task {args.task_id}/{args.num_jobs}: querying pending rows "
-          f"(force_redownload={args.force_redownload})...", flush=True)
-    rows = get_pending_rows(client, args.num_jobs, args.task_id,
-                            limit=args.limit, force_redownload=args.force_redownload)
-    print(f"Task {args.task_id}/{args.num_jobs}: {len(rows):,} pending images", flush=True)
+    ensure_downloads_table(client, downloads_table)
+    warn_chunk_accumulation(staging_dir)
 
-    total_downloaded = 0
-    total_failed = 0
-    total_corrupted = 0
+    print(f"Querying pending rows (force_redownload={args.force_redownload})...", flush=True)
+    rows = get_pending_rows(
+        client, training_table, downloads_table,
+        args.num_jobs, args.task_id,
+        limit=args.limit, force_redownload=args.force_redownload,
+    )
+    print(f"{len(rows):,} pending images to download", flush=True)
+
+    total_downloaded = total_failed = total_corrupted = 0
 
     for chunk_start in range(0, len(rows), args.chunk_size):
-        chunk = rows[chunk_start : chunk_start + args.chunk_size]
-        chunk_num = chunk_start // args.chunk_size + 1
+        chunk        = rows[chunk_start : chunk_start + args.chunk_size]
+        chunk_num    = chunk_start // args.chunk_size + 1
         total_chunks = (len(rows) + args.chunk_size - 1) // args.chunk_size
         print(f"\n[Task {args.task_id}] Chunk {chunk_num}/{total_chunks} "
-              f"({len(chunk)} images)...", flush=True)
+              f"({len(chunk):,} images)...", flush=True)
 
         # Download in parallel
-        results = []
+        results  = []
+        t0       = time.perf_counter()
+        n_ok = n_fail = n_corrupt = 0
+
         with ThreadPoolExecutor(max_workers=args.num_workers) as executor:
-            futures = {
-                executor.submit(download_and_verify, row, staging_dir): row
-                for row in chunk
-            }
+            futures = {executor.submit(download_and_verify, row, staging_dir): row
+                       for row in chunk}
             for i, future in enumerate(as_completed(futures)):
-                results.append(future.result())
+                r = future.result()
+                results.append(r)
+                if r["fetch_status"] == "downloaded":
+                    n_ok += 1
+                elif r["fetch_status"] == "failed":
+                    n_fail += 1
+                elif r["fetch_status"] == "corrupted":
+                    n_corrupt += 1
                 if (i + 1) % 1000 == 0:
-                    print(f"  {i+1}/{len(chunk)} done", flush=True)
+                    elapsed = time.perf_counter() - t0
+                    print(f"  {i+1:,}/{len(chunk):,}  "
+                          f"downloaded={n_ok:,} failed={n_fail:,} corrupted={n_corrupt:,}  "
+                          f"({(i+1)/elapsed:.0f} img/s)", flush=True)
 
-        # Count results
-        for r in results:
-            if r["fetch_status"] == "downloaded":
-                total_downloaded += 1
-            elif r["fetch_status"] == "failed":
-                total_failed += 1
-            elif r["fetch_status"] == "corrupted":
-                total_corrupted += 1
+        elapsed = time.perf_counter() - t0
+        total_downloaded += n_ok
+        total_failed     += n_fail
+        total_corrupted  += n_corrupt
+        print(f"  Chunk done in {elapsed:.0f}s ({len(chunk)/elapsed:.0f} img/s)  "
+              f"downloaded={n_ok:,} failed={n_fail:,} corrupted={n_corrupt:,}", flush=True)
 
-        print(f"  downloaded={total_downloaded} failed={total_failed} "
-              f"corrupted={total_corrupted}", flush=True)
+        # Append to downloads table (batch load — free tier, parallel-safe)
+        write_results_to_bq(client, results, downloads_table)
+        print(f"  Written to {downloads_table}", flush=True)
 
-        # Write results to BQ (free batch load, no DML)
-        write_results_to_bq(client, results)
-        print(f"  Results written to BQ", flush=True)
+        # Inline MERGE into training_images so status is current without a separate job
+        n_updated = merge_chunk_into_training_images(
+            client, results, training_table, downloads_table
+        )
+        print(f"  Merged {n_updated:,} rows into {training_table}", flush=True)
 
-        # Pack images into a per-chunk sqfs, then delete raw files.
-        # This keeps peak inode usage at ~chunk_size per task (well under quota)
-        # rather than accumulating all images on disk until the pack job runs.
+        # Pack images into chunk sqfs then clear raw files to keep inode usage low
         pack_chunk_to_sqfs(staging_dir, chunk_num, num_workers=4)
         clear_staging(staging_dir)
+        warn_chunk_accumulation(staging_dir)
         print(f"  Staging cleared (chunk sqfs kept)", flush=True)
 
-    print(f"\n[Task {args.task_id}] Done. "
-          f"downloaded={total_downloaded} failed={total_failed} "
-          f"corrupted={total_corrupted}", flush=True)
+    print(f"\n[Task {args.task_id}] Done.  "
+          f"downloaded={total_downloaded:,} failed={total_failed:,} "
+          f"corrupted={total_corrupted:,}", flush=True)
 
 
 if __name__ == "__main__":
