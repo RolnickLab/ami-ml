@@ -7,10 +7,19 @@ on:
     branches: [ main ]
 
 jobs:
+  # Lint only the files changed in the PR rather than the whole tree: the repo
+  # predates this CI and still carries flake8 debt in older modules, so
+  # `--all-files` would fail on unrelated code. This runs on pull requests only,
+  # where the diff against the base branch is well defined. pre-commit runs each
+  # hook in its own isolated env, so this does not install the heavy project
+  # dependencies (torch, etc.).
   lint:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Install uv
       uses: astral-sh/setup-uv@v5
@@ -24,22 +33,12 @@ jobs:
         path: ~/.cache/pre-commit
         key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
-    # Lint only the files changed in the PR rather than the whole tree: the
-    # repo predates this CI and still carries flake8 debt in older modules, so
-    # `--all-files` would fail on unrelated code. pre-commit runs each hook in
-    # its own isolated env, so this does not install the heavy project
-    # dependencies (torch, etc.).
     - name: Run pre-commit on changed files
-      env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: |
-        if [ -n "$BASE_SHA" ]; then
-          git fetch --depth=1 origin "$BASE_SHA"
-          uvx pre-commit run --from-ref "$BASE_SHA" --to-ref "$HEAD_SHA" --show-diff-on-failure
-        else
-          uvx pre-commit run --all-files --show-diff-on-failure
-        fi
+        git fetch --no-tags origin "$GITHUB_BASE_REF"
+        uvx pre-commit run \
+          --from-ref "origin/$GITHUB_BASE_REF" --to-ref HEAD \
+          --show-diff-on-failure
 
   test:
     runs-on: ubuntu-latest
