@@ -1,10 +1,10 @@
 """
-Tests for stream_chunks_to_tar.py.
+Tests for merge_sqfs_chunks.py.
 
 The script streams chunk sqfs files as a single tar to stdout for piping to sqfstar.
 All squashfuse calls are mocked — no real sqfs or FUSE needed.
 
-Run with: pytest tests/dataset_tools/test_stream_chunks_to_tar.py -v
+Run with: pytest tests/dataset_tools/test_merge_sqfs_chunks.py -v
 """
 
 import io
@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-import src.dataset_tools.bq_squashfs.stream_chunks_to_tar as sct
+import src.dataset_tools.bq_squashfs.merge_sqfs_chunks as sct
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ class TestNoChunks:
     def test_empty_staging_dir_exits_with_error(self, tmp_path, capsys):
         """No chunk_*.sqfs files → exits with code 1."""
         with pytest.raises(SystemExit) as exc:
-            with patch("sys.argv", ["stream_chunks_to_tar.py", str(tmp_path)]):
+            with patch("sys.argv", ["merge_sqfs_chunks.py", str(tmp_path)]):
                 sct.main()
         assert exc.value.code == 1
         assert "ERROR" in capsys.readouterr().err
@@ -142,7 +142,7 @@ class TestNoChunks:
         """Non-existent staging dir → exits with code 1."""
         missing = tmp_path / "does_not_exist"
         with pytest.raises(SystemExit) as exc:
-            with patch("sys.argv", ["stream_chunks_to_tar.py", str(missing)]):
+            with patch("sys.argv", ["merge_sqfs_chunks.py", str(missing)]):
                 sct.main()
         assert exc.value.code == 1
 
@@ -158,7 +158,7 @@ class TestDryRun:
         c1 = make_chunk_sqfs(staging, 1)
         c2 = make_chunk_sqfs(staging, 2)
 
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging), "--dry-run"]), \
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging), "--dry-run"]), \
              patch.object(sct, "squashfuse_mount") as mock_mount:
             sct.main()
 
@@ -175,7 +175,7 @@ class TestDryRun:
         make_chunk_sqfs(staging, 1)
         make_chunk_sqfs(staging, 2)
 
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging), "--dry-run"]):
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging), "--dry-run"]):
             sct.main()
 
         lines = [l for l in capsys.readouterr().out.strip().splitlines() if l]
@@ -190,7 +190,7 @@ class TestStreaming:
     def _run_stream(self, staging: Path, extra_args: list[str] = []) -> tuple[bytes, str]:
         """Run main(), capture stdout bytes and stderr text."""
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging)] + extra_args), \
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)] + extra_args), \
              patch("sys.stdout") as mock_stdout:
             mock_stdout.buffer = stdout_buf
             sct.main()
@@ -209,7 +209,7 @@ class TestStreaming:
         (fake_mnt / "000" / "img.jpg").write_bytes(b"JPEG")
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging)]), \
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
              patch("sys.stdout") as mock_stdout, \
              patch.object(sct, "squashfuse_mount", return_value=True), \
              patch.object(sct, "squashfuse_unmount"), \
@@ -236,7 +236,7 @@ class TestStreaming:
             return 5
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging)]), \
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
              patch("sys.stdout") as mock_stdout, \
              patch.object(sct, "squashfuse_mount", return_value=True), \
              patch.object(sct, "squashfuse_unmount"), \
@@ -250,15 +250,15 @@ class TestStreaming:
         # stream_dir_to_tar called twice (one per chunk) into the SAME tar
         assert call_count["n"] == 2
 
-    def test_delete_after_stream_removes_chunk(self, tmp_path):
-        """--delete-after-stream: each chunk file is deleted after streaming."""
+    def test_chunks_always_preserved_after_stream(self, tmp_path):
+        """Chunks are never deleted by stream_chunks_to_tar — deletion is the
+        job script's responsibility after verification passes."""
         staging = tmp_path / "staging"
         staging.mkdir()
         chunk = make_chunk_sqfs(staging, 1)
-        assert chunk.exists()
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging), "--delete-after-stream"]), \
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
              patch("sys.stdout") as mock_stdout, \
              patch.object(sct, "squashfuse_mount", return_value=True), \
              patch.object(sct, "squashfuse_unmount"), \
@@ -269,27 +269,7 @@ class TestStreaming:
             mock_stdout.buffer = stdout_buf
             sct.main()
 
-        assert not chunk.exists()   # deleted after streaming
-
-    def test_without_delete_flag_chunks_preserved(self, tmp_path):
-        """Without --delete-after-stream, chunk files remain on disk."""
-        staging = tmp_path / "staging"
-        staging.mkdir()
-        chunk = make_chunk_sqfs(staging, 1)
-
-        stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging)]), \
-             patch("sys.stdout") as mock_stdout, \
-             patch.object(sct, "squashfuse_mount", return_value=True), \
-             patch.object(sct, "squashfuse_unmount"), \
-             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
-             patch("os.makedirs"), \
-             patch("os.rmdir"), \
-             patch.object(sct, "stream_dir_to_tar", return_value=1):
-            mock_stdout.buffer = stdout_buf
-            sct.main()
-
-        assert chunk.exists()   # preserved
+        assert chunk.exists()   # always preserved — job script deletes after verify
 
 
 # ── main: error handling ──────────────────────────────────────────────────────
@@ -307,7 +287,7 @@ class TestErrorHandling:
         mount_results = [False, True]
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging)]), \
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
              patch("sys.stdout") as mock_stdout, \
              patch.object(sct, "squashfuse_mount", side_effect=mount_results), \
              patch.object(sct, "squashfuse_unmount"), \
@@ -332,7 +312,7 @@ class TestErrorHandling:
         make_chunk_sqfs(staging, 2)
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging)]), \
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
              patch("sys.stdout") as mock_stdout, \
              patch.object(sct, "squashfuse_mount", return_value=False), \
              patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
@@ -351,7 +331,7 @@ class TestErrorHandling:
         make_chunk_sqfs(staging, 1)
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging)]), \
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
              patch("sys.stdout") as mock_stdout, \
              patch.object(sct, "squashfuse_mount", return_value=True), \
              patch.object(sct, "squashfuse_unmount"), \
@@ -400,27 +380,17 @@ class TestErrorHandling:
         assert result is False
         assert "WARNING" in capsys.readouterr().err
 
-    def test_delete_after_stream_warning_printed(self, tmp_path, capsys):
-        """--delete-after-stream prints a data-loss warning before starting."""
+    def test_delete_after_stream_flag_removed(self, tmp_path):
+        """--delete-after-stream was removed — passing it should raise an error."""
         staging = tmp_path / "staging"
         staging.mkdir()
         make_chunk_sqfs(staging, 1)
 
-        stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging),
-                                 "--delete-after-stream"]), \
-             patch("sys.stdout") as mock_stdout, \
-             patch.object(sct, "squashfuse_mount", return_value=True), \
-             patch.object(sct, "squashfuse_unmount"), \
-             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
-             patch("os.makedirs"), \
-             patch("os.rmdir"), \
-             patch("os.unlink"), \
-             patch.object(sct, "stream_dir_to_tar", return_value=5):
-            mock_stdout.buffer = stdout_buf
-            sct.main()
-
-        assert "WARNING" in capsys.readouterr().err
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging),
+                                 "--delete-after-stream"]):
+            with pytest.raises(SystemExit) as exc:
+                sct.main()
+        assert exc.value.code == 2  # argparse unrecognised argument
 
     def test_chunks_processed_in_sorted_order(self, tmp_path):
         """Chunks are processed in sorted order: chunk_0001 before chunk_0002."""
@@ -437,7 +407,7 @@ class TestErrorHandling:
             return True
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging)]), \
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
              patch("sys.stdout") as mock_stdout, \
              patch.object(sct, "squashfuse_mount", side_effect=fake_mount), \
              patch.object(sct, "squashfuse_unmount"), \
