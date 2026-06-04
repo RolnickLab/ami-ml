@@ -118,4 +118,16 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except BrokenPipeError:
+        # sqfstar (or whatever is reading stdout) died — likely OOM killed.
+        # This is exit=137 on the sqfstar side; we exit 1 so the SLURM job
+        # is also marked failed. The job script checks both exit codes.
+        print(
+            "[stream] FATAL: BrokenPipeError — the downstream process (sqfstar) "
+            "died unexpectedly. This usually means sqfstar was OOM killed. "
+            "Check sqfstar exit code and increase --mem in the job script.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
