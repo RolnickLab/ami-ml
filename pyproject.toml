@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Software & research related to the automated monitoring of insects"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 authors = [
     {name = "Aditya Jain", email = "aditya.jain@mila.quebec"},
     {name = "Michael Bunsen", email = "michael.bunsen@mila.quebec"},

@@ -33,9 +33,9 @@ Software, algorithms and research related to the Automated Monitoring of Insects
    ```
 2. Clone this repository
 3. Create a `.env` or copy `.env.example` and update the values
-4. Install dependencies in the root of the repository:
+4. Install dependencies in the root of the repository (`--extra dev` adds the development tools, including pre-commit):
    ```bash
-   uv sync
+   uv sync --extra dev
    ```
 5. Install pre-commit hooks:
    ```bash
@@ -55,9 +55,9 @@ An optional way to setup the environment is to use [Conda](https://conda.io/proj
 Activate the virtual environment before running scripts
 
 ```bash
-source .venv/bin/activate  # On Linux/macOS
-# or
-.venv\Scripts\activate     # On Windows
+source .venv/bin/activate     # On Linux/macOS
+# or, on Windows PowerShell
+.\.venv\Scripts\Activate.ps1
 ```
 
 Example for running a script (in the activated environment):
@@ -74,3 +74,5 @@ Alternatively, one can run scripts without activating the environment:
 ```bash
 uv run python <script>
 ```
+
+`uv run` automatically uses the project's virtual environment, so there is no need to activate it first.
