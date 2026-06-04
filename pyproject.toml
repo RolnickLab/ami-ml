@@ -56,6 +56,9 @@ dev = [
     "ipykernel>=6.29.4",
     "pytest>=8.1.1",
 ]
+viz = [
+    "fiftyone",
+]
 
 [project.scripts]
 ami-dataset = "src.dataset_tools.cli:cli"

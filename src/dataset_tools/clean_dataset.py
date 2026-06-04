@@ -11,13 +11,20 @@ from src.dataset_tools.utils import get_image_path, load_dwca_data
 def _load_data(dwca_file: str, verified_data_csv: str, life_stage_predictions: str):
     metadata = load_dwca_data(dwca_file)
     metadata["image_path"] = metadata.apply(get_image_path, axis=1)
-    verified_data = pd.read_csv(verified_data_csv)
-    verified_metadata = pd.merge(
-        verified_data[["image_path", "width", "height", "fetch_date"]],
-        metadata,
-        how="inner",
-        on="image_path",
-    )
+
+    if verified_data_csv is not None:
+        verified_data = pd.read_csv(verified_data_csv)
+        verified_metadata = pd.merge(
+            verified_data[["image_path", "width", "height", "fetch_date"]],
+            metadata,
+            how="inner",
+            on="image_path",
+        )
+    else:
+        # No verify output available — work directly from DwCA metadata.
+        # Thumbnail filtering will be skipped (no width/height).
+        verified_metadata = metadata.copy()
+
     if life_stage_predictions is not None:
         life_stage_preds = pd.read_csv(life_stage_predictions)
         verified_metadata = pd.merge(
@@ -83,6 +90,7 @@ def clean_dataset(
     thumb_size: int,
     remove_non_adults: bool,
     life_stage_predictions: str,
+    output_csv: str = None,
 ):
     verified_metadata = _load_data(dwca_file, verified_data_csv, life_stage_predictions)
     current_filtered = len(verified_metadata)
@@ -98,15 +106,20 @@ def clean_dataset(
             current_filtered, ignore_dataset_by_key, verified_metadata
         )
 
-    if remove_tumbnails:
+    if remove_tumbnails and verified_data_csv is not None:
         current_filtered, verified_metadata = _remove_thumbnails(
             current_filtered, thumb_size, verified_metadata
         )
+    elif remove_tumbnails and verified_data_csv is None:
+        print("Skipping thumbnail filter: no verified-data-csv provided (no width/height).")
 
     if remove_non_adults:
         verified_metadata = _remove_non_adults(current_filtered, verified_metadata)
 
     verified_metadata_clean = verified_metadata.copy()
-    metadata_clean_filename = verified_data_csv[:-4] + "_clean.csv"
+    if output_csv is not None:
+        metadata_clean_filename = output_csv
+    else:
+        metadata_clean_filename = verified_data_csv[:-4] + "_clean.csv"
     verified_metadata_clean.to_csv(metadata_clean_filename, index=False)
     print(f"Clean dataset saved to {metadata_clean_filename}")
