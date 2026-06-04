@@ -23,7 +23,7 @@ The training workflow assumes the dataset to be in [WebDataset](https://webdatas
 
 
 ## Installation
-The python environment setup is described in the [Setup guide](https://github.com/RolnickLab/ami-ml/tree/main?tab=readme-ov-file#setup) on the main repository page. The use of Conda + Poetry is recommended.
+The python environment setup is described in the [Setup guide](https://github.com/RolnickLab/ami-ml/tree/main?tab=readme-ov-file#setup) on the main repository page. Dependencies are managed with [uv](https://docs.astral.sh/uv/).
 
 
 ## To-Do for Next Update

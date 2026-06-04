@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Lint only the files changed in the PR rather than the whole tree: the repo
+  # predates this CI and still carries flake8 debt in older modules, so
+  # `--all-files` would fail on unrelated code. This runs on pull requests only,
+  # where the diff against the base branch is well defined. pre-commit runs each
+  # hook in its own isolated env, so this does not install the heavy project
+  # dependencies (torch, etc.).
+  lint:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: "3.12"
+        enable-cache: true
+
+    - name: Cache pre-commit hooks
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+    - name: Run pre-commit on changed files
+      run: |
+        git fetch --no-tags origin "$GITHUB_BASE_REF"
+        uvx pre-commit run \
+          --from-ref "origin/$GITHUB_BASE_REF" --to-ref HEAD \
+          --show-diff-on-failure
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: "3.12"
+        enable-cache: true
+
+    - name: Install dependencies
+      run: uv sync --frozen --extra dev --extra research
+
+    - name: Test CLI commands
+      run: |
+        uv run ami-dataset --help
+        uv run ami-classification --help
+
+    - name: Run test suite
+      run: uv run pytest tests/ -v
+
+    - name: Verify imports
+      run: |
+        uv run python -c "import torch; import numpy; import pandas; print('Core dependencies imported successfully')"
+
+    - name: Verify optional dependencies (research)
+      run: |
+        uv run python -c "import awscli; import absl; print('Research dependencies imported successfully')"
