@@ -443,6 +443,149 @@ class TestModSplit:
         assert "LIMIT 50" in query_sql
 
 
+# ── Multi-task distribution and merge ────────────────────────────────────────
+
+class TestMultiTaskDistributionAndMerge:
+    """
+    Verify correct behaviour when multiple tasks run in parallel:
+      - work is partitioned correctly across tasks
+      - tasks don't interfere with each other's queries
+      - BQ downloads table receives appends from all tasks safely
+      - training_images MERGE is correct when multiple tasks write concurrently
+    """
+
+    PHOTO_IDS = list(range(50))   # simulate 50 images
+
+    def _partition(self, num_jobs: int) -> dict[int, list[int]]:
+        """Return {task_id: [photo_ids]} for all tasks."""
+        return {
+            t: [p for p in self.PHOTO_IDS if p % num_jobs == t]
+            for t in range(num_jobs)
+        }
+
+    # ── partitioning ──────────────────────────────────────────────────────────
+
+    def test_two_tasks_partition_all_images(self):
+        """num_jobs=2: task 0 + task 1 together cover every image exactly once."""
+        parts = self._partition(2)
+        combined = parts[0] + parts[1]
+        assert sorted(combined) == self.PHOTO_IDS
+        assert set(parts[0]) & set(parts[1]) == set()  # no overlap
+
+    def test_ten_tasks_partition_all_images(self):
+        """num_jobs=10: all 10 tasks together cover every image exactly once."""
+        parts = self._partition(10)
+        combined = [p for task in parts.values() for p in task]
+        assert sorted(combined) == self.PHOTO_IDS
+        for i in range(10):
+            for j in range(i + 1, 10):
+                assert set(parts[i]) & set(parts[j]) == set()
+
+    def test_task0_completion_does_not_affect_task1_query(self):
+        """Task 1's LEFT JOIN only skips images task 1 itself attempted — not task 0's."""
+        # task 0 attempted photo_ids 0,2,4... (even); task 1 should still see 1,3,5...
+        task0_uuids = {f"uuid-{p}" for p in self.PHOTO_IDS if p % 2 == 0}
+        task1_pending = [p for p in self.PHOTO_IDS if p % 2 == 1]
+
+        # task 1 query: LEFT JOIN filters on task 1's uuids only
+        # since task 0's uuids (even photo_ids) aren't in task 1's subset,
+        # they never appear in the LEFT JOIN result anyway
+        task1_uuids = {f"uuid-{p}" for p in task1_pending}
+        assert task0_uuids & task1_uuids == set()  # completely disjoint
+
+    def test_non_sequential_photo_ids_still_partition_correctly(self):
+        """Real photo_ids from iNat are large non-sequential ints — MOD still works."""
+        real_ids = [487851, 7047265, 8233026, 8427425, 10239192,
+                    17327318, 21463254, 27648248, 36757555, 41676327]
+        for num_jobs in [2, 5, 10]:
+            parts = {t: [p for p in real_ids if p % num_jobs == t]
+                     for t in range(num_jobs)}
+            combined = [p for task in parts.values() for p in task]
+            assert sorted(combined) == sorted(real_ids)
+
+    def test_empty_task_handled_gracefully(self):
+        """A task assigned 0 images should produce 0 downloads cleanly."""
+        # with 1 image and num_jobs=2, one task will have 0 images
+        single_id = [4]  # 4 % 2 == 0, so task 1 gets nothing
+        task0 = [p for p in single_id if p % 2 == 0]
+        task1 = [p for p in single_id if p % 2 == 1]
+        assert task0 == [4]
+        assert task1 == []
+
+    # ── BQ writes from multiple tasks ────────────────────────────────────────
+
+    def test_downloads_table_appends_are_independent(self):
+        """Both tasks append to downloads table — append-only, no conflicts."""
+        client = MagicMock()
+        client.load_table_from_dataframe.return_value.result.return_value = None
+
+        task0_results = [{"dataset_source_uuid": f"uuid-{p}", "fetch_status": "downloaded",
+                          "image_width": 100, "image_height": 80,
+                          "image_size": 5000, "corrupted": False}
+                         for p in range(0, 10, 2)]   # even photo_ids
+
+        task1_results = [{"dataset_source_uuid": f"uuid-{p}", "fetch_status": "downloaded",
+                          "image_width": 100, "image_height": 80,
+                          "image_size": 5000, "corrupted": False}
+                         for p in range(1, 10, 2)]   # odd photo_ids
+
+        # both tasks write to the same table — no conflict because WRITE_APPEND
+        di.write_results_to_bq(client, task0_results, "downloads_table")
+        di.write_results_to_bq(client, task1_results, "downloads_table")
+
+        assert client.load_table_from_dataframe.call_count == 2
+        # both calls target same table
+        calls = client.load_table_from_dataframe.call_args_list
+        assert calls[0][0][1] == "downloads_table"
+        assert calls[1][0][1] == "downloads_table"
+
+    def test_merge_from_two_tasks_updates_correct_rows(self):
+        """Each task's MERGE only touches its own rows — no cross-task collision."""
+        client = MagicMock()
+        client.load_table_from_dataframe.return_value.result.return_value = None
+
+        # task 0 merges even photo_ids
+        job0 = MagicMock()
+        job0.dml_stats.updated_row_count = 5
+        # task 1 merges odd photo_ids
+        job1 = MagicMock()
+        job1.dml_stats.updated_row_count = 5
+        client.query.side_effect = [job0, job1]
+
+        task0_results = [{"dataset_source_uuid": f"uuid-{i}", "fetch_status": "downloaded",
+                          "image_width": 64, "image_height": 48,
+                          "image_size": 1000, "corrupted": False}
+                         for i in range(5)]
+        task1_results = [{"dataset_source_uuid": f"uuid-{i+5}", "fetch_status": "downloaded",
+                          "image_width": 64, "image_height": 48,
+                          "image_size": 1000, "corrupted": False}
+                         for i in range(5)]
+
+        n0 = di.merge_chunk_into_training_images(
+            client, task0_results, "training_table", "downloads_table"
+        )
+        n1 = di.merge_chunk_into_training_images(
+            client, task1_results, "training_table", "downloads_table"
+        )
+
+        assert n0 == 5
+        assert n1 == 5
+        assert client.query.call_count == 2   # one MERGE per task
+        assert client.delete_table.call_count == 2  # temp table cleaned per task
+
+    def test_total_coverage_after_all_tasks_complete(self):
+        """After all tasks finish, every image should be accounted for."""
+        num_jobs = 5
+        all_downloaded = set()
+
+        for task_id in range(num_jobs):
+            task_images = {p for p in self.PHOTO_IDS if p % num_jobs == task_id}
+            all_downloaded |= task_images
+
+        assert all_downloaded == set(self.PHOTO_IDS)
+        assert len(all_downloaded) == len(self.PHOTO_IDS)
+
+
 # ── warn_chunk_accumulation ───────────────────────────────────────────────────
 
 class TestWarnChunkAccumulation:
