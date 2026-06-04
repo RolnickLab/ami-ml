@@ -223,19 +223,29 @@ def merge_chunk_into_training_images(
     training_table: str,
     downloads_table: str,
 ) -> int:
-    """MERGE this chunk's successful results directly into training_images.
+    """MERGE all chunk results into training_images, updating fetch_status for every outcome.
+
+    Outcomes merged:
+      downloaded — fetch_status='downloaded', dims and corrupted populated
+      corrupted  — fetch_status='corrupted',  corrupted=True, dims NULL
+      failed     — fetch_status='failed',     all fields NULL
+
+    Permanently failed images (404, 403, exhausted retries) are marked
+    fetch_status='failed' so they are excluded from future re-runs via
+    the WHERE fetch_status='pending' clause — no wasted retry attempts.
+    Retrying can still be done intentionally via retry_failed_downloads.py.
 
     Uses a temp table containing only this chunk's rows so the MERGE scans
     a small dataset rather than all of training_images_downloads.
-    Only updates rows that are still 'pending' — safe to run from parallel tasks.
+    Only updates rows that are still 'pending' — safe from parallel tasks.
     Returns the number of rows updated.
     """
-    successful = [r for r in results if r["fetch_status"] in ("downloaded", "corrupted")]
-    if not successful:
+    to_merge = [r for r in results if r["fetch_status"] in ("downloaded", "corrupted", "failed")]
+    if not to_merge:
         return 0
 
     tmp_table = f"{BQ_PROJECT}.{BQ_DATASET}._dl_merge_tmp_{uuid.uuid4().hex[:8]}"
-    df = pd.DataFrame(successful)
+    df = pd.DataFrame(to_merge)
     job_config = bigquery.LoadJobConfig(
         write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
         schema=DOWNLOADS_SCHEMA,

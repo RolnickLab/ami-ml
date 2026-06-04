@@ -261,39 +261,99 @@ class TestPackChunkToSqfs:
 
 class TestMergeChunkIntoTrainingImages:
 
-    def test_empty_results_skips_merge(self):
-        """No successful results → no BQ calls."""
-        client = MagicMock()
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "failed",
-                    "image_width": None, "image_height": None,
-                    "image_size": None, "corrupted": None}]
-        n = di.merge_chunk_into_training_images(
-            client, results, "training_table", "downloads_table"
-        )
-        assert n == 0
-        client.load_table_from_dataframe.assert_not_called()
-
-    def test_successful_results_trigger_merge(self):
-        """Downloaded rows → temp table load + MERGE + temp table delete."""
+    def _make_client(self, updated_count: int = 1) -> MagicMock:
         client = MagicMock()
         client.load_table_from_dataframe.return_value.result.return_value = None
         job = MagicMock()
-        job.dml_stats.updated_row_count = 2
+        job.dml_stats.updated_row_count = updated_count
         client.query.return_value = job
+        return client
 
+    def test_empty_list_skips_merge(self):
+        """Completely empty results list → no BQ calls."""
+        client = self._make_client()
+        n = di.merge_chunk_into_training_images(client, [], "t", "d")
+        assert n == 0
+        client.load_table_from_dataframe.assert_not_called()
+
+    def test_downloaded_triggers_merge(self):
+        """downloaded rows → temp table load + MERGE + cleanup."""
+        client = self._make_client(updated_count=1)
+        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
+                    "image_width": 100, "image_height": 80,
+                    "image_size": 5000, "corrupted": False}]
+        n = di.merge_chunk_into_training_images(client, results, "t", "d")
+        assert n == 1
+        assert client.load_table_from_dataframe.call_count == 1
+        assert client.query.call_count == 1
+        assert client.delete_table.call_count == 1
+
+    def test_corrupted_triggers_merge(self):
+        """corrupted rows → merged with fetch_status='corrupted'."""
+        client = self._make_client(updated_count=1)
+        results = [{"dataset_source_uuid": "u1", "fetch_status": "corrupted",
+                    "image_width": None, "image_height": None,
+                    "image_size": None, "corrupted": True}]
+        n = di.merge_chunk_into_training_images(client, results, "t", "d")
+        assert n == 1
+        assert client.load_table_from_dataframe.call_count == 1
+
+    def test_failed_triggers_merge(self):
+        """failed rows (404/403/exhausted) → merged so fetch_status='failed' in
+        training_images. Permanent failures are excluded from future re-runs
+        via WHERE fetch_status='pending' without needing the LEFT JOIN."""
+        client = self._make_client(updated_count=1)
+        results = [{"dataset_source_uuid": "u1", "fetch_status": "failed",
+                    "image_width": None, "image_height": None,
+                    "image_size": None, "corrupted": None}]
+        n = di.merge_chunk_into_training_images(client, results, "t", "d")
+        assert n == 1
+        assert client.load_table_from_dataframe.call_count == 1
+        assert client.query.call_count == 1
+        assert client.delete_table.call_count == 1
+
+    def test_all_three_statuses_merged_together(self):
+        """Mixed chunk — downloaded, corrupted, failed — all three trigger one MERGE."""
+        client = self._make_client(updated_count=3)
         results = [
             {"dataset_source_uuid": "u1", "fetch_status": "downloaded",
              "image_width": 100, "image_height": 80, "image_size": 5000, "corrupted": False},
             {"dataset_source_uuid": "u2", "fetch_status": "corrupted",
              "image_width": None, "image_height": None, "image_size": 500, "corrupted": True},
+            {"dataset_source_uuid": "u3", "fetch_status": "failed",
+             "image_width": None, "image_height": None, "image_size": None, "corrupted": None},
         ]
-        n = di.merge_chunk_into_training_images(
-            client, results, "training_table", "downloads_table"
-        )
-        assert n == 2
-        assert client.load_table_from_dataframe.call_count == 1  # temp table load
-        assert client.query.call_count == 1                       # MERGE
-        assert client.delete_table.call_count == 1               # cleanup
+        n = di.merge_chunk_into_training_images(client, results, "t", "d")
+        assert n == 3
+        assert client.load_table_from_dataframe.call_count == 1  # one temp table for all 3
+        assert client.query.call_count == 1                       # one MERGE
+        assert client.delete_table.call_count == 1               # one cleanup
+
+    def test_failed_rows_included_in_temp_table(self):
+        """Verify the dataframe passed to BQ includes the failed row."""
+        import pandas as pd
+        client = self._make_client()
+        captured_df = {}
+
+        def capture_load(df, table, **kwargs):
+            captured_df["data"] = df.copy()
+            return MagicMock(result=MagicMock(return_value=None))
+
+        client.load_table_from_dataframe.side_effect = capture_load
+
+        results = [
+            {"dataset_source_uuid": "ok",   "fetch_status": "downloaded",
+             "image_width": 64, "image_height": 48, "image_size": 1000, "corrupted": False},
+            {"dataset_source_uuid": "dead", "fetch_status": "failed",
+             "image_width": None, "image_height": None, "image_size": None, "corrupted": None},
+        ]
+        di.merge_chunk_into_training_images(client, results, "t", "d")
+
+        df = captured_df["data"]
+        assert len(df) == 2                               # both rows in temp table
+        statuses = set(df["fetch_status"].tolist())
+        assert "downloaded" in statuses
+        assert "failed" in statuses                       # failed row present
 
     def test_temp_table_deleted_even_on_merge_failure(self):
         """Temp table must be cleaned up even if the MERGE query fails."""
@@ -309,7 +369,7 @@ class TestMergeChunkIntoTrainingImages:
             di.merge_chunk_into_training_images(
                 client, results, "training_table", "downloads_table"
             )
-        client.delete_table.assert_called_once()  # cleanup still ran
+        client.delete_table.assert_called_once()
 
 
 # ── get_pending_rows / MOD split ─────────────────────────────────────────────
