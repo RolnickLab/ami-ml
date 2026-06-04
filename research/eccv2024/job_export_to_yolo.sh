@@ -19,4 +19,4 @@ source .env
 set +o allexport
 
 # 4. Run python file
-poetry run python research/eccv2024/export_to_yolo.py
+uv run python research/eccv2024/export_to_yolo.py

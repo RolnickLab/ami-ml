@@ -7,8 +7,8 @@ name = "ami-ml"
 version = "0.1.0"
 description = "Software & research related to the automated monitoring of insects"
 readme = "README.md"
-license = {text = "MIT"}
-requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
+requires-python = ">=3.10,<3.15"
 authors = [
     {name = "Aditya Jain", email = "aditya.jain@mila.quebec"},
     {name = "Michael Bunsen", email = "michael.bunsen@mila.quebec"},
@@ -39,9 +39,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-viz = [
-    "fiftyone",
-]
 research = [
     "awscli>=1.33.44",
     "awscli-plugin-endpoint>=0.4",
@@ -58,6 +55,9 @@ dev = [
     "python-devtools>=2",
     "ipykernel>=6.29.4",
     "pytest>=8.1.1",
+]
+viz = [
+    "fiftyone",
 ]
 
 [project.scripts]
