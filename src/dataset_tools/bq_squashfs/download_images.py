@@ -355,23 +355,64 @@ def warn_chunk_accumulation(staging_dir: Path) -> None:
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--staging-dir",      required=True,
-                        help="Local directory to download images into")
-    parser.add_argument("--num-jobs",         type=int, required=True,
-                        help="Total number of parallel jobs (MOD split denominator)")
-    parser.add_argument("--task-id",          type=int, required=True,
-                        help="This job's task ID (0 to num_jobs-1)")
-    parser.add_argument("--num-workers",      type=int, default=32,
-                        help="Parallel download workers (default: 32)")
-    parser.add_argument("--chunk-size",       type=int, default=10000,
-                        help="Images per chunk before packing to sqfs (default: 10000)")
-    parser.add_argument("--limit",            type=int, default=None,
-                        help="Cap total images queried — for small-scale tests")
+    parser.add_argument("--staging-dir", required=True,
+                        help=(
+                            "Local directory where images are downloaded before packing. "
+                            "Use scratch (e.g. /scratch/$USER/staging), not home — home has "
+                            "a 500k inode quota and each image counts as one inode. "
+                            "chunk_NNNN.sqfs files accumulate here until job_bq_pack_per_task.sh "
+                            "merges them into the final task_N.sqfs."
+                        ))
+    parser.add_argument("--num-jobs", type=int, required=True,
+                        help=(
+                            "Total number of parallel download tasks. Images are partitioned "
+                            "by MOD(photo_id, num_jobs) so each task gets a non-overlapping "
+                            "subset. Must match the SLURM --array range: --num-jobs 10 requires "
+                            "--array=0-9 in the job script. Typical value: 10."
+                        ))
+    parser.add_argument("--task-id", type=int, required=True,
+                        help=(
+                            "Index of this task (0 to num_jobs-1). In a SLURM array job set "
+                            "this to $SLURM_ARRAY_TASK_ID. This task will download all images "
+                            "where MOD(photo_id, num_jobs) == task_id."
+                        ))
+    parser.add_argument("--num-workers", type=int, default=32,
+                        help=(
+                            "Number of parallel download threads per task (default: 32). "
+                            "With 10 tasks running simultaneously this means up to 320 "
+                            "concurrent connections to iNaturalist S3. At scale this caused "
+                            "Errno 16 (too many open sockets) — the retry logic handles it "
+                            "but reducing to 16-24 workers per task lowers the error rate."
+                        ))
+    parser.add_argument("--chunk-size", type=int, default=10000,
+                        help=(
+                            "Number of images to download before packing into a sqfs chunk "
+                            "and clearing the staging dir (default: 10000). Lower values "
+                            "reduce peak inode usage in staging but produce more chunk files "
+                            "for the pack job to merge. Each chunk becomes one "
+                            "chunk_NNNN.sqfs file in --staging-dir."
+                        ))
+    parser.add_argument("--limit", type=int, default=None,
+                        help=(
+                            "Cap the total number of images queried from BQ. Only for "
+                            "small-scale tests — omit for production runs. "
+                            "Example: --limit 50 --table-prefix test_ for a quick smoke test."
+                        ))
     parser.add_argument("--force-redownload", action="store_true",
-                        help="Ignore existing download records and re-download all images")
-    parser.add_argument("--table-prefix",     default="",
-                        help="BQ table prefix for testing (e.g. 'test_' uses "
-                             "test_training_images and test_training_images_downloads)")
+                        help=(
+                            "Ignore existing records in training_images_downloads and "
+                            "re-download all images for this task. Use when staging files "
+                            "were deleted after a failed pack job and you need to rebuild "
+                            "the chunks from scratch. Without this flag, already-attempted "
+                            "images are skipped via LEFT JOIN."
+                        ))
+    parser.add_argument("--table-prefix", default="",
+                        help=(
+                            "BQ table name prefix for testing without touching production. "
+                            "Example: --table-prefix test_ reads from test_training_images "
+                            "and writes to test_training_images_downloads. "
+                            "Create test tables first with create_test_tables.py."
+                        ))
     args = parser.parse_args()
 
     training_table  = f"{BQ_PROJECT}.{BQ_DATASET}.{args.table_prefix}training_images"
