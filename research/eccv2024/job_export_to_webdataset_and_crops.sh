@@ -20,4 +20,4 @@ source .env
 set +o allexport
 
 # 4. Launch your script
-poetry run python research/eccv2024/export_to_webdataset_and_crops.py
+uv run python research/eccv2024/export_to_webdataset_and_crops.py
