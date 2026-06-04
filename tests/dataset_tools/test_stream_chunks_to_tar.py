@@ -344,6 +344,84 @@ class TestErrorHandling:
 
         assert exc.value.code == 1
 
+    def test_empty_chunk_exits_nonzero(self, tmp_path):
+        """A chunk that mounts but contains 0 images → exit 1 + WARNING logged."""
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        make_chunk_sqfs(staging, 1)
+
+        stdout_buf = io.BytesIO()
+        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging)]), \
+             patch("sys.stdout") as mock_stdout, \
+             patch.object(sct, "squashfuse_mount", return_value=True), \
+             patch.object(sct, "squashfuse_unmount"), \
+             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
+             patch("os.makedirs"), \
+             patch("os.rmdir"), \
+             patch.object(sct, "stream_dir_to_tar", return_value=0):  # 0 images
+            mock_stdout.buffer = stdout_buf
+            with pytest.raises(SystemExit) as exc:
+                sct.main()
+        assert exc.value.code == 1
+
+    def test_squashfuse_retry_on_transient_failure(self, tmp_path):
+        """squashfuse failure retried once before giving up."""
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        make_chunk_sqfs(staging, 1)
+
+        fail = MagicMock(returncode=1, stderr="fuse: temporary error")
+        ok   = MagicMock(returncode=0)
+
+        with patch("subprocess.run", side_effect=[fail, ok]) as mock_run, \
+             patch("time.sleep"):
+            result = sct.squashfuse_mount("/fake.sqfs", "/mnt/fake", retries=1)
+
+        assert result is True
+        assert mock_run.call_count == 2   # one fail + one retry
+
+    def test_squashfuse_unmount_retries_on_failure(self, capsys):
+        """fusermount failure retried; logs warning instead of raising."""
+        fail = MagicMock(returncode=1, stderr="resource busy")
+        ok   = MagicMock(returncode=0)
+
+        with patch("subprocess.run", side_effect=[fail, ok]), \
+             patch("time.sleep"):
+            result = sct.squashfuse_unmount("/mnt/fake", retries=2)
+
+        assert result is True  # succeeded on second attempt
+
+    def test_squashfuse_unmount_warns_on_all_failures(self, capsys):
+        """All unmount retries exhausted → warning logged, no raise."""
+        fail = MagicMock(returncode=1, stderr="resource busy")
+        with patch("subprocess.run", return_value=fail), \
+             patch("time.sleep"):
+            result = sct.squashfuse_unmount("/mnt/fake", retries=2)
+        assert result is False
+        assert "WARNING" in capsys.readouterr().err
+
+    def test_delete_after_stream_warning_printed(self, tmp_path, capsys):
+        """--delete-after-stream prints a data-loss warning before starting."""
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        make_chunk_sqfs(staging, 1)
+
+        stdout_buf = io.BytesIO()
+        with patch("sys.argv", ["stream_chunks_to_tar.py", str(staging),
+                                 "--delete-after-stream"]), \
+             patch("sys.stdout") as mock_stdout, \
+             patch.object(sct, "squashfuse_mount", return_value=True), \
+             patch.object(sct, "squashfuse_unmount"), \
+             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
+             patch("os.makedirs"), \
+             patch("os.rmdir"), \
+             patch("os.unlink"), \
+             patch.object(sct, "stream_dir_to_tar", return_value=5):
+            mock_stdout.buffer = stdout_buf
+            sct.main()
+
+        assert "WARNING" in capsys.readouterr().err
+
     def test_chunks_processed_in_sorted_order(self, tmp_path):
         """Chunks are processed in sorted order: chunk_0001 before chunk_0002."""
         staging = tmp_path / "staging"
