@@ -3,8 +3,8 @@
 Create small BQ test tables for testing download_images.py without touching production.
 
 Creates:
-  test_training_images          — 50 rows sampled from training_images, fetch_status='pending'
-  test_training_images_downloads — empty table, same schema as training_images_downloads
+  _test_training_images          — 50 rows sampled from training_images, fetch_status='pending'
+  _test_training_images_downloads — empty table, same schema as training_images_downloads
 
 Usage:
     python create_test_tables.py
@@ -23,15 +23,18 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--n-rows", type=int, default=50,
                         help="Number of rows to sample from training_images (default: 50)")
+    parser.add_argument("--dataset", default=BQ_DATASET,
+                        help=f"BigQuery dataset name (default: {BQ_DATASET}). "
+                             f"Example: --dataset global_all_leps_2605")
     args = parser.parse_args()
 
     client = bigquery.Client(project=BQ_PROJECT)
-    prefix = f"{BQ_PROJECT}.{BQ_DATASET}"
+    prefix = f"{BQ_PROJECT}.{args.dataset}"
 
-    # ── test_training_images ─────────────────────────────────────────────────
-    print(f"Creating {prefix}.test_training_images ({args.n_rows} rows)...")
+    # ── _test_training_images ─────────────────────────────────────────────────
+    print(f"Creating {prefix}._test_training_images ({args.n_rows} rows)...")
     client.query(f"""
-        CREATE OR REPLACE TABLE `{prefix}.test_training_images` AS
+        CREATE OR REPLACE TABLE `{prefix}._test_training_images` AS
         SELECT
             photo_id,
             gbif_id,
@@ -45,17 +48,18 @@ def main():
             CAST(NULL AS INT64)  AS image_size,
             CAST(NULL AS BOOL)   AS corrupted
         FROM `{prefix}.training_images`
-        WHERE fetch_status = 'downloaded'
+        WHERE fetch_status = 'downloaded' OR fetch_status IS NULL
+        ORDER BY RAND()
         LIMIT {args.n_rows}
     """).result()
 
-    n = client.get_table(f"{prefix}.test_training_images").num_rows
+    n = client.get_table(f"{prefix}._test_training_images").num_rows
     print(f"  Created: {n} rows, all fetch_status='pending'")
 
-    # ── test_training_images_downloads ───────────────────────────────────────
-    print(f"Creating {prefix}.test_training_images_downloads (empty)...")
+    # ── _test_training_images_downloads ───────────────────────────────────────
+    print(f"Creating {prefix}._test_training_images_downloads (empty)...")
     client.query(f"""
-        CREATE OR REPLACE TABLE `{prefix}.test_training_images_downloads`
+        CREATE OR REPLACE TABLE `{prefix}._test_training_images_downloads`
         (
             dataset_source_uuid STRING,
             fetch_status        STRING,
@@ -72,7 +76,7 @@ def main():
     print(f"      --staging-dir /scratch/$USER/test_download \\")
     print(f"      --num-jobs 1 --task-id 0 \\")
     print(f"      --num-workers 8 --chunk-size {args.n_rows} \\")
-    print(f"      --limit {args.n_rows} --table-prefix test_")
+    print(f"      --limit {args.n_rows} --table-prefix _test_")
 
 
 if __name__ == "__main__":
