@@ -49,7 +49,7 @@ from google.cloud import bigquery
 Image.MAX_IMAGE_PIXELS = None
 
 BQ_PROJECT = "leps-ai"
-BQ_DATASET = "global_butterflies_2604"
+BQ_DEFAULT_DATASET = "global_butterflies_2604"
 
 # Retry config for HTTP downloads
 _RETRY_STATUSES = {429, 500, 502, 503, 504}
@@ -244,7 +244,10 @@ def merge_chunk_into_training_images(
     if not to_merge:
         return 0
 
-    tmp_table = f"{BQ_PROJECT}.{BQ_DATASET}._dl_merge_tmp_{uuid.uuid4().hex[:8]}"
+    # Derive "project.dataset" from training_table ("project.dataset.table_name")
+    _parts = training_table.split(".")
+    _dataset_ref = ".".join(_parts[:2]) if len(_parts) >= 2 else _parts[0]
+    tmp_table = f"{_dataset_ref}._dl_merge_tmp_{uuid.uuid4().hex[:8]}"
     df = pd.DataFrame(to_merge)
     job_config = bigquery.LoadJobConfig(
         write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
@@ -257,7 +260,7 @@ def merge_chunk_into_training_images(
         MERGE `{training_table}` T
         USING `{tmp_table}` S
           ON T.dataset_source_uuid = S.dataset_source_uuid
-        WHEN MATCHED AND T.fetch_status = 'pending' THEN UPDATE SET
+        WHEN MATCHED AND (T.fetch_status = 'pending' OR T.fetch_status IS NULL) THEN UPDATE SET
           T.fetch_status  = S.fetch_status,
           T.image_width   = S.image_width,
           T.image_height  = S.image_height,
@@ -285,7 +288,7 @@ def get_pending_rows(
         query = f"""
         SELECT dataset_source_uuid, absolute_url, relative_local_path
         FROM `{training_table}`
-        WHERE fetch_status = 'pending'
+        WHERE (fetch_status = 'pending' OR fetch_status IS NULL)
           AND MOD(photo_id, {num_jobs}) = {task_id}
         {limit_clause}
         """
@@ -295,7 +298,7 @@ def get_pending_rows(
         FROM `{training_table}` ti
         LEFT JOIN `{downloads_table}` d
           ON ti.dataset_source_uuid = d.dataset_source_uuid
-        WHERE ti.fetch_status = 'pending'
+        WHERE (ti.fetch_status = 'pending' OR ti.fetch_status IS NULL)
           AND MOD(ti.photo_id, {num_jobs}) = {task_id}
           AND d.dataset_source_uuid IS NULL
         {limit_clause}
@@ -416,6 +419,12 @@ def main():
                             "the chunks from scratch. Without this flag, already-attempted "
                             "images are skipped via LEFT JOIN."
                         ))
+    parser.add_argument("--dataset", default=BQ_DEFAULT_DATASET,
+                        help=(
+                            f"BigQuery dataset name within the leps-ai project "
+                            f"(default: {BQ_DEFAULT_DATASET}). "
+                            f"Example: --dataset global_all_leps_2605"
+                        ))
     parser.add_argument("--table-prefix", default="",
                         help=(
                             "BQ table name prefix for testing without touching production. "
@@ -425,8 +434,8 @@ def main():
                         ))
     args = parser.parse_args()
 
-    training_table  = f"{BQ_PROJECT}.{BQ_DATASET}.{args.table_prefix}training_images"
-    downloads_table = f"{BQ_PROJECT}.{BQ_DATASET}.{args.table_prefix}training_images_downloads"
+    training_table  = f"{BQ_PROJECT}.{args.dataset}.{args.table_prefix}training_images"
+    downloads_table = f"{BQ_PROJECT}.{args.dataset}.{args.table_prefix}training_images_downloads"
 
     client      = bigquery.Client(project=BQ_PROJECT)
     staging_dir = Path(args.staging_dir)

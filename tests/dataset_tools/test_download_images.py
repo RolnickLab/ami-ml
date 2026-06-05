@@ -661,3 +661,127 @@ class TestWarnChunkAccumulation:
             (tmp_path / f"chunk_{i:04d}.sqfs").write_bytes(b"x")
         di.warn_chunk_accumulation(tmp_path)
         assert "WARNING" in capsys.readouterr().out
+
+
+# ── --dataset flag and NULL fetch_status handling ─────────────────────────────
+
+class TestDatasetFlagAndNullFetchStatus:
+    """Tests for --dataset CLI flag and NULL fetch_status support (global_all_leps_2605)."""
+
+    # ── --dataset default ─────────────────────────────────────────────────────
+
+    def test_default_dataset_constant(self):
+        """BQ_DEFAULT_DATASET must default to global_butterflies_2604 for backwards compat."""
+        assert di.BQ_DEFAULT_DATASET == "global_butterflies_2604"
+
+    # ── NULL fetch_status in get_pending_rows ─────────────────────────────────
+
+    def test_normal_query_includes_null_fetch_status(self):
+        """Normal (LEFT JOIN) query must include OR fetch_status IS NULL to pick up
+        rows from datasets like global_all_leps_2605 where status starts as NULL."""
+        client = MagicMock()
+        client.query.return_value.result.return_value = []
+
+        di.get_pending_rows(
+            client,
+            training_table="proj.ds.training_images",
+            downloads_table="proj.ds.training_images_downloads",
+            num_jobs=10,
+            task_id=0,
+            force_redownload=False,
+        )
+
+        sql = client.query.call_args[0][0]
+        assert "fetch_status IS NULL" in sql
+        assert "fetch_status = 'pending'" in sql
+
+    def test_force_redownload_query_includes_null_fetch_status(self):
+        """Force-redownload query must also include OR fetch_status IS NULL."""
+        client = MagicMock()
+        client.query.return_value.result.return_value = []
+
+        di.get_pending_rows(
+            client,
+            training_table="proj.ds.training_images",
+            downloads_table="proj.ds.training_images_downloads",
+            num_jobs=10,
+            task_id=0,
+            force_redownload=True,
+        )
+
+        sql = client.query.call_args[0][0]
+        assert "fetch_status IS NULL" in sql
+        assert "fetch_status = 'pending'" in sql
+        assert "LEFT JOIN" not in sql
+
+    # ── NULL fetch_status in MERGE ────────────────────────────────────────────
+
+    def test_merge_condition_handles_null_fetch_status(self):
+        """MERGE SQL must allow updating rows where T.fetch_status IS NULL,
+        not just 'pending' — needed for global_all_leps_2605 initial state."""
+        client = MagicMock()
+        client.load_table_from_dataframe.return_value.result.return_value = None
+        job = MagicMock()
+        job.dml_stats.updated_row_count = 1
+        client.query.return_value = job
+
+        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
+                    "image_width": 64, "image_height": 48,
+                    "image_size": 1000, "corrupted": False}]
+
+        di.merge_chunk_into_training_images(
+            client, results,
+            training_table="leps-ai.global_all_leps_2605.training_images",
+            downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
+        )
+
+        sql = client.query.call_args[0][0]
+        assert "fetch_status IS NULL" in sql
+        assert "fetch_status = 'pending'" in sql
+
+    # ── tmp_table derived from training_table ─────────────────────────────────
+
+    def test_tmp_table_uses_same_dataset_as_training_table(self):
+        """Temp table for MERGE must be in the same dataset as training_table,
+        not hardcoded to global_butterflies_2604."""
+        client = MagicMock()
+        client.load_table_from_dataframe.return_value.result.return_value = None
+        job = MagicMock()
+        job.dml_stats.updated_row_count = 1
+        client.query.return_value = job
+
+        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
+                    "image_width": 64, "image_height": 48,
+                    "image_size": 1000, "corrupted": False}]
+
+        di.merge_chunk_into_training_images(
+            client, results,
+            training_table="leps-ai.global_all_leps_2605.training_images",
+            downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
+        )
+
+        # The temp table passed to load_table_from_dataframe must be in global_all_leps_2605
+        tmp_table_arg = client.load_table_from_dataframe.call_args[0][1]
+        assert tmp_table_arg.startswith("leps-ai.global_all_leps_2605.")
+        assert "global_butterflies_2604" not in tmp_table_arg
+
+    def test_tmp_table_not_in_wrong_dataset_when_using_new_dataset(self):
+        """Regression: old code used BQ_DATASET module constant — ensure it no longer does."""
+        client = MagicMock()
+        client.load_table_from_dataframe.return_value.result.return_value = None
+        job = MagicMock()
+        job.dml_stats.updated_row_count = 1
+        client.query.return_value = job
+
+        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
+                    "image_width": 64, "image_height": 48,
+                    "image_size": 1000, "corrupted": False}]
+
+        di.merge_chunk_into_training_images(
+            client, results,
+            training_table="leps-ai.global_all_leps_2605.training_images",
+            downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
+        )
+
+        tmp_table_arg = client.load_table_from_dataframe.call_args[0][1]
+        assert "global_butterflies_2604" not in tmp_table_arg  # must not leak old dataset
