@@ -12,7 +12,6 @@ Output format matches the fusion code in classification/geo_prior.py:
 """
 import os
 import random
-import sys
 import time
 
 from absl import app
@@ -21,9 +20,8 @@ from absl import flags
 import numpy as np
 import torch
 
-sys.path.insert(0, '/home/debian/Projects/fagner-lepsAI/geo_prior')
-import dataloader  # noqa: E402
-import models      # noqa: E402
+# Geo-prior network (FCNet) modules, from Fagner's lepsAI — see geoprior_fagner/README.md
+from src.geoprior.geoprior_fagner import dataloader, models
 
 FLAGS = flags.FLAGS
 

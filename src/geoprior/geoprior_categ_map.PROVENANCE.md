@@ -23,11 +23,11 @@ enumerated 0..N-1.
 
 ```bash
 # verify this committed file still matches BigQuery (no writes)
-python src/dataset_tools/build_geoprior_categ_map.py \
-    --frozen research/geoprior/geoprior_categ_map.json
+python src/geoprior/build_geoprior_categ_map.py \
+    --frozen src/geoprior/geoprior_categ_map.json
 
 # (re)materialise all artifacts (categ_map + label_map + metadata + master lists)
-python src/dataset_tools/build_geoprior_categ_map.py \
+python src/geoprior/build_geoprior_categ_map.py \
     --write --out-dir /mnt/melabbas/data/geoprior
 ```
 

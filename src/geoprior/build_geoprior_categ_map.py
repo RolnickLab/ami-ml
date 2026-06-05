@@ -36,11 +36,10 @@ Outputs (only written with --write)
 Usage
 -----
   # verify the committed frozen map still matches BigQuery (default; no writes)
-  python build_geoprior_categ_map.py \
-      --frozen research/geoprior/geoprior_categ_map.json
+  python -m src.geoprior.build_geoprior_categ_map
 
-  # (re)generate every artifact into a directory
-  python build_geoprior_categ_map.py --write --out-dir /mnt/melabbas/data/geoprior
+  # (re)generate every artifact into the configured data dir
+  python -m src.geoprior.build_geoprior_categ_map --write
 """
 import argparse
 import json
@@ -49,17 +48,17 @@ from pathlib import Path
 
 from google.cloud import bigquery
 
-PROJECT = "leps-ai"
+from src.geoprior import config
 
 # Counts the geocoded occurrences per species. The WHERE clause mirrors
 # build_geoprior_json.py::fetch_all_geocoded so the class space is exactly the
 # set of species that survive into the geo-prior JSON pipeline.
-SPECIES_COUNT_QUERY = """
+SPECIES_COUNT_QUERY = f"""
 SELECT
   o.verbatimSpeciesScientificName AS species_name,
   COUNT(*)                        AS n_geocoded_occurrences
-FROM `leps-ai.global_butterflies_2604.gbif_inat_occurrences` o
-JOIN `leps-ai.global_butterflies_2604.gbif_occurrence_location` l
+FROM `{config.TBL_OCCURRENCES}` o
+JOIN `{config.TBL_LOCATION}` l
   ON l.gbif_id = o.gbifID
 WHERE l.decimallatitude  IS NOT NULL
   AND l.decimallongitude IS NOT NULL
@@ -71,7 +70,7 @@ GROUP BY species_name
 
 def fetch_species_counts():
     """Return {species_name: n_geocoded_occurrences} and bytes billed."""
-    client = bigquery.Client(project=PROJECT)
+    client = bigquery.Client(project=config.BQ_PROJECT)
     job = client.query(SPECIES_COUNT_QUERY)
     rows = list(job.result())
     counts = {r["species_name"]: int(r["n_geocoded_occurrences"]) for r in rows}
@@ -139,20 +138,20 @@ def write_artifacts(out_dir, species, categ_map, label_map, metadata, with_count
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--frozen", default="research/geoprior/geoprior_categ_map.json",
+    ap.add_argument("--frozen", default=str(config.CATEG_MAP_PATH),
                     help="Path to the committed frozen geoprior_categ_map.json to verify against")
     ap.add_argument("--verify-counts", default=None,
                     help="Optional path to an existing master_species_with_counts.json "
                          "to validate the BQ count query against")
     ap.add_argument("--write", action="store_true",
                     help="Materialise all five artifacts into --out-dir")
-    ap.add_argument("--out-dir", default="/mnt/melabbas/data/geoprior",
+    ap.add_argument("--out-dir", default=str(config.DATA_DIR),
                     help="Directory to write artifacts to (with --write)")
     ap.add_argument("--force", action="store_true",
                     help="Write even if verification against --frozen fails")
     args = ap.parse_args()
 
-    print(f"Querying BigQuery (project={PROJECT}) for geocoded species counts ...")
+    print(f"Querying BigQuery (project={config.BQ_PROJECT}) for geocoded species counts ...")
     counts, billed = fetch_species_counts()
     species, categ_map, label_map, metadata, with_counts = build_maps(counts)
     total_occ = sum(counts.values())

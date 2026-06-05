@@ -12,7 +12,6 @@ Original script: github.com/mihow/fagner-lepsAI/blob/main/geo_prior/train_geo_ne
 import datetime
 import os
 import random
-import sys
 import time
 
 from absl import app
@@ -23,15 +22,13 @@ import torch
 import wandb
 from timm.utils import AverageMeter
 
-# import original geo_prior modules
-sys.path.insert(0, '/home/debian/Projects/fagner-lepsAI/geo_prior')
-import dataloader  # noqa: E402
-import losses      # noqa: E402
-import models      # noqa: E402
+from src.geoprior import config
+# Geo-prior network (FCNet) modules, from Fagner's lepsAI — see geoprior_fagner/README.md
+from src.geoprior.geoprior_fagner import dataloader, losses, models
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string("train_data_json", default=None,
+flags.DEFINE_string("train_data_json", default=str(config.DATA_DIR / "train.json"),
                     help="Path to JSON file containing training data")
 flags.DEFINE_integer("batch_size", default=1024, help="Batch size")
 flags.DEFINE_string("loc_encode", default="encode_cos_sin",
@@ -48,21 +45,18 @@ flags.DEFINE_integer("embed_dim", default=256, help="FCNet embedding dim")
 flags.DEFINE_float("lr", default=0.0005, help="Initial learning rate")
 flags.DEFINE_float("lr_decay", default=0.98, help="LR decay per epoch")
 flags.DEFINE_integer("log_frequency", default=50, help="Log every N steps")
-flags.DEFINE_string("model_save_path", default=None,
+flags.DEFINE_string("model_save_path", default=str(config.MODEL_DIR),
                     help="Directory to save checkpoints")
 flags.DEFINE_integer("dataloader_num_workers", default=4, help="DataLoader workers")
 flags.DEFINE_integer("random_seed", default=42, help="Random seed")
 
 # wandb-specific
-flags.DEFINE_string("wandb_project", default="Global-Butterfly", help="W&B project")
-flags.DEFINE_string("wandb_entity",  default="moth-ai", help="W&B entity")
+flags.DEFINE_string("wandb_project", default=config.WANDB_PROJECT, help="W&B project")
+flags.DEFINE_string("wandb_entity",  default=config.WANDB_ENTITY, help="W&B entity")
 flags.DEFINE_string("wandb_run_name", default="geoprior-fcnet-global-12317cls-v1",
                     help="W&B run name")
 flags.DEFINE_bool("wandb_offline", default=False,
                   help="Run wandb in offline mode")
-
-flags.mark_flag_as_required("train_data_json")
-flags.mark_flag_as_required("model_save_path")
 
 
 def build_input_data(data_json, is_training, max_instances_per_class=0):

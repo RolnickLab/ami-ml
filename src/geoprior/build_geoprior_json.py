@@ -2,13 +2,13 @@
 """
 Build COCO-style train/val/test JSONs for geo-prior training.
 
-Source data:
-  - leps-ai.global_butterflies_2604.gbif_occurrence_location  (lat/lon/eventdate per gbif_id)
-  - leps-ai.global_butterflies_2604.gbif_inat_occurrences     (species_name per gbif_id)
-  - /mnt/melabbas/ami-ml/data/splits/{val,test}.csv           (vision-model val/test photo lists)
-  - /mnt/melabbas/data/geoprior/geoprior_categ_map.json       (species_name -> class_id, 12317 classes)
+Source data (all paths/identifiers come from src/geoprior/config.py / .env):
+  - <BQ_DATASET>.gbif_occurrence_location  (lat/lon/eventdate per gbif_id)
+  - <BQ_DATASET>.gbif_inat_occurrences     (species_name per gbif_id)
+  - $GEOPRIOR_SPLITS_DIR/{val,test}.csv    (vision-model val/test photo lists)
+  - frozen geoprior_categ_map.json         (species_name -> class_id, 12317 classes)
 
-Output JSONs (in /mnt/melabbas/data/geoprior/):
+Output JSONs (written to $GEOPRIOR_DATA_DIR):
   - train.json   (all geocoded - val/test - bad_coords - sparse_species)
   - val.json     (vision val_set photos intersected with geocoded data)
   - test.json    (vision test_set photos intersected with geocoded data)
@@ -18,21 +18,22 @@ Filters applied (per the create_moth_filtered_geoprior_json.ipynb precedent):
     - exclude any gbif_id in val.csv or test.csv
     - require non-NULL lat/lon/eventdate
     - drop lat OR lon values that appear > 1000 times (placeholder coords)
-    - drop species with <= 10 geocoded occurrences after the above filters
+    - drop species with <= MIN_OCC_PER_SPECIES geocoded occurrences
+      (default 0 = keep all species)
   val/test:
     - require non-NULL lat/lon/eventdate (only)
 """
 import json
 import time
-from pathlib import Path
 
 import pandas as pd
 from google.cloud import bigquery
 
+from src.geoprior import config
 
-SPLITS_DIR        = Path('/mnt/melabbas/ami-ml/data/splits')
-GEOPRIOR_DIR      = Path('/mnt/melabbas/data/geoprior')
-CATEG_MAP_PATH    = GEOPRIOR_DIR / 'geoprior_categ_map.json'   # species -> class_id (12317)
+SPLITS_DIR        = config.SPLITS_DIR
+GEOPRIOR_DIR      = config.DATA_DIR
+CATEG_MAP_PATH    = config.CATEG_MAP_PATH    # frozen species -> class_id (12317)
 SAME_COORD_THRESHOLD = 1000   # drop coord values appearing > this many times
 MIN_OCC_PER_SPECIES  = 0     # 0 disables the filter (keep all species)
 
@@ -55,15 +56,15 @@ def load_split_gbif_ids(csv_path):
 
 def fetch_all_geocoded(client):
     """Pull all valid geocoded occurrences with species_name."""
-    q = '''
+    q = f'''
     SELECT
       o.gbifID                              AS gbif_id,
       o.verbatimSpeciesScientificName       AS species_name,
       l.decimallatitude                     AS latitude,
       l.decimallongitude                    AS longitude,
       l.eventdate                           AS event_date
-    FROM `leps-ai.global_butterflies_2604.gbif_inat_occurrences` o
-    JOIN `leps-ai.global_butterflies_2604.gbif_occurrence_location` l
+    FROM `{config.TBL_OCCURRENCES}` o
+    JOIN `{config.TBL_LOCATION}` l
       ON l.gbif_id = o.gbifID
     WHERE l.decimallatitude  IS NOT NULL
       AND l.decimallongitude IS NOT NULL
@@ -127,7 +128,7 @@ def main():
 
     t('Fetching all geocoded occurrences from BQ', start)
     fetch_start = time.time()
-    client = bigquery.Client(project='leps-ai')
+    client = bigquery.Client(project=config.BQ_PROJECT)
     df, bytes_billed = fetch_all_geocoded(client)
     t(f'BQ fetch done. Rows: {len(df):,}. Bytes scanned: {bytes_billed/1e6:.1f} MB (~${bytes_billed/1e12*5:.4f})', fetch_start)
 

@@ -24,11 +24,11 @@ where the right answer is at rank 6+ — for that we'd need full inference
 import csv
 import json
 import os
-import sys
 import time
-from pathlib import Path
 
 import numpy as np
+
+from src.geoprior import config
 
 
 def load_categ_map(path):
@@ -187,16 +187,16 @@ def eval_split(split, csv_path, prior_dir, geoprior_categ_map, max_rows=None):
 
 
 def main():
-    geoprior_categ_map = load_categ_map('/mnt/melabbas/data/geoprior/geoprior_categ_map.json')
+    geoprior_categ_map = load_categ_map(config.CATEG_MAP_PATH)
     print(f'Loaded geoprior_categ_map: {len(geoprior_categ_map):,} species -> class_id')
 
     res_val  = eval_split('val',
-        '/mnt/melabbas/ami-ml/data/predictions/global_max1000img_512/val_predictions.csv',
-        '/mnt/melabbas/predictions/geoprior_v1/val',
+        str(config.CLF_VAL_PREDS),
+        str(config.GEOPRIOR_VAL_PREDS),
         geoprior_categ_map)
     res_test = eval_split('test',
-        '/mnt/melabbas/ami-ml/data/predictions/global_max1000img_512/test_predictions.csv',
-        '/mnt/melabbas/predictions/geoprior_v1/test',
+        str(config.CLF_TEST_PREDS),
+        str(config.GEOPRIOR_TEST_PREDS),
         geoprior_categ_map)
 
     print('\n===== SUMMARY =====')
