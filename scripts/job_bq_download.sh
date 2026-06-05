@@ -10,7 +10,7 @@
 #   sbatch --dependency=afterok:$DOWNLOAD_JOB job_bq_pack_squashfs.sh
 #
 #SBATCH --account=def-drolnick
-#SBATCH --job-name=bq_download
+#SBATCH --job-name=bq_dl_2605
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=64G
 #SBATCH --time=72:00:00
@@ -24,7 +24,7 @@ TASK_ID=${SLURM_ARRAY_TASK_ID}
 
 # Each job downloads its images into its own staging subdirectory
 # These are kept after the job ends (on Lustre) for the pack job to merge
-STAGING_BASE="/scratch/melabbas/bq_download_staging"
+STAGING_BASE="/scratch/melabbas/global_all_leps_2605"
 STAGING_DIR="${STAGING_BASE}/task_${TASK_ID}"
 
 echo "=== bq_download task=${TASK_ID}/${NUM_JOBS} started at $(date) ==="
@@ -42,7 +42,8 @@ python src/dataset_tools/bq_squashfs/download_images.py \
     --num-jobs     ${NUM_JOBS} \
     --task-id      ${TASK_ID} \
     --num-workers  32 \
-    --chunk-size   10000
+    --chunk-size   10000 \
+    --dataset      global_all_leps_2605
 
 EXIT_CODE=$?
 echo "=== bq_download task=${TASK_ID} finished at $(date) (exit=${EXIT_CODE}) ==="
