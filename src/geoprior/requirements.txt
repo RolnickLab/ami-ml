@@ -1,0 +1,23 @@
+# Geo-prior pipeline dependencies.
+# Install:  pip install -r src/geoprior/requirements.txt
+#
+# The pipeline has two stages with slightly different needs; this file is their
+# union. Lower bounds below; validated with the exact versions noted in comments.
+
+# --- Data build stage (BigQuery -> COCO-style JSON) ---
+google-cloud-bigquery>=3.40    # validated 3.41.0
+db-dtypes>=1.2                 # needed for TIMESTAMP -> pandas in to_dataframe()
+pyarrow>=16                    # validated 24.0.0
+
+# --- Training / prediction stage (FCNet) ---
+# NOTE: install the CUDA build of torch from the appropriate index for your
+# platform, e.g.  pip install torch --index-url https://download.pytorch.org/whl/cu124
+torch>=2.5                     # validated 2.5.1+cu124
+timm>=1.0                      # validated 1.0.27 (provides timm.utils.AverageMeter)
+wandb>=0.18                    # validated 0.26.1
+absl-py>=2.0                   # validated 2.4.0
+
+# --- Shared ---
+numpy>=1.25
+pandas>=2.1                    # build venv 2.3.3 / train venv 3.0.3 both work
+python-dotenv>=1.0             # loads src/geoprior/.env

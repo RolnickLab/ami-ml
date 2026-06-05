@@ -171,3 +171,6 @@ cython_debug/
 
 # Weights and Biases files
 wandb/
+
+# geo-prior model checkpoints
+*.pth
