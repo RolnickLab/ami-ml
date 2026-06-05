@@ -44,6 +44,7 @@ import pandas as pd
 import PIL
 import requests
 from PIL import Image
+from google.api_core import exceptions as google_exceptions
 from google.cloud import bigquery
 
 Image.MAX_IMAGE_PIXELS = None
@@ -56,6 +57,7 @@ _RETRY_STATUSES = {429, 500, 502, 503, 504}
 _MAX_RETRIES    = 5
 _BACKOFF_BASE   = 2.0   # seconds
 _BACKOFF_MAX    = 60.0  # seconds cap
+_MERGE_MAX_RETRIES = 10  # BQ MERGE serialization conflicts (concurrent tasks)
 
 # Warn if this many chunk sqfs files accumulate (pack job falling behind)
 _CHUNK_ACCUMULATION_WARN = 20
@@ -255,8 +257,7 @@ def merge_chunk_into_training_images(
     )
     client.load_table_from_dataframe(df, tmp_table, job_config=job_config).result()
 
-    try:
-        job = client.query(f"""
+    merge_sql = f"""
         MERGE `{training_table}` T
         USING `{tmp_table}` S
           ON T.dataset_source_uuid = S.dataset_source_uuid
@@ -266,9 +267,24 @@ def merge_chunk_into_training_images(
           T.image_height  = S.image_height,
           T.image_size    = S.image_size,
           T.corrupted     = S.corrupted
-        """)
-        job.result()
-        return job.dml_stats.updated_row_count
+        """
+    try:
+        # Concurrent MERGEs from parallel tasks can collide with
+        # "Could not serialize access ... due to concurrent update" (400).
+        # BQ docs recommend retrying — back off with jitter until a slot frees.
+        for attempt in range(_MERGE_MAX_RETRIES + 1):
+            try:
+                job = client.query(merge_sql)
+                job.result()
+                return job.dml_stats.updated_row_count
+            except google_exceptions.BadRequest as e:
+                if "serialize" not in str(e).lower() or attempt >= _MERGE_MAX_RETRIES:
+                    raise
+                delay = min(_BACKOFF_BASE * (2 ** attempt), _BACKOFF_MAX)
+                delay += random.uniform(0, delay * 0.5)
+                print(f"  MERGE serialization conflict — retry "
+                      f"{attempt+1}/{_MERGE_MAX_RETRIES} in {delay:.0f}s", flush=True)
+                time.sleep(delay)
     finally:
         client.delete_table(tmp_table, not_found_ok=True)
 
