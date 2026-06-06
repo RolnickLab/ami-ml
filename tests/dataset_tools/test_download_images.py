@@ -257,119 +257,93 @@ class TestPackChunkToSqfs:
         mock_run.assert_not_called()
 
 
-# ── merge_chunk_into_training_images ─────────────────────────────────────────
+# ── merge_downloads_into_training_images ─────────────────────────────────────
 
-class TestMergeChunkIntoTrainingImages:
+class TestMergeDownloadsIntoTrainingImages:
+    """The MERGE now runs once per run, sourced from the downloads table.
+
+    Cost rationale: a MERGE is billed mainly for scanning the *target* table
+    (~7 GB for global_all_leps_2605), so it must run once per run, not once per
+    chunk. These tests pin that contract: a single MERGE query, no per-chunk
+    temp tables, sourced from the downloads table, deduplicated per uuid.
+    """
 
     def _make_client(self, updated_count: int = 1) -> MagicMock:
         client = MagicMock()
-        client.load_table_from_dataframe.return_value.result.return_value = None
         job = MagicMock()
         job.dml_stats.updated_row_count = updated_count
         client.query.return_value = job
         return client
 
-    def test_empty_list_skips_merge(self):
-        """Completely empty results list → no BQ calls."""
-        client = self._make_client()
-        n = di.merge_chunk_into_training_images(client, [], "t", "d")
-        assert n == 0
+    def test_runs_single_merge_no_temp_table(self):
+        """One MERGE query, and no temp-table load/delete (the expensive per-chunk
+        pattern that re-scanned the whole target table)."""
+        client = self._make_client(updated_count=7)
+        n = di.merge_downloads_into_training_images(client, "t", "d")
+        assert n == 7
+        assert client.query.call_count == 1
         client.load_table_from_dataframe.assert_not_called()
+        client.delete_table.assert_not_called()
 
-    def test_downloaded_triggers_merge(self):
-        """downloaded rows → temp table load + MERGE + cleanup."""
-        client = self._make_client(updated_count=1)
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 100, "image_height": 80,
-                    "image_size": 5000, "corrupted": False}]
-        n = di.merge_chunk_into_training_images(client, results, "t", "d")
-        assert n == 1
-        assert client.load_table_from_dataframe.call_count == 1
-        assert client.query.call_count == 1
-        assert client.delete_table.call_count == 1
-
-    def test_corrupted_triggers_merge(self):
-        """corrupted rows → merged with fetch_status='corrupted'."""
-        client = self._make_client(updated_count=1)
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "corrupted",
-                    "image_width": None, "image_height": None,
-                    "image_size": None, "corrupted": True}]
-        n = di.merge_chunk_into_training_images(client, results, "t", "d")
-        assert n == 1
-        assert client.load_table_from_dataframe.call_count == 1
-
-    def test_failed_triggers_merge(self):
-        """failed rows (404/403/exhausted) → merged so fetch_status='failed' in
-        training_images. Permanent failures are excluded from future re-runs
-        via WHERE fetch_status='pending' without needing the LEFT JOIN."""
-        client = self._make_client(updated_count=1)
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "failed",
-                    "image_width": None, "image_height": None,
-                    "image_size": None, "corrupted": None}]
-        n = di.merge_chunk_into_training_images(client, results, "t", "d")
-        assert n == 1
-        assert client.load_table_from_dataframe.call_count == 1
-        assert client.query.call_count == 1
-        assert client.delete_table.call_count == 1
-
-    def test_all_three_statuses_merged_together(self):
-        """Mixed chunk — downloaded, corrupted, failed — all three trigger one MERGE."""
-        client = self._make_client(updated_count=3)
-        results = [
-            {"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-             "image_width": 100, "image_height": 80, "image_size": 5000, "corrupted": False},
-            {"dataset_source_uuid": "u2", "fetch_status": "corrupted",
-             "image_width": None, "image_height": None, "image_size": 500, "corrupted": True},
-            {"dataset_source_uuid": "u3", "fetch_status": "failed",
-             "image_width": None, "image_height": None, "image_size": None, "corrupted": None},
-        ]
-        n = di.merge_chunk_into_training_images(client, results, "t", "d")
-        assert n == 3
-        assert client.load_table_from_dataframe.call_count == 1  # one temp table for all 3
-        assert client.query.call_count == 1                       # one MERGE
-        assert client.delete_table.call_count == 1               # one cleanup
-
-    def test_failed_rows_included_in_temp_table(self):
-        """Verify the dataframe passed to BQ includes the failed row."""
-        import pandas as pd
+    def test_merge_sources_from_downloads_table(self):
+        """The MERGE reads its source from the downloads table (already populated
+        via free batch loads), not a freshly loaded temp table."""
         client = self._make_client()
-        captured_df = {}
+        di.merge_downloads_into_training_images(
+            client,
+            training_table="leps-ai.global_all_leps_2605.training_images",
+            downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
+        )
+        sql = client.query.call_args[0][0]
+        assert "MERGE `leps-ai.global_all_leps_2605.training_images`" in sql
+        assert "FROM `leps-ai.global_all_leps_2605.training_images_downloads`" in sql
 
-        def capture_load(df, table, **kwargs):
-            captured_df["data"] = df.copy()
-            return MagicMock(result=MagicMock(return_value=None))
+    def test_merge_deduplicates_source_by_uuid(self):
+        """The downloads table is append-only (and --force-redownload can add a
+        second row), so the source must collapse to one row per uuid."""
+        client = self._make_client()
+        di.merge_downloads_into_training_images(client, "t", "d")
+        sql = client.query.call_args[0][0]
+        assert "GROUP BY dataset_source_uuid" in sql
 
-        client.load_table_from_dataframe.side_effect = capture_load
+    def test_merge_condition_handles_null_fetch_status(self):
+        """MERGE must update rows where T.fetch_status IS NULL, not just 'pending'
+        — needed for global_all_leps_2605 whose initial state is NULL."""
+        client = self._make_client()
+        di.merge_downloads_into_training_images(
+            client,
+            training_table="leps-ai.global_all_leps_2605.training_images",
+            downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
+        )
+        sql = client.query.call_args[0][0]
+        assert "fetch_status IS NULL" in sql
+        assert "fetch_status = 'pending'" in sql
 
-        results = [
-            {"dataset_source_uuid": "ok",   "fetch_status": "downloaded",
-             "image_width": 64, "image_height": 48, "image_size": 1000, "corrupted": False},
-            {"dataset_source_uuid": "dead", "fetch_status": "failed",
-             "image_width": None, "image_height": None, "image_size": None, "corrupted": None},
-        ]
-        di.merge_chunk_into_training_images(client, results, "t", "d")
+    def test_merge_retries_on_serialization_conflict(self):
+        """Concurrent MERGEs can raise a 'serialize access' BadRequest; the
+        function backs off and retries rather than failing the run."""
+        from google.api_core import exceptions as google_exceptions
 
-        df = captured_df["data"]
-        assert len(df) == 2                               # both rows in temp table
-        statuses = set(df["fetch_status"].tolist())
-        assert "downloaded" in statuses
-        assert "failed" in statuses                       # failed row present
-
-    def test_temp_table_deleted_even_on_merge_failure(self):
-        """Temp table must be cleaned up even if the MERGE query fails."""
         client = MagicMock()
-        client.load_table_from_dataframe.return_value.result.return_value = None
-        client.query.side_effect = Exception("MERGE failed")
+        ok = MagicMock()
+        ok.dml_stats.updated_row_count = 3
+        client.query.side_effect = [
+            google_exceptions.BadRequest("Could not serialize access to table"),
+            ok,
+        ]
+        with patch("time.sleep"):
+            n = di.merge_downloads_into_training_images(client, "t", "d")
+        assert n == 3
+        assert client.query.call_count == 2
 
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 100, "image_height": 80,
-                    "image_size": 5000, "corrupted": False}]
+    def test_merge_reraises_non_serialization_error(self):
+        """A BadRequest that is not a serialization conflict must propagate."""
+        from google.api_core import exceptions as google_exceptions
 
-        with pytest.raises(Exception, match="MERGE failed"):
-            di.merge_chunk_into_training_images(
-                client, results, "training_table", "downloads_table"
-            )
-        client.delete_table.assert_called_once()
+        client = MagicMock()
+        client.query.side_effect = google_exceptions.BadRequest("syntax error")
+        with pytest.raises(google_exceptions.BadRequest, match="syntax error"):
+            di.merge_downloads_into_training_images(client, "t", "d")
 
 
 # ── get_pending_rows / MOD split ─────────────────────────────────────────────
@@ -600,38 +574,27 @@ class TestMultiTaskDistributionAndMerge:
         assert calls[1][0][1] == "downloads_table"
 
     def test_merge_from_two_tasks_updates_correct_rows(self):
-        """Each task's MERGE only touches its own rows — no cross-task collision."""
+        """Each task runs its own end-of-run MERGE; the WHERE fetch_status filter
+        keeps them from colliding. One MERGE query per task, no temp tables."""
         client = MagicMock()
-        client.load_table_from_dataframe.return_value.result.return_value = None
 
-        # task 0 merges even photo_ids
         job0 = MagicMock()
         job0.dml_stats.updated_row_count = 5
-        # task 1 merges odd photo_ids
         job1 = MagicMock()
         job1.dml_stats.updated_row_count = 5
         client.query.side_effect = [job0, job1]
 
-        task0_results = [{"dataset_source_uuid": f"uuid-{i}", "fetch_status": "downloaded",
-                          "image_width": 64, "image_height": 48,
-                          "image_size": 1000, "corrupted": False}
-                         for i in range(5)]
-        task1_results = [{"dataset_source_uuid": f"uuid-{i+5}", "fetch_status": "downloaded",
-                          "image_width": 64, "image_height": 48,
-                          "image_size": 1000, "corrupted": False}
-                         for i in range(5)]
-
-        n0 = di.merge_chunk_into_training_images(
-            client, task0_results, "training_table", "downloads_table"
+        n0 = di.merge_downloads_into_training_images(
+            client, "training_table", "downloads_table"
         )
-        n1 = di.merge_chunk_into_training_images(
-            client, task1_results, "training_table", "downloads_table"
+        n1 = di.merge_downloads_into_training_images(
+            client, "training_table", "downloads_table"
         )
 
         assert n0 == 5
         assert n1 == 5
         assert client.query.call_count == 2   # one MERGE per task
-        assert client.delete_table.call_count == 2  # temp table cleaned per task
+        client.delete_table.assert_not_called()  # no temp tables anymore
 
     def test_total_coverage_after_all_tasks_complete(self):
         """After all tasks finish, every image should be accounted for."""
@@ -720,17 +683,12 @@ class TestDatasetFlagAndNullFetchStatus:
         """MERGE SQL must allow updating rows where T.fetch_status IS NULL,
         not just 'pending' — needed for global_all_leps_2605 initial state."""
         client = MagicMock()
-        client.load_table_from_dataframe.return_value.result.return_value = None
         job = MagicMock()
         job.dml_stats.updated_row_count = 1
         client.query.return_value = job
 
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 64, "image_height": 48,
-                    "image_size": 1000, "corrupted": False}]
-
-        di.merge_chunk_into_training_images(
-            client, results,
+        di.merge_downloads_into_training_images(
+            client,
             training_table="leps-ai.global_all_leps_2605.training_images",
             downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
         )
@@ -739,49 +697,23 @@ class TestDatasetFlagAndNullFetchStatus:
         assert "fetch_status IS NULL" in sql
         assert "fetch_status = 'pending'" in sql
 
-    # ── tmp_table derived from training_table ─────────────────────────────────
+    # ── MERGE targets the dataset from the args, not a hardcoded one ───────────
 
-    def test_tmp_table_uses_same_dataset_as_training_table(self):
-        """Temp table for MERGE must be in the same dataset as training_table,
-        not hardcoded to global_butterflies_2604."""
+    def test_merge_targets_dataset_from_args(self):
+        """The MERGE must read and write the dataset passed in (global_all_leps_2605),
+        never the old hardcoded global_butterflies_2604."""
         client = MagicMock()
-        client.load_table_from_dataframe.return_value.result.return_value = None
         job = MagicMock()
         job.dml_stats.updated_row_count = 1
         client.query.return_value = job
 
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 64, "image_height": 48,
-                    "image_size": 1000, "corrupted": False}]
-
-        di.merge_chunk_into_training_images(
-            client, results,
+        di.merge_downloads_into_training_images(
+            client,
             training_table="leps-ai.global_all_leps_2605.training_images",
             downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
         )
 
-        # The temp table passed to load_table_from_dataframe must be in global_all_leps_2605
-        tmp_table_arg = client.load_table_from_dataframe.call_args[0][1]
-        assert tmp_table_arg.startswith("leps-ai.global_all_leps_2605.")
-        assert "global_butterflies_2604" not in tmp_table_arg
-
-    def test_tmp_table_not_in_wrong_dataset_when_using_new_dataset(self):
-        """Regression: old code used BQ_DATASET module constant — ensure it no longer does."""
-        client = MagicMock()
-        client.load_table_from_dataframe.return_value.result.return_value = None
-        job = MagicMock()
-        job.dml_stats.updated_row_count = 1
-        client.query.return_value = job
-
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 64, "image_height": 48,
-                    "image_size": 1000, "corrupted": False}]
-
-        di.merge_chunk_into_training_images(
-            client, results,
-            training_table="leps-ai.global_all_leps_2605.training_images",
-            downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
-        )
-
-        tmp_table_arg = client.load_table_from_dataframe.call_args[0][1]
-        assert "global_butterflies_2604" not in tmp_table_arg  # must not leak old dataset
+        sql = client.query.call_args[0][0]
+        assert "leps-ai.global_all_leps_2605.training_images" in sql
+        assert "leps-ai.global_all_leps_2605.training_images_downloads" in sql
+        assert "global_butterflies_2604" not in sql  # must not leak old dataset
