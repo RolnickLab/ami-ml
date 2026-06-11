@@ -53,6 +53,8 @@ ipdb = "^0.13.13"
 python-devtools = "^2"
 ipykernel = "^6.29.4"
 pytest = "^8.1.1"
+google-cloud-bigquery = "^3.0"
+pandas-gbq = "^0.19"
 
 [tool.poetry.scripts]
 ami-dataset = "src.dataset_tools.cli:cli"
