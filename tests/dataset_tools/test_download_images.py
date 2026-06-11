@@ -14,8 +14,8 @@ import requests
 
 import src.dataset_tools.bq_squashfs.download_images as di
 
-
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def make_response(status_code: int, content: bytes = b"\xff\xd8\xff\xe0JFIF"):
     """Build a minimal mock HTTP response."""
@@ -40,13 +40,15 @@ def make_mock_session(*responses):
 
 # ── _fetch_with_retry ─────────────────────────────────────────────────────────
 
+
 class TestFetchWithRetry:
 
     def test_success_on_first_attempt(self, tmp_path):
         dest = tmp_path / "img.jpg"
         session = make_mock_session(make_response(200, b"IMAGE"))
-        with patch.object(di, "_get_session", return_value=session), \
-             patch("time.sleep"):
+        with patch.object(di, "_get_session", return_value=session), patch(
+            "time.sleep"
+        ):
             di._fetch_with_retry("http://example.com/img.jpg", dest)
         assert dest.read_bytes() == b"IMAGE"
         assert session.get.call_count == 1
@@ -58,8 +60,9 @@ class TestFetchWithRetry:
             make_response(429),
             make_response(200, b"IMAGE"),
         )
-        with patch.object(di, "_get_session", return_value=session), \
-             patch("time.sleep"):
+        with patch.object(di, "_get_session", return_value=session), patch(
+            "time.sleep"
+        ):
             di._fetch_with_retry("http://example.com/img.jpg", dest)
         assert session.get.call_count == 3
         assert dest.read_bytes() == b"IMAGE"
@@ -70,18 +73,22 @@ class TestFetchWithRetry:
             make_response(503),
             make_response(200, b"IMAGE"),
         )
-        with patch.object(di, "_get_session", return_value=session), \
-             patch("time.sleep"):
+        with patch.object(di, "_get_session", return_value=session), patch(
+            "time.sleep"
+        ):
             di._fetch_with_retry("http://example.com/img.jpg", dest)
         assert session.get.call_count == 2
 
     def test_connection_error_errno16_retries(self, tmp_path):
         """Errno 16 (device/resource busy — too many sockets) retries."""
         dest = tmp_path / "img.jpg"
-        errno16 = requests.exceptions.ConnectionError("[Errno 16] Device or resource busy")
+        errno16 = requests.exceptions.ConnectionError(
+            "[Errno 16] Device or resource busy"
+        )
         session = make_mock_session(errno16, errno16, make_response(200, b"IMAGE"))
-        with patch.object(di, "_get_session", return_value=session), \
-             patch("time.sleep"):
+        with patch.object(di, "_get_session", return_value=session), patch(
+            "time.sleep"
+        ):
             di._fetch_with_retry("http://example.com/img.jpg", dest)
         assert session.get.call_count == 3
 
@@ -91,8 +98,9 @@ class TestFetchWithRetry:
             requests.exceptions.Timeout(),
             make_response(200, b"IMAGE"),
         )
-        with patch.object(di, "_get_session", return_value=session), \
-             patch("time.sleep"):
+        with patch.object(di, "_get_session", return_value=session), patch(
+            "time.sleep"
+        ):
             di._fetch_with_retry("http://example.com/img.jpg", dest)
         assert session.get.call_count == 2
 
@@ -100,9 +108,9 @@ class TestFetchWithRetry:
         """404 is not in RETRY_STATUSES — raises without retrying."""
         dest = tmp_path / "img.jpg"
         session = make_mock_session(make_response(404))
-        with patch.object(di, "_get_session", return_value=session), \
-             patch("time.sleep"), \
-             pytest.raises(requests.exceptions.HTTPError):
+        with patch.object(di, "_get_session", return_value=session), patch(
+            "time.sleep"
+        ), pytest.raises(requests.exceptions.HTTPError):
             di._fetch_with_retry("http://example.com/img.jpg", dest)
         assert session.get.call_count == 1
 
@@ -111,22 +119,25 @@ class TestFetchWithRetry:
         dest = tmp_path / "img.jpg"
         err = requests.exceptions.ConnectionError("connection refused")
         session = make_mock_session(*([err] * (di._MAX_RETRIES + 1)))
-        with patch.object(di, "_get_session", return_value=session), \
-             patch("time.sleep"), \
-             pytest.raises(requests.exceptions.ConnectionError):
+        with patch.object(di, "_get_session", return_value=session), patch(
+            "time.sleep"
+        ), pytest.raises(requests.exceptions.ConnectionError):
             di._fetch_with_retry("http://example.com/img.jpg", dest)
         assert session.get.call_count == di._MAX_RETRIES + 1
 
     def test_exhausted_retries_on_timeout_raises(self, tmp_path):
         dest = tmp_path / "img.jpg"
-        session = make_mock_session(*([requests.exceptions.Timeout()] * (di._MAX_RETRIES + 1)))
-        with patch.object(di, "_get_session", return_value=session), \
-             patch("time.sleep"), \
-             pytest.raises(requests.exceptions.Timeout):
+        session = make_mock_session(
+            *([requests.exceptions.Timeout()] * (di._MAX_RETRIES + 1))
+        )
+        with patch.object(di, "_get_session", return_value=session), patch(
+            "time.sleep"
+        ), pytest.raises(requests.exceptions.Timeout):
             di._fetch_with_retry("http://example.com/img.jpg", dest)
 
 
 # ── download_and_verify ───────────────────────────────────────────────────────
+
 
 class TestDownloadAndVerify:
 
@@ -138,16 +149,20 @@ class TestDownloadAndVerify:
 
     def test_success(self, tmp_path):
         """Valid JPEG → fetch_status=downloaded, dimensions populated."""
-        from PIL import Image
         import io
+
+        from PIL import Image
+
         buf = io.BytesIO()
         Image.new("RGB", (64, 48)).save(buf, format="JPEG")
         jpeg_bytes = buf.getvalue()
 
         with patch.object(di, "_fetch_with_retry") as mock_fetch:
+
             def write_file(url, dest):
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(jpeg_bytes)
+
             mock_fetch.side_effect = write_file
 
             result = di.download_and_verify(self.ROW, tmp_path)
@@ -160,8 +175,9 @@ class TestDownloadAndVerify:
 
     def test_network_failure_recorded_as_failed(self, tmp_path):
         """Network error → fetch_status=failed, no image on disk."""
-        with patch.object(di, "_fetch_with_retry",
-                          side_effect=Exception("connection refused")):
+        with patch.object(
+            di, "_fetch_with_retry", side_effect=Exception("connection refused")
+        ):
             result = di.download_and_verify(self.ROW, tmp_path)
 
         assert result["fetch_status"] == "failed"
@@ -170,9 +186,11 @@ class TestDownloadAndVerify:
     def test_corrupted_image_recorded_as_corrupted(self, tmp_path):
         """Truncated/invalid image bytes → fetch_status=corrupted."""
         with patch.object(di, "_fetch_with_retry") as mock_fetch:
+
             def write_garbage(url, dest):
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(b"not an image at all")
+
             mock_fetch.side_effect = write_garbage
 
             result = di.download_and_verify(self.ROW, tmp_path)
@@ -184,11 +202,18 @@ class TestDownloadAndVerify:
 
 # ── write_results_to_bq ───────────────────────────────────────────────────────
 
+
 class TestWriteResultsToBq:
 
     RESULTS = [
-        {"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-         "image_width": 100, "image_height": 80, "image_size": 5000, "corrupted": False},
+        {
+            "dataset_source_uuid": "u1",
+            "fetch_status": "downloaded",
+            "image_width": 100,
+            "image_height": 80,
+            "image_size": 5000,
+            "corrupted": False,
+        },
     ]
 
     def test_success(self):
@@ -218,6 +243,7 @@ class TestWriteResultsToBq:
 
 
 # ── pack_chunk_to_sqfs ────────────────────────────────────────────────────────
+
 
 class TestPackChunkToSqfs:
 
@@ -259,6 +285,7 @@ class TestPackChunkToSqfs:
 
 # ── merge_chunk_into_training_images ─────────────────────────────────────────
 
+
 class TestMergeChunkIntoTrainingImages:
 
     def _make_client(self, updated_count: int = 1) -> MagicMock:
@@ -279,9 +306,16 @@ class TestMergeChunkIntoTrainingImages:
     def test_downloaded_triggers_merge(self):
         """downloaded rows → temp table load + MERGE + cleanup."""
         client = self._make_client(updated_count=1)
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 100, "image_height": 80,
-                    "image_size": 5000, "corrupted": False}]
+        results = [
+            {
+                "dataset_source_uuid": "u1",
+                "fetch_status": "downloaded",
+                "image_width": 100,
+                "image_height": 80,
+                "image_size": 5000,
+                "corrupted": False,
+            }
+        ]
         n = di.merge_chunk_into_training_images(client, results, "t", "d")
         assert n == 1
         assert client.load_table_from_dataframe.call_count == 1
@@ -291,9 +325,16 @@ class TestMergeChunkIntoTrainingImages:
     def test_corrupted_triggers_merge(self):
         """corrupted rows → merged with fetch_status='corrupted'."""
         client = self._make_client(updated_count=1)
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "corrupted",
-                    "image_width": None, "image_height": None,
-                    "image_size": None, "corrupted": True}]
+        results = [
+            {
+                "dataset_source_uuid": "u1",
+                "fetch_status": "corrupted",
+                "image_width": None,
+                "image_height": None,
+                "image_size": None,
+                "corrupted": True,
+            }
+        ]
         n = di.merge_chunk_into_training_images(client, results, "t", "d")
         assert n == 1
         assert client.load_table_from_dataframe.call_count == 1
@@ -303,9 +344,16 @@ class TestMergeChunkIntoTrainingImages:
         training_images. Permanent failures are excluded from future re-runs
         via WHERE fetch_status='pending' without needing the LEFT JOIN."""
         client = self._make_client(updated_count=1)
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "failed",
-                    "image_width": None, "image_height": None,
-                    "image_size": None, "corrupted": None}]
+        results = [
+            {
+                "dataset_source_uuid": "u1",
+                "fetch_status": "failed",
+                "image_width": None,
+                "image_height": None,
+                "image_size": None,
+                "corrupted": None,
+            }
+        ]
         n = di.merge_chunk_into_training_images(client, results, "t", "d")
         assert n == 1
         assert client.load_table_from_dataframe.call_count == 1
@@ -316,22 +364,43 @@ class TestMergeChunkIntoTrainingImages:
         """Mixed chunk — downloaded, corrupted, failed — all three trigger one MERGE."""
         client = self._make_client(updated_count=3)
         results = [
-            {"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-             "image_width": 100, "image_height": 80, "image_size": 5000, "corrupted": False},
-            {"dataset_source_uuid": "u2", "fetch_status": "corrupted",
-             "image_width": None, "image_height": None, "image_size": 500, "corrupted": True},
-            {"dataset_source_uuid": "u3", "fetch_status": "failed",
-             "image_width": None, "image_height": None, "image_size": None, "corrupted": None},
+            {
+                "dataset_source_uuid": "u1",
+                "fetch_status": "downloaded",
+                "image_width": 100,
+                "image_height": 80,
+                "image_size": 5000,
+                "corrupted": False,
+            },
+            {
+                "dataset_source_uuid": "u2",
+                "fetch_status": "corrupted",
+                "image_width": None,
+                "image_height": None,
+                "image_size": 500,
+                "corrupted": True,
+            },
+            {
+                "dataset_source_uuid": "u3",
+                "fetch_status": "failed",
+                "image_width": None,
+                "image_height": None,
+                "image_size": None,
+                "corrupted": None,
+            },
         ]
         n = di.merge_chunk_into_training_images(client, results, "t", "d")
         assert n == 3
-        assert client.load_table_from_dataframe.call_count == 1  # one temp table for all 3
-        assert client.query.call_count == 1                       # one MERGE
-        assert client.delete_table.call_count == 1               # one cleanup
+        assert (
+            client.load_table_from_dataframe.call_count == 1
+        )  # one temp table for all 3
+        assert client.query.call_count == 1  # one MERGE
+        assert client.delete_table.call_count == 1  # one cleanup
 
     def test_failed_rows_included_in_temp_table(self):
         """Verify the dataframe passed to BQ includes the failed row."""
         import pandas as pd
+
         client = self._make_client()
         captured_df = {}
 
@@ -342,18 +411,30 @@ class TestMergeChunkIntoTrainingImages:
         client.load_table_from_dataframe.side_effect = capture_load
 
         results = [
-            {"dataset_source_uuid": "ok",   "fetch_status": "downloaded",
-             "image_width": 64, "image_height": 48, "image_size": 1000, "corrupted": False},
-            {"dataset_source_uuid": "dead", "fetch_status": "failed",
-             "image_width": None, "image_height": None, "image_size": None, "corrupted": None},
+            {
+                "dataset_source_uuid": "ok",
+                "fetch_status": "downloaded",
+                "image_width": 64,
+                "image_height": 48,
+                "image_size": 1000,
+                "corrupted": False,
+            },
+            {
+                "dataset_source_uuid": "dead",
+                "fetch_status": "failed",
+                "image_width": None,
+                "image_height": None,
+                "image_size": None,
+                "corrupted": None,
+            },
         ]
         di.merge_chunk_into_training_images(client, results, "t", "d")
 
         df = captured_df["data"]
-        assert len(df) == 2                               # both rows in temp table
+        assert len(df) == 2  # both rows in temp table
         statuses = set(df["fetch_status"].tolist())
         assert "downloaded" in statuses
-        assert "failed" in statuses                       # failed row present
+        assert "failed" in statuses  # failed row present
 
     def test_temp_table_deleted_even_on_merge_failure(self):
         """Temp table must be cleaned up even if the MERGE query fails."""
@@ -361,9 +442,16 @@ class TestMergeChunkIntoTrainingImages:
         client.load_table_from_dataframe.return_value.result.return_value = None
         client.query.side_effect = Exception("MERGE failed")
 
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 100, "image_height": 80,
-                    "image_size": 5000, "corrupted": False}]
+        results = [
+            {
+                "dataset_source_uuid": "u1",
+                "fetch_status": "downloaded",
+                "image_width": 100,
+                "image_height": 80,
+                "image_size": 5000,
+                "corrupted": False,
+            }
+        ]
 
         with pytest.raises(Exception, match="MERGE failed"):
             di.merge_chunk_into_training_images(
@@ -374,19 +462,32 @@ class TestMergeChunkIntoTrainingImages:
 
 # ── get_pending_rows / MOD split ─────────────────────────────────────────────
 
+
 class TestModSplit:
     """Verify that num_jobs/task_id partitioning is correct and complete."""
 
-    def _make_client(self, photo_ids: list[int], num_jobs: int, task_id: int) -> MagicMock:
+    def _make_client(
+        self, photo_ids: list[int], num_jobs: int, task_id: int
+    ) -> MagicMock:
         """Return a mock BQ client that filters photo_ids by MOD split."""
         matching = [
-            {"dataset_source_uuid": f"uuid-{p}", "absolute_url": f"http://x/{p}",
-             "relative_local_path": f"000/{p}.jpg"}
-            for p in photo_ids if p % num_jobs == task_id
+            {
+                "dataset_source_uuid": f"uuid-{p}",
+                "absolute_url": f"http://x/{p}",
+                "relative_local_path": f"000/{p}.jpg",
+            }
+            for p in photo_ids
+            if p % num_jobs == task_id
         ]
         client = MagicMock()
         client.query.return_value.result.return_value = [
-            MagicMock(**{k: v for k, v in row.items()}, **{"__iter__": lambda self: iter(row.items()), "keys": lambda self: row.keys()})
+            MagicMock(
+                **{k: v for k, v in row.items()},
+                **{
+                    "__iter__": lambda self: iter(row.items()),
+                    "keys": lambda self: row.keys(),
+                },
+            )
             for row in matching
         ]
         # Simpler: just return dicts directly via side_effect
@@ -421,7 +522,7 @@ class TestModSplit:
         """Task 3 of 10 should only see photo_ids ending in 3."""
         photo_ids = list(range(50))
         expected = [p for p in photo_ids if p % 10 == 3]  # 3, 13, 23, 33, 43
-        actual   = [p for p in photo_ids if p % 10 == 3]
+        actual = [p for p in photo_ids if p % 10 == 3]
         assert actual == expected
         assert all(p % 10 == 3 for p in actual)
 
@@ -505,6 +606,7 @@ class TestModSplit:
 
 # ── Multi-task distribution and merge ────────────────────────────────────────
 
+
 class TestMultiTaskDistributionAndMerge:
     """
     Verify correct behaviour when multiple tasks run in parallel:
@@ -514,13 +616,12 @@ class TestMultiTaskDistributionAndMerge:
       - training_images MERGE is correct when multiple tasks write concurrently
     """
 
-    PHOTO_IDS = list(range(50))   # simulate 50 images
+    PHOTO_IDS = list(range(50))  # simulate 50 images
 
     def _partition(self, num_jobs: int) -> dict[int, list[int]]:
         """Return {task_id: [photo_ids]} for all tasks."""
         return {
-            t: [p for p in self.PHOTO_IDS if p % num_jobs == t]
-            for t in range(num_jobs)
+            t: [p for p in self.PHOTO_IDS if p % num_jobs == t] for t in range(num_jobs)
         }
 
     # ── partitioning ──────────────────────────────────────────────────────────
@@ -555,11 +656,22 @@ class TestMultiTaskDistributionAndMerge:
 
     def test_non_sequential_photo_ids_still_partition_correctly(self):
         """Real photo_ids from iNat are large non-sequential ints — MOD still works."""
-        real_ids = [487851, 7047265, 8233026, 8427425, 10239192,
-                    17327318, 21463254, 27648248, 36757555, 41676327]
+        real_ids = [
+            487851,
+            7047265,
+            8233026,
+            8427425,
+            10239192,
+            17327318,
+            21463254,
+            27648248,
+            36757555,
+            41676327,
+        ]
         for num_jobs in [2, 5, 10]:
-            parts = {t: [p for p in real_ids if p % num_jobs == t]
-                     for t in range(num_jobs)}
+            parts = {
+                t: [p for p in real_ids if p % num_jobs == t] for t in range(num_jobs)
+            }
             combined = [p for task in parts.values() for p in task]
             assert sorted(combined) == sorted(real_ids)
 
@@ -579,15 +691,29 @@ class TestMultiTaskDistributionAndMerge:
         client = MagicMock()
         client.load_table_from_dataframe.return_value.result.return_value = None
 
-        task0_results = [{"dataset_source_uuid": f"uuid-{p}", "fetch_status": "downloaded",
-                          "image_width": 100, "image_height": 80,
-                          "image_size": 5000, "corrupted": False}
-                         for p in range(0, 10, 2)]   # even photo_ids
+        task0_results = [
+            {
+                "dataset_source_uuid": f"uuid-{p}",
+                "fetch_status": "downloaded",
+                "image_width": 100,
+                "image_height": 80,
+                "image_size": 5000,
+                "corrupted": False,
+            }
+            for p in range(0, 10, 2)
+        ]  # even photo_ids
 
-        task1_results = [{"dataset_source_uuid": f"uuid-{p}", "fetch_status": "downloaded",
-                          "image_width": 100, "image_height": 80,
-                          "image_size": 5000, "corrupted": False}
-                         for p in range(1, 10, 2)]   # odd photo_ids
+        task1_results = [
+            {
+                "dataset_source_uuid": f"uuid-{p}",
+                "fetch_status": "downloaded",
+                "image_width": 100,
+                "image_height": 80,
+                "image_size": 5000,
+                "corrupted": False,
+            }
+            for p in range(1, 10, 2)
+        ]  # odd photo_ids
 
         # both tasks write to the same table — no conflict because WRITE_APPEND
         di.write_results_to_bq(client, task0_results, "downloads_table")
@@ -612,14 +738,28 @@ class TestMultiTaskDistributionAndMerge:
         job1.dml_stats.updated_row_count = 5
         client.query.side_effect = [job0, job1]
 
-        task0_results = [{"dataset_source_uuid": f"uuid-{i}", "fetch_status": "downloaded",
-                          "image_width": 64, "image_height": 48,
-                          "image_size": 1000, "corrupted": False}
-                         for i in range(5)]
-        task1_results = [{"dataset_source_uuid": f"uuid-{i+5}", "fetch_status": "downloaded",
-                          "image_width": 64, "image_height": 48,
-                          "image_size": 1000, "corrupted": False}
-                         for i in range(5)]
+        task0_results = [
+            {
+                "dataset_source_uuid": f"uuid-{i}",
+                "fetch_status": "downloaded",
+                "image_width": 64,
+                "image_height": 48,
+                "image_size": 1000,
+                "corrupted": False,
+            }
+            for i in range(5)
+        ]
+        task1_results = [
+            {
+                "dataset_source_uuid": f"uuid-{i+5}",
+                "fetch_status": "downloaded",
+                "image_width": 64,
+                "image_height": 48,
+                "image_size": 1000,
+                "corrupted": False,
+            }
+            for i in range(5)
+        ]
 
         n0 = di.merge_chunk_into_training_images(
             client, task0_results, "training_table", "downloads_table"
@@ -630,7 +770,7 @@ class TestMultiTaskDistributionAndMerge:
 
         assert n0 == 5
         assert n1 == 5
-        assert client.query.call_count == 2   # one MERGE per task
+        assert client.query.call_count == 2  # one MERGE per task
         assert client.delete_table.call_count == 2  # temp table cleaned per task
 
     def test_total_coverage_after_all_tasks_complete(self):
@@ -648,6 +788,7 @@ class TestMultiTaskDistributionAndMerge:
 
 # ── warn_chunk_accumulation ───────────────────────────────────────────────────
 
+
 class TestWarnChunkAccumulation:
 
     def test_no_warning_below_threshold(self, tmp_path, capsys):
@@ -664,6 +805,7 @@ class TestWarnChunkAccumulation:
 
 
 # ── --dataset flag and NULL fetch_status handling ─────────────────────────────
+
 
 class TestDatasetFlagAndNullFetchStatus:
     """Tests for --dataset CLI flag and NULL fetch_status support (global_all_leps_2605)."""
@@ -725,12 +867,20 @@ class TestDatasetFlagAndNullFetchStatus:
         job.dml_stats.updated_row_count = 1
         client.query.return_value = job
 
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 64, "image_height": 48,
-                    "image_size": 1000, "corrupted": False}]
+        results = [
+            {
+                "dataset_source_uuid": "u1",
+                "fetch_status": "downloaded",
+                "image_width": 64,
+                "image_height": 48,
+                "image_size": 1000,
+                "corrupted": False,
+            }
+        ]
 
         di.merge_chunk_into_training_images(
-            client, results,
+            client,
+            results,
             training_table="leps-ai.global_all_leps_2605.training_images",
             downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
         )
@@ -750,12 +900,20 @@ class TestDatasetFlagAndNullFetchStatus:
         job.dml_stats.updated_row_count = 1
         client.query.return_value = job
 
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 64, "image_height": 48,
-                    "image_size": 1000, "corrupted": False}]
+        results = [
+            {
+                "dataset_source_uuid": "u1",
+                "fetch_status": "downloaded",
+                "image_width": 64,
+                "image_height": 48,
+                "image_size": 1000,
+                "corrupted": False,
+            }
+        ]
 
         di.merge_chunk_into_training_images(
-            client, results,
+            client,
+            results,
             training_table="leps-ai.global_all_leps_2605.training_images",
             downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
         )
@@ -773,15 +931,25 @@ class TestDatasetFlagAndNullFetchStatus:
         job.dml_stats.updated_row_count = 1
         client.query.return_value = job
 
-        results = [{"dataset_source_uuid": "u1", "fetch_status": "downloaded",
-                    "image_width": 64, "image_height": 48,
-                    "image_size": 1000, "corrupted": False}]
+        results = [
+            {
+                "dataset_source_uuid": "u1",
+                "fetch_status": "downloaded",
+                "image_width": 64,
+                "image_height": 48,
+                "image_size": 1000,
+                "corrupted": False,
+            }
+        ]
 
         di.merge_chunk_into_training_images(
-            client, results,
+            client,
+            results,
             training_table="leps-ai.global_all_leps_2605.training_images",
             downloads_table="leps-ai.global_all_leps_2605.training_images_downloads",
         )
 
         tmp_table_arg = client.load_table_from_dataframe.call_args[0][1]
-        assert "global_butterflies_2604" not in tmp_table_arg  # must not leak old dataset
+        assert (
+            "global_butterflies_2604" not in tmp_table_arg
+        )  # must not leak old dataset

@@ -17,12 +17,11 @@ from unittest.mock import create_autospec
 
 import pandas as pd
 import pytest
+from google.cloud import bigquery
 from PIL import Image
 
-from google.cloud import bigquery
-
-
 # ── BQ client ─────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def mock_bq_client():
@@ -48,6 +47,7 @@ def mock_bq_client():
 
 # ── Small CSV dataset ─────────────────────────────────────────────────────────
 
+
 def _make_small_df() -> pd.DataFrame:
     """
     5 species × 10 images = 50 rows.
@@ -59,26 +59,28 @@ def _make_small_df() -> pd.DataFrame:
       - one species has exactly 5 images (min_instances boundary)
     """
     species = [
-        ("Danaus plexippus",   1001, 101),
-        ("Vanessa atalanta",   1002, 102),
-        ("Papilio machaon",    1003, 103),
-        ("Colias croceus",     1004, 104),
-        ("Pieris brassicae",   1005, 105),
+        ("Danaus plexippus", 1001, 101),
+        ("Vanessa atalanta", 1002, 102),
+        ("Papilio machaon", 1003, 103),
+        ("Colias croceus", 1004, 104),
+        ("Pieris brassicae", 1005, 105),
     ]
     rows = []
     photo_id = 0
     for sp_name, taxon_id, base_gbif in species:
         for i in range(10):
-            gbif_id = base_gbif + (i // 2)   # 2 images share a gbif_id
-            rows.append({
-                "photo_id":            photo_id,
-                "gbif_id":             gbif_id,
-                "inat_taxon_id":       taxon_id,
-                "species_name":        sp_name,
-                "dataset_source_uuid": f"uuid-{photo_id:04d}",
-                "relative_local_path": f"{photo_id % 256:03d}/{photo_id:06d}.jpg",
-                "absolute_url":        f"https://inaturalist.org/photos/{photo_id}/original.jpg",
-            })
+            gbif_id = base_gbif + (i // 2)  # 2 images share a gbif_id
+            rows.append(
+                {
+                    "photo_id": photo_id,
+                    "gbif_id": gbif_id,
+                    "inat_taxon_id": taxon_id,
+                    "species_name": sp_name,
+                    "dataset_source_uuid": f"uuid-{photo_id:04d}",
+                    "relative_local_path": f"{photo_id % 256:03d}/{photo_id:06d}.jpg",
+                    "absolute_url": f"https://inaturalist.org/photos/{photo_id}/original.jpg",
+                }
+            )
             photo_id += 1
     return pd.DataFrame(rows)
 
@@ -99,6 +101,7 @@ def small_csv(tmp_path) -> Path:
 
 # ── Small SquashFS ────────────────────────────────────────────────────────────
 
+
 def _build_small_sqfs(root: Path) -> Path:
     """
     Create a small sqfs with 10 PIL-generated JPEGs.
@@ -115,9 +118,18 @@ def _build_small_sqfs(root: Path) -> Path:
 
     sqfs_path = root / "test_fixture.sqfs"
     result = subprocess.run(
-        ["mksquashfs", str(img_dir), str(sqfs_path),
-         "-noappend", "-no-xattrs", "-comp", "zstd",
-         "-Xcompression-level", "1", "-quiet"],
+        [
+            "mksquashfs",
+            str(img_dir),
+            str(sqfs_path),
+            "-noappend",
+            "-no-xattrs",
+            "-comp",
+            "zstd",
+            "-Xcompression-level",
+            "1",
+            "-quiet",
+        ],
         capture_output=True,
     )
     if result.returncode != 0:
@@ -136,6 +148,7 @@ def small_sqfs(tmp_path_factory) -> Path:
 
 
 # ── SQL file ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def sample_sql_file(tmp_path) -> Path:

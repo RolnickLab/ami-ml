@@ -19,8 +19,8 @@ import pytest
 
 import src.dataset_tools.bq_squashfs.merge_sqfs_chunks as sct
 
-
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def make_chunk_sqfs(staging_dir: Path, chunk_num: int) -> Path:
     """Create a dummy chunk_NNNN.sqfs file (content doesn't matter — squashfuse is mocked)."""
@@ -47,6 +47,7 @@ def read_tar_from_bytes(data: bytes) -> list[str]:
 
 # ── stream_dir_to_tar ─────────────────────────────────────────────────────────
 
+
 class TestStreamDirToTar:
 
     def test_files_added_with_relative_paths(self, tmp_path):
@@ -66,9 +67,9 @@ class TestStreamDirToTar:
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w:") as tf:
             count = sct.stream_dir_to_tar(tf, str(mnt))
-        assert count == 1   # only the .jpg, not the dir
+        assert count == 1  # only the .jpg, not the dir
         members = read_tar_from_bytes(buf.getvalue())
-        assert "000" in members       # dir entry
+        assert "000" in members  # dir entry
         assert "000/img.jpg" in members  # file entry
 
     def test_empty_mount_dir_returns_zero(self, tmp_path):
@@ -97,6 +98,7 @@ class TestStreamDirToTar:
 
 
 # ── squashfuse_mount / unmount ────────────────────────────────────────────────
+
 
 class TestSquashfuseMount:
 
@@ -128,6 +130,7 @@ class TestSquashfuseMount:
 
 # ── main: no chunks ───────────────────────────────────────────────────────────
 
+
 class TestNoChunks:
 
     def test_empty_staging_dir_exits_with_error(self, tmp_path, capsys):
@@ -149,6 +152,7 @@ class TestNoChunks:
 
 # ── main: dry run ─────────────────────────────────────────────────────────────
 
+
 class TestDryRun:
 
     def test_dry_run_lists_chunks_no_streaming(self, tmp_path, capsys):
@@ -158,8 +162,9 @@ class TestDryRun:
         c1 = make_chunk_sqfs(staging, 1)
         c2 = make_chunk_sqfs(staging, 2)
 
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging), "--dry-run"]), \
-             patch.object(sct, "squashfuse_mount") as mock_mount:
+        with patch(
+            "sys.argv", ["merge_sqfs_chunks.py", str(staging), "--dry-run"]
+        ), patch.object(sct, "squashfuse_mount") as mock_mount:
             sct.main()
 
         mock_mount.assert_not_called()  # no mounting in dry run
@@ -185,13 +190,17 @@ class TestDryRun:
 
 # ── main: streaming ───────────────────────────────────────────────────────────
 
+
 class TestStreaming:
 
-    def _run_stream(self, staging: Path, extra_args: list[str] = []) -> tuple[bytes, str]:
+    def _run_stream(
+        self, staging: Path, extra_args: list[str] = []
+    ) -> tuple[bytes, str]:
         """Run main(), capture stdout bytes and stderr text."""
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)] + extra_args), \
-             patch("sys.stdout") as mock_stdout:
+        with patch(
+            "sys.argv", ["merge_sqfs_chunks.py", str(staging)] + extra_args
+        ), patch("sys.stdout") as mock_stdout:
             mock_stdout.buffer = stdout_buf
             sct.main()
         return stdout_buf.getvalue(), ""
@@ -209,14 +218,21 @@ class TestStreaming:
         (fake_mnt / "000" / "img.jpg").write_bytes(b"JPEG")
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
-             patch("sys.stdout") as mock_stdout, \
-             patch.object(sct, "squashfuse_mount", return_value=True), \
-             patch.object(sct, "squashfuse_unmount"), \
-             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
-             patch("os.makedirs"), \
-             patch("os.rmdir"), \
-             patch.object(sct, "stream_dir_to_tar", return_value=1) as mock_stream:
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), patch(
+            "sys.stdout"
+        ) as mock_stdout, patch.object(
+            sct, "squashfuse_mount", return_value=True
+        ), patch.object(
+            sct, "squashfuse_unmount"
+        ), patch(
+            "tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")
+        ), patch(
+            "os.makedirs"
+        ), patch(
+            "os.rmdir"
+        ), patch.object(
+            sct, "stream_dir_to_tar", return_value=1
+        ) as mock_stream:
             mock_stdout.buffer = stdout_buf
             sct.main()
 
@@ -236,14 +252,21 @@ class TestStreaming:
             return 5
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
-             patch("sys.stdout") as mock_stdout, \
-             patch.object(sct, "squashfuse_mount", return_value=True), \
-             patch.object(sct, "squashfuse_unmount"), \
-             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
-             patch("os.makedirs"), \
-             patch("os.rmdir"), \
-             patch.object(sct, "stream_dir_to_tar", side_effect=fake_stream):
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), patch(
+            "sys.stdout"
+        ) as mock_stdout, patch.object(
+            sct, "squashfuse_mount", return_value=True
+        ), patch.object(
+            sct, "squashfuse_unmount"
+        ), patch(
+            "tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")
+        ), patch(
+            "os.makedirs"
+        ), patch(
+            "os.rmdir"
+        ), patch.object(
+            sct, "stream_dir_to_tar", side_effect=fake_stream
+        ):
             mock_stdout.buffer = stdout_buf
             sct.main()
 
@@ -258,21 +281,29 @@ class TestStreaming:
         chunk = make_chunk_sqfs(staging, 1)
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
-             patch("sys.stdout") as mock_stdout, \
-             patch.object(sct, "squashfuse_mount", return_value=True), \
-             patch.object(sct, "squashfuse_unmount"), \
-             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
-             patch("os.makedirs"), \
-             patch("os.rmdir"), \
-             patch.object(sct, "stream_dir_to_tar", return_value=1):
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), patch(
+            "sys.stdout"
+        ) as mock_stdout, patch.object(
+            sct, "squashfuse_mount", return_value=True
+        ), patch.object(
+            sct, "squashfuse_unmount"
+        ), patch(
+            "tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")
+        ), patch(
+            "os.makedirs"
+        ), patch(
+            "os.rmdir"
+        ), patch.object(
+            sct, "stream_dir_to_tar", return_value=1
+        ):
             mock_stdout.buffer = stdout_buf
             sct.main()
 
-        assert chunk.exists()   # always preserved — job script deletes after verify
+        assert chunk.exists()  # always preserved — job script deletes after verify
 
 
 # ── main: error handling ──────────────────────────────────────────────────────
+
 
 class TestErrorHandling:
 
@@ -287,14 +318,21 @@ class TestErrorHandling:
         mount_results = [False, True]
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
-             patch("sys.stdout") as mock_stdout, \
-             patch.object(sct, "squashfuse_mount", side_effect=mount_results), \
-             patch.object(sct, "squashfuse_unmount"), \
-             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
-             patch("os.makedirs"), \
-             patch("os.rmdir"), \
-             patch.object(sct, "stream_dir_to_tar", return_value=5):
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), patch(
+            "sys.stdout"
+        ) as mock_stdout, patch.object(
+            sct, "squashfuse_mount", side_effect=mount_results
+        ), patch.object(
+            sct, "squashfuse_unmount"
+        ), patch(
+            "tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")
+        ), patch(
+            "os.makedirs"
+        ), patch(
+            "os.rmdir"
+        ), patch.object(
+            sct, "stream_dir_to_tar", return_value=5
+        ):
             mock_stdout.buffer = stdout_buf
             with pytest.raises(SystemExit) as exc:
                 sct.main()
@@ -312,12 +350,17 @@ class TestErrorHandling:
         make_chunk_sqfs(staging, 2)
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
-             patch("sys.stdout") as mock_stdout, \
-             patch.object(sct, "squashfuse_mount", return_value=False), \
-             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
-             patch("os.makedirs"), \
-             patch("os.rmdir"):
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), patch(
+            "sys.stdout"
+        ) as mock_stdout, patch.object(
+            sct, "squashfuse_mount", return_value=False
+        ), patch(
+            "tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")
+        ), patch(
+            "os.makedirs"
+        ), patch(
+            "os.rmdir"
+        ):
             mock_stdout.buffer = stdout_buf
             with pytest.raises(SystemExit) as exc:
                 sct.main()
@@ -331,14 +374,21 @@ class TestErrorHandling:
         make_chunk_sqfs(staging, 1)
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
-             patch("sys.stdout") as mock_stdout, \
-             patch.object(sct, "squashfuse_mount", return_value=True), \
-             patch.object(sct, "squashfuse_unmount"), \
-             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
-             patch("os.makedirs"), \
-             patch("os.rmdir"), \
-             patch.object(sct, "stream_dir_to_tar", return_value=0):  # 0 images
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), patch(
+            "sys.stdout"
+        ) as mock_stdout, patch.object(
+            sct, "squashfuse_mount", return_value=True
+        ), patch.object(
+            sct, "squashfuse_unmount"
+        ), patch(
+            "tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")
+        ), patch(
+            "os.makedirs"
+        ), patch(
+            "os.rmdir"
+        ), patch.object(
+            sct, "stream_dir_to_tar", return_value=0
+        ):  # 0 images
             mock_stdout.buffer = stdout_buf
             with pytest.raises(SystemExit) as exc:
                 sct.main()
@@ -351,22 +401,22 @@ class TestErrorHandling:
         make_chunk_sqfs(staging, 1)
 
         fail = MagicMock(returncode=1, stderr="fuse: temporary error")
-        ok   = MagicMock(returncode=0)
+        ok = MagicMock(returncode=0)
 
-        with patch("subprocess.run", side_effect=[fail, ok]) as mock_run, \
-             patch("time.sleep"):
+        with patch("subprocess.run", side_effect=[fail, ok]) as mock_run, patch(
+            "time.sleep"
+        ):
             result = sct.squashfuse_mount("/fake.sqfs", "/mnt/fake", retries=1)
 
         assert result is True
-        assert mock_run.call_count == 2   # one fail + one retry
+        assert mock_run.call_count == 2  # one fail + one retry
 
     def test_squashfuse_unmount_retries_on_failure(self, capsys):
         """fusermount failure retried; logs warning instead of raising."""
         fail = MagicMock(returncode=1, stderr="resource busy")
-        ok   = MagicMock(returncode=0)
+        ok = MagicMock(returncode=0)
 
-        with patch("subprocess.run", side_effect=[fail, ok]), \
-             patch("time.sleep"):
+        with patch("subprocess.run", side_effect=[fail, ok]), patch("time.sleep"):
             result = sct.squashfuse_unmount("/mnt/fake", retries=2)
 
         assert result is True  # succeeded on second attempt
@@ -374,8 +424,7 @@ class TestErrorHandling:
     def test_squashfuse_unmount_warns_on_all_failures(self, capsys):
         """All unmount retries exhausted → warning logged, no raise."""
         fail = MagicMock(returncode=1, stderr="resource busy")
-        with patch("subprocess.run", return_value=fail), \
-             patch("time.sleep"):
+        with patch("subprocess.run", return_value=fail), patch("time.sleep"):
             result = sct.squashfuse_unmount("/mnt/fake", retries=2)
         assert result is False
         assert "WARNING" in capsys.readouterr().err
@@ -386,8 +435,9 @@ class TestErrorHandling:
         staging.mkdir()
         make_chunk_sqfs(staging, 1)
 
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging),
-                                 "--delete-after-stream"]):
+        with patch(
+            "sys.argv", ["merge_sqfs_chunks.py", str(staging), "--delete-after-stream"]
+        ):
             with pytest.raises(SystemExit) as exc:
                 sct.main()
         assert exc.value.code == 2  # argparse unrecognised argument
@@ -407,17 +457,26 @@ class TestErrorHandling:
             return True
 
         stdout_buf = io.BytesIO()
-        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), \
-             patch("sys.stdout") as mock_stdout, \
-             patch.object(sct, "squashfuse_mount", side_effect=fake_mount), \
-             patch.object(sct, "squashfuse_unmount"), \
-             patch("tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")), \
-             patch("os.makedirs"), \
-             patch("os.rmdir"), \
-             patch.object(sct, "stream_dir_to_tar", return_value=1):
+        with patch("sys.argv", ["merge_sqfs_chunks.py", str(staging)]), patch(
+            "sys.stdout"
+        ) as mock_stdout, patch.object(
+            sct, "squashfuse_mount", side_effect=fake_mount
+        ), patch.object(
+            sct, "squashfuse_unmount"
+        ), patch(
+            "tempfile.mkdtemp", return_value=str(tmp_path / "mnt_base")
+        ), patch(
+            "os.makedirs"
+        ), patch(
+            "os.rmdir"
+        ), patch.object(
+            sct, "stream_dir_to_tar", return_value=1
+        ):
             mock_stdout.buffer = stdout_buf
             sct.main()
 
         assert processed_order == [
-            "chunk_0001.sqfs", "chunk_0002.sqfs", "chunk_0003.sqfs"
+            "chunk_0001.sqfs",
+            "chunk_0002.sqfs",
+            "chunk_0003.sqfs",
         ]
