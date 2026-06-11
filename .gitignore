@@ -171,3 +171,18 @@ cython_debug/
 
 # Weights and Biases files
 wandb/
+
+# Raw image datasets (too many inodes for home filesystem)
+data/vermont_butterflies/
+data/vermont_species/
+
+# Job output logs and stats
+stats/
+logs/
+
+# Scratch/intermediate data outputs
+data/bq_pipeline/
+data/predictions/
+data/pipeline_test/
+data/split_test/
+data/wds_test_splits/
