@@ -107,7 +107,9 @@ def verify_against(frozen_path, regenerated, label):
         return None
     frozen = json.loads(frozen_path.read_text())
     if frozen == regenerated:
-        print(f"  [{label}] VERIFY OK — {len(regenerated):,} entries, identical to {frozen_path}")
+        print(
+            f"  [{label}] VERIFY OK — {len(regenerated):,} entries, identical to {frozen_path}"
+        )
         return True
     print(f"  [{label}] VERIFY FAILED — differs from {frozen_path}")
     if label == "categ_map":
@@ -116,7 +118,9 @@ def verify_against(frozen_path, regenerated, label):
         print(f"      removed species:  {len(removed)}  e.g. {removed[:5]}")
         print(f"      reindexed (id changed): {len(reindexed)}  e.g. {reindexed[:5]}")
     else:
-        print(f"      frozen has {len(frozen):,} entries, regenerated has {len(regenerated):,}")
+        print(
+            f"      frozen has {len(frozen):,} entries, regenerated has {len(regenerated):,}"
+        )
     return False
 
 
@@ -128,35 +132,59 @@ def write_artifacts(out_dir, species, categ_map, label_map, metadata, with_count
     (out_dir / "geoprior_metadata.json").write_text(json.dumps(metadata))
     (out_dir / "master_species_with_counts.json").write_text(json.dumps(with_counts))
     (out_dir / "master_species_list.txt").write_text("\n".join(species) + "\n")
-    for name in ("geoprior_categ_map.json", "geoprior_label_map.json",
-                 "geoprior_metadata.json", "master_species_with_counts.json",
-                 "master_species_list.txt"):
+    for name in (
+        "geoprior_categ_map.json",
+        "geoprior_label_map.json",
+        "geoprior_metadata.json",
+        "master_species_with_counts.json",
+        "master_species_list.txt",
+    ):
         p = out_dir / name
         print(f"  wrote {p}  ({p.stat().st_size/1e3:.0f} KB)")
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--frozen", default=str(config.CATEG_MAP_PATH),
-                    help="Path to the committed frozen geoprior_categ_map.json to verify against")
-    ap.add_argument("--verify-counts", default=None,
-                    help="Optional path to an existing master_species_with_counts.json "
-                         "to validate the BQ count query against")
-    ap.add_argument("--write", action="store_true",
-                    help="Materialise all five artifacts into --out-dir")
-    ap.add_argument("--out-dir", default=str(config.DATA_DIR),
-                    help="Directory to write artifacts to (with --write)")
-    ap.add_argument("--force", action="store_true",
-                    help="Write even if verification against --frozen fails")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--frozen",
+        default=str(config.CATEG_MAP_PATH),
+        help="Path to the committed frozen geoprior_categ_map.json to verify against",
+    )
+    ap.add_argument(
+        "--verify-counts",
+        default=None,
+        help="Optional path to an existing master_species_with_counts.json "
+        "to validate the BQ count query against",
+    )
+    ap.add_argument(
+        "--write",
+        action="store_true",
+        help="Materialise all five artifacts into --out-dir",
+    )
+    ap.add_argument(
+        "--out-dir",
+        default=str(config.DATA_DIR),
+        help="Directory to write artifacts to (with --write)",
+    )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="Write even if verification against --frozen fails",
+    )
     args = ap.parse_args()
 
-    print(f"Querying BigQuery (project={config.BQ_PROJECT}) for geocoded species counts ...")
+    print(
+        f"Querying BigQuery (project={config.BQ_PROJECT}) for geocoded species counts ..."
+    )
     counts, billed = fetch_species_counts()
     species, categ_map, label_map, metadata, with_counts = build_maps(counts)
     total_occ = sum(counts.values())
-    print(f"  {len(species):,} species, {total_occ:,} geocoded occurrences, "
-          f"scanned {billed/1e6:.1f} MB (~${billed/1e12*5:.4f})")
+    print(
+        f"  {len(species):,} species, {total_occ:,} geocoded occurrences, "
+        f"scanned {billed/1e6:.1f} MB (~${billed/1e12*5:.4f})"
+    )
 
     print("Verifying ...")
     ok = verify_against(args.frozen, categ_map, "categ_map")
@@ -165,12 +193,16 @@ def main():
 
     if args.write:
         if ok is False and not args.force:
-            print("Refusing to --write: regenerated map differs from the frozen "
-                  "artifact. Re-run with --force only if you intend to retire the "
-                  "current class space (and retrain the model).")
+            print(
+                "Refusing to --write: regenerated map differs from the frozen "
+                "artifact. Re-run with --force only if you intend to retire the "
+                "current class space (and retrain the model)."
+            )
             sys.exit(1)
         print(f"Writing artifacts to {args.out_dir} ...")
-        write_artifacts(args.out_dir, species, categ_map, label_map, metadata, with_counts)
+        write_artifacts(
+            args.out_dir, species, categ_map, label_map, metadata, with_counts
+        )
 
     # Exit non-zero on a real mismatch so CI / callers can catch drift.
     if ok is False and not args.force:

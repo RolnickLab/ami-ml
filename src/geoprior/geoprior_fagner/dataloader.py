@@ -18,9 +18,9 @@ import datetime
 import json
 import math
 
-import torch
-import pandas as pd
 import numpy as np
+import pandas as pd
+import torch
 from absl import flags
 from torch.utils.data.sampler import Sampler
 

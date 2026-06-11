@@ -14,49 +14,60 @@ import os
 import random
 import time
 
-from absl import app
-from absl import flags
-
 import numpy as np
 import torch
 import wandb
+from absl import app, flags
 from timm.utils import AverageMeter
 
 from src.geoprior import config
+
 # Geo-prior network (FCNet) modules, from Fagner's lepsAI — see geoprior_fagner/README.md
 from src.geoprior.geoprior_fagner import dataloader, losses, models
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string("train_data_json", default=str(config.DATA_DIR / "train.json"),
-                    help="Path to JSON file containing training data")
+flags.DEFINE_string(
+    "train_data_json",
+    default=str(config.DATA_DIR / "train.json"),
+    help="Path to JSON file containing training data",
+)
 flags.DEFINE_integer("batch_size", default=1024, help="Batch size")
-flags.DEFINE_string("loc_encode", default="encode_cos_sin",
-                    help="Encoding type for location coords")
-flags.DEFINE_string("date_encode", default="encode_cos_sin",
-                    help="Encoding type for date")
+flags.DEFINE_string(
+    "loc_encode", default="encode_cos_sin", help="Encoding type for location coords"
+)
+flags.DEFINE_string(
+    "date_encode", default="encode_cos_sin", help="Encoding type for date"
+)
 flags.DEFINE_bool("use_date_feats", default=True, help="Include date features")
-flags.DEFINE_bool("use_photographers", default=False,
-                  help="Include photographers classifier branch")
-flags.DEFINE_integer("max_instances_per_class", default=100,
-                     help="Max samples per class per epoch (BalancedSampler)")
+flags.DEFINE_bool(
+    "use_photographers", default=False, help="Include photographers classifier branch"
+)
+flags.DEFINE_integer(
+    "max_instances_per_class",
+    default=100,
+    help="Max samples per class per epoch (BalancedSampler)",
+)
 flags.DEFINE_integer("epochs", default=30, help="Number of training epochs")
 flags.DEFINE_integer("embed_dim", default=256, help="FCNet embedding dim")
 flags.DEFINE_float("lr", default=0.0005, help="Initial learning rate")
 flags.DEFINE_float("lr_decay", default=0.98, help="LR decay per epoch")
 flags.DEFINE_integer("log_frequency", default=50, help="Log every N steps")
-flags.DEFINE_string("model_save_path", default=str(config.MODEL_DIR),
-                    help="Directory to save checkpoints")
+flags.DEFINE_string(
+    "model_save_path",
+    default=str(config.MODEL_DIR),
+    help="Directory to save checkpoints",
+)
 flags.DEFINE_integer("dataloader_num_workers", default=4, help="DataLoader workers")
 flags.DEFINE_integer("random_seed", default=42, help="Random seed")
 
 # wandb-specific
 flags.DEFINE_string("wandb_project", default=config.WANDB_PROJECT, help="W&B project")
-flags.DEFINE_string("wandb_entity",  default=config.WANDB_ENTITY, help="W&B entity")
-flags.DEFINE_string("wandb_run_name", default="geoprior-fcnet-global-12317cls-v1",
-                    help="W&B run name")
-flags.DEFINE_bool("wandb_offline", default=False,
-                  help="Run wandb in offline mode")
+flags.DEFINE_string("wandb_entity", default=config.WANDB_ENTITY, help="W&B entity")
+flags.DEFINE_string(
+    "wandb_run_name", default="geoprior-fcnet-global-12317cls-v1", help="W&B run name"
+)
+flags.DEFINE_bool("wandb_offline", default=False, help="Run wandb in offline mode")
 
 
 def build_input_data(data_json, is_training, max_instances_per_class=0):
@@ -96,8 +107,18 @@ def build_input_data(data_json, is_training, max_instances_per_class=0):
     )
 
 
-def train_one_epoch(model, train_data, randgen, loc_o_loss, loc_p_loss, p_o_loss,
-                    optimizer, device, epoch, steps_per_epoch):
+def train_one_epoch(
+    model,
+    train_data,
+    randgen,
+    loc_o_loss,
+    loc_p_loss,
+    p_o_loss,
+    optimizer,
+    device,
+    epoch,
+    steps_per_epoch,
+):
     batch_time = AverageMeter()
     running_loss = AverageMeter()
     running_obj_loss = AverageMeter()
@@ -134,7 +155,9 @@ def train_one_epoch(model, train_data, randgen, loc_o_loss, loc_p_loss, p_o_loss
             user_pred_rand = 1 - user_pred[bs:]
             phot_loss_rand = loc_p_loss(users, user_pred_rand)
             p_c_given_u = torch.matmul(users, model.user_emb.weight.transpose(0, 1))
-            p_c_given_u = torch.matmul(p_c_given_u, model.class_emb.weight.transpose(0, 1))
+            p_c_given_u = torch.matmul(
+                p_c_given_u, model.class_emb.weight.transpose(0, 1)
+            )
             p_c_given_u = torch.sigmoid(p_c_given_u)
             phot_obj_loss = p_o_loss(labels, p_c_given_u)
             loss = loss + phot_loss + phot_loss_rand + phot_obj_loss
@@ -160,15 +183,17 @@ def train_one_epoch(model, train_data, randgen, loc_o_loss, loc_p_loss, p_o_loss
                 f" lr: {current_lr:.8f}",
                 flush=True,
             )
-            wandb.log({
-                "step/loss": running_loss.avg,
-                "step/obj_loss": running_obj_loss.avg,
-                "step/obj_loss_rand": running_obj_loss_rand.avg,
-                "step/lr": current_lr,
-                "step/batch_ms": batch_time.avg * 1000,
-                "step/eta_seconds": int(eta),
-                "step/epoch": epoch,
-            })
+            wandb.log(
+                {
+                    "step/loss": running_loss.avg,
+                    "step/obj_loss": running_obj_loss.avg,
+                    "step/obj_loss_rand": running_obj_loss_rand.avg,
+                    "step/lr": current_lr,
+                    "step/batch_ms": batch_time.avg * 1000,
+                    "step/eta_seconds": int(eta),
+                    "step/epoch": epoch,
+                }
+            )
 
     return {
         "epoch/loss": running_loss.avg,
@@ -184,7 +209,9 @@ def save_checkpoint(model, save_dir, epoch, is_final=False):
     suffix = "final" if is_final else f"epoch{epoch:02d}"
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     path = os.path.join(save_dir, f"model_{suffix}_{timestamp}.pth")
-    state_dict = model.module.state_dict() if hasattr(model, "module") else model.state_dict()
+    state_dict = (
+        model.module.state_dict() if hasattr(model, "module") else model.state_dict()
+    )
     torch.save(state_dict, path)
     return path
 
@@ -209,8 +236,10 @@ def main(_):
         is_training=True,
         max_instances_per_class=FLAGS.max_instances_per_class,
     )
-    print(f"  num_classes={num_classes}, num_users={num_users}, num_feats={num_feats}",
-          flush=True)
+    print(
+        f"  num_classes={num_classes}, num_users={num_users}, num_feats={num_feats}",
+        flush=True,
+    )
     print(f"  loaded in {time.time()-t0:.1f}s", flush=True)
 
     randgen = dataloader.RandSpatioTemporalGenerator(
@@ -236,8 +265,13 @@ def main(_):
         entity=FLAGS.wandb_entity,
         name=FLAGS.wandb_run_name,
         mode="offline" if FLAGS.wandb_offline else "online",
-        tags=["geoprior", "fcnet", "global-butterflies", f"{num_classes}cls",
-              f"embed-dim-{FLAGS.embed_dim}"],
+        tags=[
+            "geoprior",
+            "fcnet",
+            "global-butterflies",
+            f"{num_classes}cls",
+            f"embed-dim-{FLAGS.embed_dim}",
+        ],
         config={
             "train_data_json": FLAGS.train_data_json,
             "epochs": FLAGS.epochs,
@@ -266,9 +300,16 @@ def main(_):
         print(f"\n=== Starting epoch {epoch}/{FLAGS.epochs} ===", flush=True)
         epoch_start = time.time()
         epoch_metrics = train_one_epoch(
-            model, train_dataloader, randgen,
-            loc_o_loss, loc_p_loss, p_o_loss,
-            optimizer, device, epoch, steps_per_epoch,
+            model,
+            train_dataloader,
+            randgen,
+            loc_o_loss,
+            loc_p_loss,
+            p_o_loss,
+            optimizer,
+            device,
+            epoch,
+            steps_per_epoch,
         )
         scheduler.step()
         epoch_time = time.time() - epoch_start
@@ -285,9 +326,14 @@ def main(_):
         ckpt_path = save_checkpoint(model, FLAGS.model_save_path, epoch, is_final=False)
         print(f"  saved {ckpt_path}", flush=True)
 
-    final_path = save_checkpoint(model, FLAGS.model_save_path, FLAGS.epochs, is_final=True)
+    final_path = save_checkpoint(
+        model, FLAGS.model_save_path, FLAGS.epochs, is_final=True
+    )
     total_time = time.time() - train_start
-    print(f"\nTraining complete in {datetime.timedelta(seconds=int(total_time))}", flush=True)
+    print(
+        f"\nTraining complete in {datetime.timedelta(seconds=int(total_time))}",
+        flush=True,
+    )
     print(f"Final checkpoint: {final_path}", flush=True)
 
     wandb.run.summary["final_loss"] = epoch_metrics["epoch/loss"]

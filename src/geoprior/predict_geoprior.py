@@ -14,19 +14,18 @@ import os
 import random
 import time
 
-from absl import app
-from absl import flags
-
 import numpy as np
 import torch
+from absl import app, flags
 
 # Geo-prior network (FCNet) modules, from Fagner's lepsAI — see geoprior_fagner/README.md
 from src.geoprior.geoprior_fagner import dataloader, models
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string("test_data_json", default=None,
-                    help="Path to JSON file containing test data")
+flags.DEFINE_string(
+    "test_data_json", default=None, help="Path to JSON file containing test data"
+)
 flags.DEFINE_integer("batch_size", default=1024, help="Batch size")
 flags.DEFINE_string("loc_encode", default="encode_cos_sin", help="Loc encoding")
 flags.DEFINE_string("date_encode", default="encode_cos_sin", help="Date encoding")
@@ -70,7 +69,9 @@ def build_input_data():
 
 def load_prior_model(num_feats, device):
     model = models.FCNet(num_feats, FLAGS.num_classes, FLAGS.embed_dim, FLAGS.num_users)
-    state = torch.load(FLAGS.model_path, map_location=torch.device(device), weights_only=True)
+    state = torch.load(
+        FLAGS.model_path, map_location=torch.device(device), weights_only=True
+    )
     model.load_state_dict(state)
     return model.to(device)
 
@@ -86,8 +87,8 @@ def generate_and_stream(prior_model, dataloader_iter, device, preds_dir, valid_d
             feats, _, valid, instance_id = data
             feats = feats.to(device, non_blocking=True)
             outputs = prior_model(feats).cpu().numpy().astype(np.float32)
-            valids  = valid.cpu().numpy().astype(np.float32)
-            ids_np  = instance_id.cpu().numpy()
+            valids = valid.cpu().numpy().astype(np.float32)
+            ids_np = instance_id.cpu().numpy()
             for j in range(len(ids_np)):
                 sid = int(ids_np[j])
                 np.save(os.path.join(preds_dir, f"{sid}.npy"), outputs[j])
@@ -96,9 +97,11 @@ def generate_and_stream(prior_model, dataloader_iter, device, preds_dir, valid_d
             if i % FLAGS.log_frequence == 0:
                 elapsed = time.time() - t0
                 rate = total_written / max(elapsed, 1e-6)
-                print(f"  batch {i:4d}  written={total_written:>7,}  "
-                      f"rate={rate:>6.0f} samples/s  elapsed={elapsed:.1f}s",
-                      flush=True)
+                print(
+                    f"  batch {i:4d}  written={total_written:>7,}  "
+                    f"rate={rate:>6.0f} samples/s  elapsed={elapsed:.1f}s",
+                    flush=True,
+                )
     return total_written, time.time() - t0
 
 
@@ -131,8 +134,11 @@ def main(_):
     valid_dir = os.path.join(FLAGS.results_dir, "valid")
     print(f"Streaming predictions to {preds_dir}, {valid_dir}", flush=True)
     n, elapsed = generate_and_stream(model, loader, device, preds_dir, valid_dir)
-    print(f"\nDone. Wrote {n:,} predictions in {elapsed:.1f}s "
-          f"({n/elapsed:.0f} samples/s)", flush=True)
+    print(
+        f"\nDone. Wrote {n:,} predictions in {elapsed:.1f}s "
+        f"({n/elapsed:.0f} samples/s)",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

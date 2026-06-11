@@ -39,24 +39,24 @@ def load_categ_map(path):
 
 def load_prior_for_gbif(prior_dir, gbif_id):
     """Returns (prior_vector, valid_flag) or (None, None) if file missing."""
-    p_path = os.path.join(prior_dir, 'preds', f'{gbif_id}.npy')
-    v_path = os.path.join(prior_dir, 'valid', f'{gbif_id}.npy')
+    p_path = os.path.join(prior_dir, "preds", f"{gbif_id}.npy")
+    v_path = os.path.join(prior_dir, "valid", f"{gbif_id}.npy")
     if not os.path.exists(p_path):
         return None, None
     return np.load(p_path), np.load(v_path)
 
 
 def eval_split(split, csv_path, prior_dir, geoprior_categ_map, max_rows=None):
-    print(f'\n===== {split.upper()} =====')
-    print(f'  CSV:   {csv_path}')
-    print(f'  Prior: {prior_dir}')
+    print(f"\n===== {split.upper()} =====")
+    print(f"  CSV:   {csv_path}")
+    print(f"  Prior: {prior_dir}")
 
     n_total = 0
     n_baseline_correct = 0
     n_fused_correct = 0
-    n_top5_hit  = 0
+    n_top5_hit = 0
     n_flipped_to_correct = 0
-    n_flipped_to_wrong   = 0
+    n_flipped_to_wrong = 0
     n_no_prior_file = 0
     n_valid = 0
     n_unmapped_species_in_top5 = 0  # candidates not in geoprior
@@ -73,11 +73,13 @@ def eval_split(split, csv_path, prior_dir, geoprior_categ_map, max_rows=None):
     with open(csv_path) as f:
         reader = csv.DictReader(f)
         for row in reader:
-            gbif_id = row['gbif_id']
-            gt_sp = row['species_name']
-            baseline_pred = row['predicted_species']
-            top5_sp = row['top5_species'].split('|')
-            top5_scores = np.array([float(x) for x in row['top5_scores'].split('|')], dtype=np.float32)
+            gbif_id = row["gbif_id"]
+            gt_sp = row["species_name"]
+            baseline_pred = row["predicted_species"]
+            top5_sp = row["top5_species"].split("|")
+            top5_scores = np.array(
+                [float(x) for x in row["top5_scores"].split("|")], dtype=np.float32
+            )
 
             # baseline
             n_total += 1
@@ -125,6 +127,7 @@ def eval_split(split, csv_path, prior_dir, geoprior_categ_map, max_rows=None):
             # macro-F1 accounting (per-class)
             def bump(d, key):
                 d[key] = d.get(key, 0) + 1
+
             if baseline_pred == gt_sp:
                 bump(tp_baseline, gt_sp)
             else:
@@ -146,67 +149,75 @@ def eval_split(split, csv_path, prior_dir, geoprior_categ_map, max_rows=None):
         classes = set(tp.keys()) | set(fp.keys()) | set(fn.keys())
         f1s = []
         for c in classes:
-            t = tp.get(c, 0); p = fp.get(c, 0); n = fn.get(c, 0)
-            denom = 2*t + p + n
-            f1s.append(2*t / denom if denom else 0.0)
+            t = tp.get(c, 0)
+            p = fp.get(c, 0)
+            n = fn.get(c, 0)
+            denom = 2 * t + p + n
+            f1s.append(2 * t / denom if denom else 0.0)
         return float(np.mean(f1s)) if f1s else 0.0
 
     baseline_acc = n_baseline_correct / n_total
-    fused_acc    = n_fused_correct    / n_total
-    top5_hit     = n_top5_hit         / n_total
-    delta        = fused_acc - baseline_acc
+    fused_acc = n_fused_correct / n_total
+    top5_hit = n_top5_hit / n_total
+    delta = fused_acc - baseline_acc
 
-    print(f'  Rows processed:     {n_total:,}')
-    print(f'  Time:               {elapsed:.1f}s  ({n_total/elapsed:.0f} rows/s)')
-    print(f'  Valid (had geo):    {n_valid:,}  ({100*n_valid/n_total:.2f}%)')
-    print(f'  Missing prior file: {n_no_prior_file:,}')
-    print(f'  Unmapped species (top-5 candidate ∉ geoprior): {n_unmapped_species_in_top5:,}')
+    print(f"  Rows processed:     {n_total:,}")
+    print(f"  Time:               {elapsed:.1f}s  ({n_total/elapsed:.0f} rows/s)")
+    print(f"  Valid (had geo):    {n_valid:,}  ({100*n_valid/n_total:.2f}%)")
+    print(f"  Missing prior file: {n_no_prior_file:,}")
+    print(
+        f"  Unmapped species (top-5 candidate ∉ geoprior): {n_unmapped_species_in_top5:,}"
+    )
     print()
-    print(f'  Baseline top-1:   {baseline_acc:.4%}  ({n_baseline_correct:,} correct)')
-    print(f'  Fused    top-1:   {fused_acc:.4%}  ({n_fused_correct:,} correct)')
-    print(f'  Δ top-1:          {delta:+.4%}  ({delta*100:+.2f} pp)')
-    print(f'  Top-5 ceiling:    {top5_hit:.4%}  (GT in CNN top-5)')
+    print(f"  Baseline top-1:   {baseline_acc:.4%}  ({n_baseline_correct:,} correct)")
+    print(f"  Fused    top-1:   {fused_acc:.4%}  ({n_fused_correct:,} correct)")
+    print(f"  Δ top-1:          {delta:+.4%}  ({delta*100:+.2f} pp)")
+    print(f"  Top-5 ceiling:    {top5_hit:.4%}  (GT in CNN top-5)")
     print()
-    print(f'  Flips (CNN→fused changed prediction):')
-    print(f'    to correct:   {n_flipped_to_correct:,}')
-    print(f'    to wrong:     {n_flipped_to_wrong:,}')
-    print(f'    net flips:    {n_flipped_to_correct - n_flipped_to_wrong:+,}')
+    print("  Flips (CNN→fused changed prediction):")
+    print(f"    to correct:   {n_flipped_to_correct:,}")
+    print(f"    to wrong:     {n_flipped_to_wrong:,}")
+    print(f"    net flips:    {n_flipped_to_correct - n_flipped_to_wrong:+,}")
     print()
-    print(f'  Macro-F1 baseline: {macro_f1(tp_baseline, fp_baseline, fn_baseline):.4f}')
-    print(f'  Macro-F1 fused:    {macro_f1(tp_fused, fp_fused, fn_fused):.4f}')
+    print(f"  Macro-F1 baseline: {macro_f1(tp_baseline, fp_baseline, fn_baseline):.4f}")
+    print(f"  Macro-F1 fused:    {macro_f1(tp_fused, fp_fused, fn_fused):.4f}")
 
     return {
-        'n_total': n_total,
-        'baseline_acc': baseline_acc,
-        'fused_acc': fused_acc,
-        'delta': delta,
-        'top5_hit': top5_hit,
-        'flips_correct': n_flipped_to_correct,
-        'flips_wrong': n_flipped_to_wrong,
+        "n_total": n_total,
+        "baseline_acc": baseline_acc,
+        "fused_acc": fused_acc,
+        "delta": delta,
+        "top5_hit": top5_hit,
+        "flips_correct": n_flipped_to_correct,
+        "flips_wrong": n_flipped_to_wrong,
     }
 
 
 def main():
     geoprior_categ_map = load_categ_map(config.CATEG_MAP_PATH)
-    print(f'Loaded geoprior_categ_map: {len(geoprior_categ_map):,} species -> class_id')
+    print(f"Loaded geoprior_categ_map: {len(geoprior_categ_map):,} species -> class_id")
 
-    res_val  = eval_split('val',
+    res_val = eval_split(
+        "val",
         str(config.CLF_VAL_PREDS),
         str(config.GEOPRIOR_VAL_PREDS),
-        geoprior_categ_map)
-    res_test = eval_split('test',
+        geoprior_categ_map,
+    )
+    res_test = eval_split(
+        "test",
         str(config.CLF_TEST_PREDS),
         str(config.GEOPRIOR_TEST_PREDS),
-        geoprior_categ_map)
+        geoprior_categ_map,
+    )
 
-    print('\n===== SUMMARY =====')
-    bva, fva, dva = res_val['baseline_acc'], res_val['fused_acc'], res_val['delta']
-    bte, fte, dte = res_test['baseline_acc'], res_test['fused_acc'], res_test['delta']
-    print(f'  baseline (val):   {bva:.4%}')
-    print(f'  fused    (val):   {fva:.4%}  (delta = {dva:+.4%})')
-    print(f'  baseline (test):  {bte:.4%}')
-    print(f'  fused    (test):  {fte:.4%}  (delta = {dte:+.4%})')
+    print("\n===== SUMMARY =====")
+    bva, fva, dva = res_val["baseline_acc"], res_val["fused_acc"], res_val["delta"]
+    bte, fte, dte = res_test["baseline_acc"], res_test["fused_acc"], res_test["delta"]
+    print(f"  baseline (val):   {bva:.4%}")
+    print(f"  fused    (val):   {fva:.4%}  (delta = {dva:+.4%})")
+    print(f"  baseline (test):  {bte:.4%}")
+    print(f"  fused    (test):  {fte:.4%}  (delta = {dte:+.4%})")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

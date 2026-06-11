@@ -15,11 +15,13 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
 except ImportError:  # python-dotenv is in requirements.txt; degrade gracefully
+
     def load_dotenv(*_args, **_kwargs):
         return False
 
-PKG_DIR = Path(__file__).resolve().parent          # .../src/geoprior
-REPO_ROOT = PKG_DIR.parents[1]                      # repo root (…/ami-ml)
+
+PKG_DIR = Path(__file__).resolve().parent  # .../src/geoprior
+REPO_ROOT = PKG_DIR.parents[1]  # repo root (…/ami-ml)
 
 # Load src/geoprior/.env if present (no-op otherwise). Real env vars take
 # precedence over .env values.
