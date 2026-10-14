@@ -69,18 +69,34 @@ def _get_transforms(
     # Add square padding
     final_transforms = [transforms.Lambda(_pad_to_square)]
 
-    # Mixed resolution data augmentation
+    # Mixed resolution data augmentation. This randomly downscales the image to simulate small,
+    # low-resolution subjects (a camera-trap degradation). It defaults on in the CLI, but the
+    # Fieldguide corpus is DSLR/phone photos cropped tight to the subject, so this degradation does
+    # not match the serving domain. MIXED_RESOLUTION_AUG in the environment overrides the caller:
+    # set it to 0 to force the augmentation off (the CLI flag cannot, being a click bool that reads
+    # any non-empty string as True).
+    _mixres_env = os.environ.get("MIXED_RESOLUTION_AUG")
+    if _mixres_env is not None:
+        mixed_resolution_data_aug = _mixres_env == "1"
     if mixed_resolution_data_aug:
         f_random_resize = partial(_mixed_resolution, full_size=input_size)
         final_transforms += [transforms.Lambda(f_random_resize)]
 
     # Standard training augmentations
     if is_training:
+        # RandomResizedCrop scale floor: the default 0.3 zooms into a 30%-area sub-crop, which on
+        # the Fieldguide corpus (already cropped tight to the subject) can cut off wings/antennae
+        # and does not match the serving path (a whole-image resize, no random crop). RRC_SCALE_MIN
+        # raises the floor to keep crops near the full subject.
+        _rrc_min = float(os.environ.get('RRC_SCALE_MIN', '0.3'))
         final_transforms += [
-            transforms.RandomResizedCrop(input_size, scale=(0.3, 1)),
+            transforms.RandomResizedCrop(input_size, scale=(_rrc_min, 1)),
             transforms.RandomHorizontalFlip(),
-            transforms.RandAugment(num_ops=2, magnitude=9),
         ]
+        # RandAugment is the dominant per-image CPU cost; RANDAUGMENT=0 drops it for a faster,
+        # less-regularised run. On by default.
+        if os.environ.get('RANDAUGMENT', '1') == '1':
+            final_transforms += [transforms.RandAugment(num_ops=2, magnitude=9)]
     else:
         final_transforms += [transforms.Resize((input_size, input_size))]
 

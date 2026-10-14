@@ -4,6 +4,8 @@
 """ Utility functions
 """
 
+import json
+import os
 import random
 import tarfile
 import typing as tp
@@ -110,11 +112,58 @@ def _count_files_from_tar(tar_filename: str, ext="jpg") -> int:
     return count_files
 
 
+# On-disk memo of per-shard image counts. Scanning every .tar on each launch costs tens of
+# minutes of serial I/O before training starts; a shard's count is fixed for a given
+# (size, mtime), so it only needs to be computed once. Override the location with
+# WDS_COUNT_CACHE; set WDS_COUNT_CACHE=off to always rescan.
+WDS_COUNT_CACHE = os.environ.get(
+    "WDS_COUNT_CACHE", os.path.expanduser("~/.cache/ami_ml_wds_counts.json")
+)
+
+
+def _load_count_cache() -> dict:
+    if WDS_COUNT_CACHE == "off" or not os.path.exists(WDS_COUNT_CACHE):
+        return {}
+    try:
+        with open(WDS_COUNT_CACHE) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_count_cache(cache: dict) -> None:
+    if WDS_COUNT_CACHE == "off":
+        return
+    try:
+        os.makedirs(os.path.dirname(WDS_COUNT_CACHE), exist_ok=True)
+        tmp = WDS_COUNT_CACHE + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(cache, fh)
+        os.replace(tmp, WDS_COUNT_CACHE)
+    except OSError:
+        pass  # a cache we cannot persist is a slow start, not a failure
+
+
+def _shard_key(tar_filename: str) -> str:
+    st = os.stat(tar_filename)
+    return f"{os.path.abspath(tar_filename)}:{st.st_size}:{int(st.st_mtime)}"
+
+
 def get_webdataset_length(sharedurl: str) -> int:
     """Get the total number of images in all webdataset files for a given dataset"""
 
     tar_filenames = list(braceexpand.braceexpand(sharedurl))
-    counts = [_count_files_from_tar(tar_f) for tar_f in tar_filenames]
+    cache = _load_count_cache()
+    counts = []
+    dirty = False
+    for tar_f in tar_filenames:
+        key = _shard_key(tar_f)
+        if key not in cache:
+            cache[key] = _count_files_from_tar(tar_f)
+            dirty = True
+        counts.append(cache[key])
+    if dirty:
+        _save_count_cache(cache)
     return int(sum(counts))
 
 

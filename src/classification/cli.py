@@ -225,6 +225,14 @@ COMMANDS_HELP = {TRAIN_CMD: "Train a classification model"}
     default=None,
     help="User-defined training run name",
 )
+@click.option(
+    "--resume_from_checkpoint",
+    type=str,
+    default=None,
+    help="Path to a *_checkpoint.pt to resume from. Restores model, EMA, optimizer, "
+    "LR-scheduler position and epoch counter so an interrupted run continues its "
+    "schedule instead of restarting. Omit for a fresh run.",
+)
 def train_model_command(
     random_seed: int,
     model_type: str,
@@ -251,6 +259,7 @@ def train_model_command(
     wandb_entity: Optional[str],
     wandb_project: Optional[str],
     wandb_run_name: Optional[str],
+    resume_from_checkpoint: Optional[str],
 ):
     from src.classification.train import train_model
 
@@ -280,6 +289,7 @@ def train_model_command(
         wandb_entity=wandb_entity,
         wandb_project=wandb_project,
         wandb_run_name=wandb_run_name,
+        resume_from_checkpoint=resume_from_checkpoint,
     )
 
 

@@ -5,6 +5,7 @@
 """ Main script for training classification models
 """
 
+import os
 import pathlib
 import time
 import typing as tp
@@ -13,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 import torch
-from timm.utils import AverageMeter
+from timm.utils import AverageMeter, ModelEmaV3
 
 import wandb
 from src.classification.dataloader import build_webdataset_pipeline
@@ -35,6 +36,7 @@ def _save_model_checkpoint(
     epoch: int,
     train_loss: float,
     val_loss: float,
+    model_ema: Optional[tp.Any] = None,
 ) -> None:
     """Save model to disk"""
 
@@ -45,6 +47,9 @@ def _save_model_checkpoint(
     model_checkpoint = {
         "epoch": epoch,
         "model_state_dict": model_state_dict,
+        "model_ema_state_dict": (
+            model_ema.module.state_dict() if model_ema is not None else None
+        ),
         "optimizer_state_dict": optimizer.state_dict(),
         "lr_scheduler": learning_rate_scheduler.state_dict()
         if learning_rate_scheduler is not None
@@ -63,12 +68,18 @@ def _train_model_for_one_epoch(
     train_dataloader: torch.utils.data.DataLoader,
     learning_rate_scheduler: Optional[tp.Any],
     total_train_steps: int,
+    model_ema: Optional[tp.Any] = None,
 ) -> tuple[dict, int]:  # TODO: First element will eventually turn into a dict
     """Training model for one epoch"""
 
     total_train_steps_current = total_train_steps
     running_loss = AverageMeter()
     running_accuracy = AverageMeter()
+
+    # Intra-epoch wandb logging cadence in wall-clock seconds (default 10 min).
+    _log_every_s = int(os.environ.get("WANDB_LOG_EVERY_SECONDS", "600"))
+    _t_last = time.time()
+    _imgs_since = 0
 
     model.train()
     for batch_data in train_dataloader:
@@ -78,11 +89,14 @@ def _train_model_for_one_epoch(
         )
 
         # Forward pass, loss calculation, backward pass, and optimizer step
-        optimizer.zero_grad()
-        outputs = model(images)
-        loss = loss_function(outputs, labels)
+        optimizer.zero_grad(set_to_none=True)
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            outputs = model(images)
+            loss = loss_function(outputs, labels)
         loss.backward()
         optimizer.step()
+        if model_ema is not None:
+            model_ema.update(model)
 
         # Calculate the average loss per sample
         running_loss.update(loss.item())
@@ -95,6 +109,21 @@ def _train_model_for_one_epoch(
         if learning_rate_scheduler:
             total_train_steps_current += 1
             learning_rate_scheduler.step_update(num_updates=total_train_steps_current)
+
+        _imgs_since += labels.size(0)
+        _now = time.time()
+        if wandb.run is not None and (_now - _t_last) >= _log_every_s:
+            wandb.log(
+                {
+                    "train_step": total_train_steps_current,
+                    "train_loss_running": running_loss.avg,
+                    "train_accuracy_running": running_accuracy.avg,
+                    "lr": optimizer.param_groups[0]["lr"],
+                    "imgs_per_sec": _imgs_since / (_now - _t_last),
+                }
+            )
+            _t_last = _now
+            _imgs_since = 0
 
     metrics = {"train_loss": running_loss.avg, "train_accuracy": running_accuracy.avg}
 
@@ -120,7 +149,7 @@ def _evaluate_model(
             device, non_blocking=True
         )
 
-        with torch.no_grad():
+        with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
             outputs = model(images)
             loss = loss_function(outputs, labels)
 
@@ -165,6 +194,7 @@ def train_model(
     wandb_entity: Optional[str],
     wandb_project: Optional[str],
     wandb_run_name: Optional[str],
+    resume_from_checkpoint: Optional[str] = None,
 ) -> None:
     """Main training function"""
 
@@ -175,6 +205,10 @@ def train_model(
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"The available device is {device}.")
     model = build_model(device, model_type, num_classes, existing_weights)
+    # Weight EMA: a shadow copy updated as an exponential moving average of the weights each
+    # step. The averaged weights usually generalise better; they are checkpointed next to the
+    # raw weights so the fair evaluation can score both and keep whichever wins.
+    model_ema = ModelEmaV3(model, decay=0.9998)
 
     # Setup dataloaders
     train_dataloader = build_webdataset_pipeline(
@@ -200,6 +234,7 @@ def train_model(
 
     # Other training ingredients
     optimizer = get_optimizer(optimizer_type, model, learning_rate, weight_decay)
+    steps_per_epoch: Optional[int] = None
     if learning_rate_scheduler:
         train_data_length = get_webdataset_length(train_webdataset)
         steps_per_epoch = int((train_data_length - 1) / batch_size) + 1
@@ -215,6 +250,47 @@ def train_model(
         label_smoothing=label_smoothing,
         weight_on_order=weight_on_order_loss,
     )
+
+    # Resume-aware training state. The defaults reproduce a fresh start; when a checkpoint
+    # path is supplied they are overwritten from the checkpoint so an interrupted run
+    # continues its cosine schedule and EMA momentum instead of re-running warm-up from
+    # step zero. Every field is read defensively so a checkpoint written before a field
+    # existed still loads. total_train_steps is reconstructed from the resumed epoch so the
+    # timm scheduler's per-step position lines up with where training left off.
+    start_epoch = 1
+    total_train_steps = 0  # total training batches processed
+    lowest_val_loss = 1e8
+    resumed_from_epoch: Optional[int] = None
+    if resume_from_checkpoint:
+        print(f"Resuming from checkpoint: {resume_from_checkpoint}", flush=True)
+        checkpoint = torch.load(resume_from_checkpoint, map_location=device)
+        if checkpoint.get("model_state_dict") is not None:
+            if torch.cuda.device_count() > 1:
+                model.module.load_state_dict(checkpoint["model_state_dict"])
+            else:
+                model.load_state_dict(checkpoint["model_state_dict"])
+        if checkpoint.get("model_ema_state_dict") is not None:
+            model_ema.module.load_state_dict(checkpoint["model_ema_state_dict"])
+        if checkpoint.get("optimizer_state_dict") is not None:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        if (
+            learning_rate_scheduler is not None
+            and checkpoint.get("lr_scheduler") is not None
+        ):
+            learning_rate_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+        resumed_from_epoch = int(checkpoint.get("epoch", 0))
+        start_epoch = resumed_from_epoch + 1
+        if steps_per_epoch is not None:
+            total_train_steps = (start_epoch - 1) * steps_per_epoch
+        if checkpoint.get("val_loss") is not None:
+            lowest_val_loss = float(checkpoint["val_loss"])
+        print(
+            f"Resumed from epoch {resumed_from_epoch}; continuing at epoch {start_epoch} "
+            f"of {total_epochs} (total_train_steps={total_train_steps}, "
+            f"lowest_val_loss={lowest_val_loss:.4f}).",
+            flush=True,
+        )
+
     current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
     model_save_path = Path(model_save_directory) / f"{model_type}_{current_date}"
 
@@ -241,6 +317,8 @@ def train_model(
             "loss_function_type": loss_function_type,
             "label_smoothing": label_smoothing,
             "model_save_directory": model_save_directory,
+            "resume_from_checkpoint": resume_from_checkpoint,
+            "resumed_from_epoch": resumed_from_epoch,
         }
         wandb.init(
             entity=wandb_entity,
@@ -249,11 +327,10 @@ def train_model(
             config=training_configuration,
         )
 
-    # Model training
-    total_train_steps = 0  # total training batches processed
+    # Model training. start_epoch, total_train_steps and lowest_val_loss were set above
+    # (fresh-start defaults, or restored from the resume checkpoint).
     early_stopping_count = 0
-    lowest_val_loss = 1e8
-    for epoch in range(1, total_epochs + 1):
+    for epoch in range(start_epoch, total_epochs + 1):
         epoch_start_time = time.time()
         train_metrics, total_train_steps_current = _train_model_for_one_epoch(
             model,
@@ -263,6 +340,7 @@ def train_model(
             train_dataloader,
             learning_rate_scheduler,
             total_train_steps,
+            model_ema=model_ema,
         )
         total_train_steps = total_train_steps_current
         early_stopping_count += 1
@@ -279,7 +357,13 @@ def train_model(
                 epoch,
                 train_metrics["train_loss"],
                 val_metrics["val_loss"],
+                model_ema=model_ema,
             )
+            if wandb.run is not None:
+                # Off-box resilience: mirror the just-saved best checkpoint to wandb so a box or
+                # volume loss does not leave the weights as a single on-disk copy (the run-end
+                # artifact upload is otherwise the only copy in wandb).
+                wandb.save(f"{model_save_path}_checkpoint.pt", policy="now")
             lowest_val_loss = val_metrics["val_loss"]
             early_stopping_count = 0
 
