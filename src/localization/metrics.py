@@ -201,6 +201,117 @@ def compute_precision_recall(
     return precision, recall
 
 
+# --- leps_localizer metric extensions ---------------------------------------
+# Best-of-N matching for single-subject tasks (any pred near the gt = hit) and
+# containment-aware metrics for FG-square-gt vs YOLO-tight-rect-pred mismatch.
+
+
+def iou_xyxy(box_a: tp.Sequence[float], box_b: tp.Sequence[float]) -> float:
+    """IoU of two axis-aligned [x1,y1,x2,y2] boxes."""
+    ax1, ay1, ax2, ay2 = box_a
+    bx1, by1, bx2, by2 = box_b
+    inter_x1 = max(ax1, bx1)
+    inter_y1 = max(ay1, by1)
+    inter_x2 = min(ax2, bx2)
+    inter_y2 = min(ay2, by2)
+    iw = max(0.0, inter_x2 - inter_x1)
+    ih = max(0.0, inter_y2 - inter_y1)
+    inter = iw * ih
+    a_area = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+    b_area = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    union = a_area + b_area - inter
+    return float(inter / union) if union > 0 else 0.0
+
+
+def containment_iou(
+    pred_xyxy: tp.Sequence[float], gt_xyxy: tp.Sequence[float]
+) -> float:
+    """Fraction of pred that lands inside gt: |pred ∩ gt| / |pred|.
+
+    Built for the FG square-gt vs YOLO-tight-pred mismatch: a tight pred
+    fully inside a fat square gt scores 1.0 (the pred is on the subject,
+    even though IoU is low because the gt is bigger than it needs to be).
+    """
+    inter_x1 = max(pred_xyxy[0], gt_xyxy[0])
+    inter_y1 = max(pred_xyxy[1], gt_xyxy[1])
+    inter_x2 = min(pred_xyxy[2], gt_xyxy[2])
+    inter_y2 = min(pred_xyxy[3], gt_xyxy[3])
+    iw = max(0.0, inter_x2 - inter_x1)
+    ih = max(0.0, inter_y2 - inter_y1)
+    inter = iw * ih
+    pred_area = max(0.0, pred_xyxy[2] - pred_xyxy[0]) * max(
+        0.0, pred_xyxy[3] - pred_xyxy[1]
+    )
+    return float(inter / pred_area) if pred_area > 0 else 0.0
+
+
+def best_of_n_match(
+    preds_xyxy: tp.Sequence[tp.Sequence[float]],
+    gt_xyxy: tp.Sequence[float],
+    *,
+    iou_threshold: float = 0.5,
+    use_containment: bool = False,
+) -> tp.Tuple[bool, float, int]:
+    """Single-subject "best of N" reduction.
+
+    Returns (hit, best_score, best_pred_idx). `hit` is True if ANY prediction
+    has IoU (or containment, when `use_containment`) ≥ threshold against the
+    single gt box.
+    """
+    if not preds_xyxy:
+        return False, 0.0, -1
+    scorer = containment_iou if use_containment else iou_xyxy
+    scores = [scorer(p, gt_xyxy) for p in preds_xyxy]
+    best_idx = int(np.argmax(scores))
+    best = float(scores[best_idx])
+    return (best >= iou_threshold, best, best_idx)
+
+
+# Default leps_localizer area-fraction buckets (lower-inclusive, upper-exclusive
+# except the last which is fully closed).
+DEFAULT_AREA_FRAC_BUCKETS: tp.List[tp.Tuple[float, float]] = [
+    (0.00, 0.05),
+    (0.05, 0.10),
+    (0.10, 0.25),
+    (0.25, 0.50),
+    (0.50, 1.01),
+]
+
+
+def _bucket_index(frac: float, buckets: tp.Sequence[tp.Tuple[float, float]]) -> int:
+    for i, (lo, hi) in enumerate(buckets):
+        if lo <= frac < hi:
+            return i
+    return -1
+
+
+def recall_by_bucket(
+    samples: tp.Sequence[tp.Tuple[float, bool]],
+    *,
+    buckets: tp.Optional[tp.Sequence[tp.Tuple[float, float]]] = None,
+) -> tp.List[tp.Dict[str, float]]:
+    """Per-bucket recall.
+
+    `samples` is a list of `(bbox_area_fraction, hit)` pairs — one per gt.
+    Returns one dict per bucket: `{lo, hi, n, hits, recall}`.
+    """
+    if buckets is None:
+        buckets = DEFAULT_AREA_FRAC_BUCKETS
+    counts = [{"lo": lo, "hi": hi, "n": 0, "hits": 0} for (lo, hi) in buckets]
+    for frac, hit in samples:
+        idx = _bucket_index(frac, buckets)
+        if idx < 0:
+            continue
+        counts[idx]["n"] += 1
+        if hit:
+            counts[idx]["hits"] += 1
+    out: tp.List[tp.Dict[str, float]] = []
+    for c in counts:
+        recall = (c["hits"] / c["n"]) if c["n"] else 0.0
+        out.append({**c, "recall": recall})
+    return out
+
+
 def create_precision_recall_fig(
     precision: np.ndarray,
     recall: np.ndarray,

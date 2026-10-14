@@ -171,3 +171,10 @@ cython_debug/
 
 # Weights and Biases files
 wandb/
+
+# Lepidoptera localizer: materialized datasets, run outputs and demo model
+# weights are regenerated locally and never committed.
+research/leps_localizer/data/
+research/leps_localizer/eval_outputs/
+research/leps_localizer/runs/
+research/leps_localizer/demo/model/

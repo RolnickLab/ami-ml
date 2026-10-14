@@ -1,0 +1,335 @@
+# Leps Localizer — Methods & Results
+
+Single-class arthropod (butterfly) localization detector. Stage-3 of a three-stage pipeline (Detector → Localizer → Classifier). The localizer's job: given a 1-N-arthropod scene, return tight bboxes per individual that the classifier can crop to a square and identify to species.
+
+This document describes (a) the dataset construction, (b) each model architecture compared, (c) the eval protocol and its known biases, and (d) all results to date. The companion file `results.csv` holds the same per-run numbers in tabular form.
+
+---
+
+## 1. Dataset
+
+### 1.1 Training set: `butterflies-fg-train-2026-05`
+
+- **Source**: 3 Fieldguide eval sets repartitioned into a single train+val split, seed=20260505
+  - `leps-butterflies-500` (999 imgs, full distribution)
+  - `leps-butterflies-small-1000` (999 imgs, bbox area frac < 0.10)
+  - `leps-butterflies-medsmall-1000` (997 imgs, bbox area frac 0.10-0.25)
+- **Total unique**: 2,862 images (133 cross-set duplicates dropped)
+- **Split**: 2,572 train / 290 val (90/10)
+- **Format**: YOLO labels under `${DATA_ROOT}/yolo/` (written by `scripts/prepare_yolo_dataset.py`), single class `arthropod`
+- **Bbox-area-fraction distribution**:
+  - small (<0.10): well-covered (~970 imgs)
+  - medsmall (0.10-0.25): well-covered (~970 imgs)
+  - medlarge (0.25-0.50): **underrepresented** — only what the random sample contributed
+  - large (>0.50): **underrepresented**
+
+### 1.2 Available FG pool (Butterflies / Papilionoidea clade, snapshot 2026-04-27)
+
+74,944 candidate Fieldguide photos with a user-drawn crop in the butterfly (Papilionoidea) clade. Bbox-area-fraction distribution:
+
+| frac bucket | count | notes |
+|---|---|---|
+| 0.01-0.05 | 528 | tiny — hardest detector cases |
+| 0.05-0.10 | 1,403 | small |
+| 0.10-0.25 | 7,715 | medsmall |
+| 0.25-0.50 | 22,714 | **medlarge — underrepresented in current train set** |
+| 0.50-0.95 | 37,868 | large |
+| ≥0.95 | 4,716 | skipped (subject crops to nearly full frame) |
+
+Used in current train+val: ~2,862 photos (<4% of pool). Substantial headroom for enrichment runs.
+
+The broader **Lepidoptera** clade (butterflies and moths) has 217,914 subtree categories — moths can be added to widen coverage if butterfly-only saturates.
+
+### 1.3 Held-out test set: GAP (no FG test set reserved)
+
+The original detector-dataset spec (2026-04-24) intended **all 4 datasets** (`leps-butterflies-500`, `-small-1000`, `-medsmall-1000`, Leeds) to be held out as eval-only forever. During stage-3 training, the 3 FG datasets were repartitioned into train+val seed=20260505. **Only Leeds remains held-out.**
+
+Implications:
+- No FG-style framing test set — can't measure quality on the actual production distribution
+- Leeds is biased (see §1.4) so the only held-out metric we have is structurally penalizing correct models
+- Comparing checkpoints across architectures relies on Leeds + visual gym inspection, no clean tiebreaker
+
+**Fix when the next data pull happens**: stratify pull by frac bucket, **reserve 1K as locked FG test** before training touches the rest.
+
+### 1.4 Held-out eval set: Leeds-butterflies (832 images)
+
+- Standard butterfly dataset, 10 species, single butterfly per image, mostly large/centered
+- **Never seen during training of any model in this comparison**
+- GT bboxes: see Bias section below
+
+### 1.5 Bias note: Leeds GT framing
+
+Leeds GT bboxes systematically clip the **antennae** (wing tips are intact). Tight crops cover head + full wing area but exclude antennae. This biases IoU/containment metrics **against** models that produce biologically correct boxes (which would include antennae). Discovered 2026-05-07 by visual inspection in the gym.
+
+Implication: a model that wins on Leeds IoU may be losing for the downstream classifier (antennae are diagnostic). Don't treat Leeds recall@IoU as the ground truth ranking.
+
+### 1.6 Bias note: framing skew (large/centered subjects)
+
+Beyond the antenna clip, Leeds is **easy-mode framing** — most subjects are large and roughly centered, filling the frame. Distribution of bbox area fraction in Leeds:
+
+| ratio bin | n | share |
+|---|---|---|
+| 0.00–0.05 | 2 | 0.2% |
+| 0.05–0.10 | 13 | 1.6% |
+| **0.10–0.25 (small)** | **128** | **15.4%** |
+| **0.25–0.50 (mid)** | **396** | **47.6%** |
+| 0.50–1.01 (large) | 293 | 35.2% |
+
+A model that always emits a near-full-frame box scores well on the bottom row. The **real ranking signal** is recall on the small/mid bins, where detection actually has to work. Headline `recall@IoU0.5` averages over all bins and is dominated by the large bucket; read the per-bin table, not the headline.
+
+The current train + Leeds eval splits both lean large/centered. Field-deployment images (camera traps, citizen-sci photos, app screenshots) routinely produce small-ratio subjects, so this is the deployment-relevant gap. Filling it is the motivation for the planned medium-to-large data pull and the planned reserved FG test set with framing diversity.
+
+---
+
+## 2. Architectures compared
+
+### 2.1 YOLOv11s (Ultralytics, anchor-free, NMS-based)
+
+- **Params**: 9.4M, **GFLOPs**: 21.5
+- **Backbone**: CSPDarknet variant with C2f/C3k2 blocks
+- **Head**: Decoupled cls/reg with DFL regression
+- **Pretrained on**: COCO 80-class detection
+- **Mobile/web export**: Native CoreML/TFLite/ONNX. NMS runs on-device.
+- **Why included**: Reliable small-fast baseline. Drop-in via `from ultralytics import YOLO`.
+
+### 2.2 YOLO26-s (Ultralytics, NMS-free, Jan 2026 release)
+
+- **Params**: 9.95M, **GFLOPs**: 22.5
+- **Backbone**: Refined CSP variant
+- **Head**: NMS-free decoder with **STAL** (Self-Adversarial Training) and **ProgLoss** (progressive loss schedule for small objects)
+- **Pretrained on**: COCO 80-class detection
+- **Mobile/web export**: Native CoreML/TFLite/ONNX. **No on-device NMS needed** — cleaner export, smaller compute graph.
+- **Why included**: Drop-in successor to v11s. Better small-object handling in theory. Native mobile target.
+
+### 2.3 RT-DETR-l (Ultralytics, end-to-end DETR)
+
+- **Params**: 33M, **GFLOPs**: 108
+- **Backbone**: HGNetv2
+- **Head**: Transformer decoder, query-based (300 queries default), end-to-end, **no NMS by design**
+- **Pretrained on**: COCO 80-class detection
+- **Mobile/web export**: ONNX works; CoreML works as of coremltools 8.x (multi-head attention native ops). Inference is 3-5x slower than YOLO on mobile NPU.
+- **Why included**: Real-time DETR baseline. Best for accuracy when compute isn't constrained.
+
+### 2.4 SAHI-tiled YOLOv11s (test-time augmentation)
+
+- Wraps the v11s checkpoint at inference with **Slicing Aided Hyper Inference**
+- Splits input image into overlapping tiles, runs detection on each, merges
+- **No retraining** — same checkpoint as v11s
+- **Why included**: Low-cost way to test if v11s misses small objects in raw inference
+
+### 2.5 DEIM-D-FINE-S (blocked, superseded by DEIMv2-S)
+
+- **Params**: 10M, **GFLOPs**: 25
+- Blocked on H100L MIG slice: NCCL fails DDP init on the partition, and torchvision-v2 transforms raise `NotImplementedError` against the venv torch we had pinned. Superseded by DEIMv2-S below.
+
+### 2.6 DEIMv2-S (Intellindust-AI-Lab, NMS-free transformer + DINOv3-distilled ViT-T)
+
+- **Params**: 9.7M, **GFLOPs**: 25
+- **Backbone**: DINOv3-distilled ViT-T (`vitt_distill.pt`, 22 MB) + Lite Spatial Prior Module
+- **Head**: NMS-free transformer decoder (descended from D-FINE, with DEIMv2 improved matching). 300 queries, no NMS at inference.
+- **Pretrained on**: COCO 80-class detection (`deimv2_dinov3_s_coco.pth`, 38 MB)
+- **License**: Apache-2.0 (Intellindust-AI-Lab/DEIMv2 repo)
+- **Mobile/web export**: ONNX native. CoreML via coremltools — DINOv3 attention is multi-head-attention, supported in coremltools 8.x. DETR-class inference cost.
+- **Why included**: Successor to DEIM v1 with pinned `torch==2.5.1` / `torchvision==0.20.1` to dodge the v1 blockers. Single-process bypass of `torchrun` works on MIG-1-24C. NMS-free with strong "always emits something" behavior — useful for downstream pipelines that want a guaranteed crop.
+
+---
+
+## 3. Training protocol
+
+### 3.1 Common settings
+
+- Hardware: a cloud GPU server with a 24 GB H100 MIG slice
+- Epochs: 80 (no early stopping triggered for any run)
+- Batch: 16
+- Patience: 20
+- Seed: 20260505 (Ultralytics RNG — independent of split-assignment seed)
+- AMP: enabled
+- Optimizer: AdamW (Ultralytics auto-determined LR=0.002)
+- Logger: Weights & Biases (project `leps_localizer`; the entity comes from the `WANDB_ENTITY` environment variable)
+
+### 3.2 Per-run hyperparameters
+
+| Run | Arch | imgsz | copy_paste | mosaic | scale | Init |
+|---|---|---|---|---|---|---|
+| `yolov11s-fg-2026-05` (r1) | YOLOv11s | 1280 | 0.0 | 1.0 | 0.5 | yolo11s.pt (COCO) |
+| `yolov11s-fg-2026-05-r2` | YOLOv11s | 1536 | 0.5 | 1.0 | 0.5 | yolo11s.pt (COCO) |
+| `rtdetr-l-fg-2026-05` | RT-DETR-l | 640 | n/a | n/a | 0.5 | rtdetr-l.pt (COCO) |
+| `yolo26s-fg-2026-05` | YOLO26-s | 1280 | 0.0 | 1.0 | 0.5 | yolo26s.pt (COCO) |
+| `yolo26s-fg-2026-05-v2` | YOLO26-s | 1280 | 0.0 | 1.0 | 0.5 | yolo26s.pt (COCO) |
+| `deimv2-s-fg-2026-05` | DEIMv2-S (DINOv3-distilled ViT-T) | 640 | n/a | n/a | n/a | deimv2_dinov3_s_coco.pth |
+
+**imgsz=640 for RT-DETR** is intentional: RT-DETR's positional encodings were tuned at 640. Comparing at native imgsz per architecture, not identical-imgsz across.
+
+**copy_paste=0.5 in r2** was a small-object augmentation experiment. Cuts patches from one image and pastes into another. Slightly hurt FG val mAP but slightly improved Leeds containment.
+
+---
+
+## 4. Eval protocol
+
+Eval driver: `src/localization/eval_locked.py` (called by `research/leps_localizer/scripts/eval_on_locked.py` and `eval_sahi.py`).
+
+Per Leeds image:
+1. Load image, get GT bbox xyxy
+2. Run model with `conf=0.25` (matches gym default behavior at non-tight settings)
+3. For each predicted bbox, compute IoU and "containment" (`area(GT ∩ pred) / area(GT)`) vs GT
+4. Take the **best-matching predicted bbox** by IoU
+5. Record: best_iou, best_containment, n_preds
+
+Aggregates:
+- **recall (IoU)**: fraction of GT with at least one pred at IoU ≥ 0.5
+- **recall (containment)**: fraction of GT with at least one pred at containment ≥ 0.5
+- **mean best IoU**: average of best_iou across all GT
+- **mean best containment**: same, for containment
+- **missed completely**: GT images where the model produced zero predictions at conf=0.25
+- **per-bucket recall**: same metrics broken down by bbox-area-fraction (small/medsmall/medlarge/large)
+
+The recall@containment metric is generally more informative than recall@IoU for downstream-classification because the classifier needs the subject inside the crop, not necessarily in a tight box.
+
+---
+
+## 5. Results
+
+### 5.1 Training-time metrics (FG val, 290 images)
+
+Final-epoch metrics from `runs/<name>/results.csv` (DEIMv2 row from COCO eval at the best-epoch checkpoint, epoch 37):
+
+| Run | mAP50 | mAP50-95 | Precision | Recall |
+|---|---|---|---|---|
+| yolov11s r1 (imgsz=1280) | 0.892 | 0.551 | 0.877 | 0.834 |
+| yolov11s r2 (imgsz=1536, cp=0.5) | 0.870 | 0.508 | 0.865 | 0.840 |
+| rtdetr-l (imgsz=640) | 0.898 | 0.506 | 0.875 | 0.872 |
+| yolo26s (imgsz=1280) | 0.896 | 0.554 | 0.867 | 0.879 |
+| **yolo26s v2 (imgsz=1280, re-run)** | **0.939** | **0.637** | **0.896** | 0.871 |
+| deimv2-s (imgsz=640) | 0.936 | 0.606 | n/a | n/a |
+
+YOLO26-s v2 (the re-run with the same recipe as v1) is the new best on FG val: **0.939 mAP50 / 0.637 mAP50-95**, +4-8pp over v1. Same epoch count, same imgsz, same init weights — improvement comes from training stochasticity / EMA divergence between runs. RT-DETR-l previously held best plain mAP50 (0.898); v2 now leads both metrics. DEIMv2-S lands close behind (0.936 / 0.606) at half the input resolution.
+
+### 5.2 Held-out Leeds eval (832 images)
+
+YOLO runs at conf=0.25; DEIMv2-S at score>=0.45 (DETR-style). Aggregate metrics:
+
+| Run | recall@IoU0.5 | recall@cont0.5 | mean IoU | mean cont | missed |
+|---|---|---|---|---|---|
+| yolov11s r1 | 0.697 | 0.730 | 0.558 | 0.602 | 20 |
+| yolov11s r2 | 0.703 | **0.785** | 0.532 | **0.635** | 53 |
+| yolov11s r2 + SAHI 768/0.2 | **0.720** | 0.774 | 0.553 | 0.627 | 51 |
+| yolov11s r2 + SAHI 1024/0.3 | **0.720** | 0.770 | 0.552 | 0.624 | 53 |
+| rtdetr-l | 0.672 | 0.681 | **0.567** | 0.573 | **1** |
+| yolo26s | 0.676 | 0.690 | 0.553 | 0.571 | 26 |
+| **yolo26s v2** | **0.692** | 0.698 | **0.574** | **0.584** | 9 |
+| deimv2-s | 0.669 | 0.669 | 0.564 | 0.564 | **2** |
+
+### 5.2.1 Recall by bbox-area-fraction bucket (the real ranking)
+
+Per §1.6, the headline averages above are dominated by the large-ratio bucket. The rank-the-models question lives in the small (0.10–0.25) and mid (0.25–0.50) bins. Recall@IoU0.5 per bin:
+
+| Run | <0.05 (n=2) | 0.05–0.10 (n=13) | **0.10–0.25 (n=128)** | **0.25–0.50 (n=396)** | 0.50–1.01 (n=293) |
+|---|---|---|---|---|---|
+| yolo26s v2 | 0.000 | 0.077 | **0.328** | **0.629 (0.636 cont)** | 0.969 (0.976 cont) |
+| deimv2-s | 0.000 | 0.077 | **0.281** | **0.573** | **1.000** |
+
+- **YOLO26-s v2 wins the small + mid bins** by 4.7pp small / 6.3pp mid — the buckets that matter for deployment.
+- **DEIMv2-S wins the large bin** (perfect 100%) and "finds something" rate (2 missed vs 9). Behavior is consistent with NMS-free DETR-class detectors that always emit a high-confidence query, even on hard images.
+- **Caveat — confound:** DEIMv2-S trained at imgsz=640, YOLO26-s v2 at 1280. Small-object recall correlates strongly with input resolution. **This is not yet an architectural verdict.** Fair-fight rerun = DEIMv2 @ 1280 (preferred, on a larger GPU).
+
+### 5.3 Read
+
+- **Real ranking signal (small + mid bins)**: YOLO26-s v2 currently leads.
+- **Leeds headline metrics**: v11s r2 + SAHI wins recall@IoU (0.720); v11s r2 wins recall@cont (0.785). Both lift come from large-bin saturation, not small-bin gains — see the per-bin table above.
+- **Antenna bias**: Leeds GT clips antennae. Models that include antennae (RT-DETR, YOLO26, DEIMv2) are penalized on IoU.
+- **Per-model framing observed in gym**:
+  - RT-DETR-l: most inclusive — antennae intact, full wings (rectangular boxes, biologically correct)
+  - DEIMv2-S: similar inclusion to RT-DETR; nearly always emits a box.
+  - YOLO26-s: antennae intact, slight wing-tip clipping (tight rectangular)
+  - YOLOv11s: clips wing tips, antennae intact (near-square boxes)
+- **For server-side bulk annotation pipeline**: RT-DETR-l or DEIMv2-S — most inclusive boxes, "finds something" behavior, downstream classifier gets antennae + full wings.
+- **For mobile/web app**: YOLO26-s v2 — NMS-free, native CoreML, leads small-ratio recall in current data.
+
+### 5.4 The unbiased eval (planned)
+
+End-to-end pipeline eval — **localizer → square crop → classifier accuracy**. The classifier is an existing species classifier, and the truth set is expert-identified photos. This treats Leeds-style framing biases as noise: what matters is whether the classifier can identify the cropped subject, not whether the box matches Leeds GT. This will be the unbiased metric for ranking architectures.
+
+---
+
+## 5.5 Web deployment — quantization shootout (2026-05-13/14)
+
+Goal: ship a browser demo (onnxruntime-web, WASM SIMD) with wire size **≤2 MB**
+for use as a convenience suggestor. Detector accuracy can degrade noticeably
+without hurting the use case.
+
+Baseline reference: yolo26s-fg-2026-05-v2 trained at imgsz=1280, eval here at
+imgsz=640 (cheaper for web, ~half the FLOPs).
+
+| Variant | Params | Disk | Brotli wire | Val mAP50 | R_all | R_small | R_mid | R_large | ms/img (CPU) | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| yolo26s FP32 | 9.5 M | 36.4 MB | 33.4 MB | 0.92 | 0.846 | 0.580 | 0.842 | 0.955 | 179 | baseline for the size race |
+| yolo26s dyn-INT8 | 9.5 M | 9.5 MB | 5.8 MB | — | 0.722 | 0.420 | 0.691 | 0.914 | 918 | recall -12pp, **slower** (QDQ overhead on conv-heavy graph) |
+| yolo26s static-INT8 | 9.5 M | 9.8 MB | — | — | **0.000** | 0 | 0 | 0 | 107 | output sigmoid collapsed; known YOLO + QDQ pathology |
+| yolo26n FP32 | 2.4 M | 9.4 MB | 8.2 MB | **0.935** | **0.860** | 0.519 | 0.877 | 0.937 | **18** | beats s on R_all, 10× faster on CPU |
+| yolo26n FP16 (browser-ship) | 2.4 M | 4.7 MB | **4.0 MB** | — | **0.860** | 0.519 | 0.877 | 0.937 | 19 | **lossless** vs FP32 nano (same per-bin counts); ships in onnxruntime-web WASM |
+| yolo26n dyn-INT8 (native-only) | 2.4 M | 2.7 MB | 1.5 MB | — | 0.838 | 0.556 | 0.847 | 0.914 | 104 | **does not run in onnxruntime-web** (no ConvInteger op in WASM EP); fine for native iOS/Android |
+| yolo26n static-INT8 (QDQ) | 2.4 M | 3.0 MB | — | — | **0.000** | 0 | 0 | 0 | 18 | same sigmoid collapse as on s |
+
+Wire-size compressibility: FP32 weights are entropic — Brotli only buys ~10%.
+INT8 weights compress to ~55% (2.7 MB → 1.5 MB on yolo26n).
+
+Conclusions:
+- **Browser ship target: yolo26n FP16 @ 4.0 MB Brotli.** Recall is **identical** to FP32 nano (R_all 0.860, same per-bin matched counts). Ultralytics' native `half=True` export handles the Resize + Cast type wrangling that onnxconverter-common's `convert_float_to_float16` mishandles on YOLO26 end2end graphs (mixed-type IO around the decoder).
+- **The ≤2 MB target is not reachable today in the browser.** Both INT8 pathways are blocked:
+  - **dyn-INT8 (QOperator format, 1.5 MB Brotli)** uses `ConvInteger` ops, which `onnxruntime-web` WASM EP does not implement (verified by `ERROR_CODE: 9, Could not find an implementation for ConvInteger`). It runs fine in native onnxruntime (CPU/iOS/Android) with R_all=0.838, only -2.2pp vs FP32 nano. **Keep this build for native deployments.**
+  - **static-INT8 (QDQ format, ~3 MB Brotli)** decomposes to Quantize→Conv→Dequant which WASM does support, but the YOLO26 sigmoid + end2end decoder collapses output ranges to zero on both s and n. Fix would be selective node exclusion (skip QDQ around the head) or QAT-during-training. Not pursued.
+- **yolo26n FP32 actually beat yolo26s FP32 on val mAP50 and on overall recall** (R_all 0.860 vs 0.846, val mAP50 0.935 vs 0.92). s only wins on the small bucket (R_small 0.580 vs 0.519, +6pp). For a convenience suggestor where small-object recall isn't the use case, nano is straightforwardly better.
+- **s-class is out of the running** for the web build entirely — 32 MB Brotli is too heavy regardless of accuracy.
+
+Demo location: `research/leps_localizer/demo/` (HTML + JS + `serve.py` with
+COOP/COEP + Content-Encoding handling). Two pages: `index.html` (ORT-web
+runtime) and `tfjs.html` (TFJS runtime). Model weights gitignored.
+
+### Cold-load wire size (runtime + weights)
+
+Measuring the **total bytes a fresh visitor downloads** matters more than
+weights alone — the inference runtime itself isn't free.
+
+| Stack | Runtime wire | Model wire | **Cold-load total** | Recall | Notes |
+|---|---|---|---|---|---|
+| ORT-web + yolo26n FP16 | 2.5 MB (js+wasm) | 4.0 MB | **6.5 MB** | 0.860 | current `index.html` |
+| ORT-web + yolo26n FP32 | 2.5 MB | 8.2 MB | 10.7 MB | 0.860 | fallback |
+| ORT-web + yolo26s FP32 | 2.5 MB | 32 MB | 34.5 MB | 0.846 | not viable |
+| **TFJS + yolo26n uint8** | **0.36 MB (js)** | **1.6 MB (shards)** | **~2.0 MB** | **0.862** | `tfjs.html`, ship candidate; recall measured via TFLite proxy |
+| TFJS + yolo26n FP16 | 0.36 MB | 4.0 MB | 4.4 MB | (≈0.860) | TFJS converter native FP16, expected identical to FP32 |
+
+Why TFJS wins on cold-load: (a) `@tensorflow/tfjs` ships as a single 360 KB
+brotli JS that bundles core + converter + WebGL + CPU backends — no
+separate WASM binary needed for GPU inference; (b) TFJS converter's
+`--quantize_uint8=*` works on the graph model format directly (no
+ConvInteger op required at inference) and the WebGL backend dequantizes
+weights to FP32 textures at load, so the runtime executes in FP32 while
+the wire payload stays uint8. ORT-web's WASM EP requires a 2.2 MB
+brotli binary regardless, and its quant path needs ConvInteger which
+the WASM EP doesn't implement.
+
+---
+
+## 6. Open questions and next steps
+
+1. **Fair-fight DEIMv2-S @ imgsz=1280** on a larger GPU. Current DEIMv2-S run was at 640px; the small-ratio gap vs YOLO26-s v2 may be a resolution effect, not architectural. Until rerun, treat the YOLO26-s v2 lead as conditional.
+2. **Pull medium-to-large data**: 1-2K more Lepidoptera images with bbox area fraction 0.25-0.50 to fill the distribution gap, plus reserve 1K as locked FG test with framing diversity (small/off-center). The data pull runs against the Fieldguide database outside this repository.
+3. **Repartition** the enriched set and retrain best-of-class on each tier (mobile + server).
+4. **End-to-end classifier-accuracy eval**: the unbiased ranking. Should override Leeds metrics.
+5. **CoreML / ONNX exports**: YOLO26-s native, RT-DETR/DEIMv2 via ONNX → coremltools.
+
+---
+
+## 7. Sources / reference URLs
+
+- Ultralytics docs: https://docs.ultralytics.com/
+- DEIM (Intellindust-AI-Lab): https://github.com/Intellindust-AI-Lab/DEIM
+- D-FINE (Peterande): https://github.com/Peterande/D-FINE
+- DEIM paper: https://arxiv.org/abs/2412.04234
+- SAHI: https://github.com/obss/sahi
+- Leeds-butterflies dataset: J. Wang et al, 2009
+- Side-by-side comparison app: `scripts/serve_gym.py` (run locally)
+
+---
+
+*Last updated: 2026-05-14*
